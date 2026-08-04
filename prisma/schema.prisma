@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  RETIRED
+}
+
+enum ViewMode {
+  AUTO
+  MOBILE
+  PC
+}
+
+model Company {
+  id          String       @id @default(uuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  departments Department[]
+}
+
+model Department {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  name        String
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  teams       Team[]
+  users       User[]
+
+  @@index([companyId])
+}
+
+model Team {
+  id           String     @id @default(uuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  name         String
+  order        Int        @default(0)
+  active       Boolean    @default(true)
+  version      Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  users        User[]
+
+  @@index([departmentId])
+}
+
+model User {
+  id                String         @id @default(uuid())
+  email             String         @unique
+  passwordHash      String
+  employeeCode      String?        @unique
+  name              String
+  departmentId      String?
+  department        Department?    @relation(fields: [departmentId], references: [id])
+  teamId            String?
+  team              Team?          @relation(fields: [teamId], references: [id])
+  status            UserStatus     @default(ACTIVE)
+  hiredAt           DateTime?
+  retiredAt         DateTime?
+  iconUrl           String?
+  displayOrder      Int            @default(0)
+  preferredViewMode ViewMode       @default(AUTO)
+  mustChangePassword Boolean       @default(true)
+  failedLoginCount  Int            @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  version           Int            @default(1)
+  deletedAt         DateTime?
+
+  roles             UserRole[]
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+
+  @@index([departmentId])
+  @@index([teamId])
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  code        String       @unique // SUPER_ADMIN, ADMIN, MANAGER, LEADER, INSIDE_SALES, FIELD_SALES, ENTRY_OPERATOR, USER, VIEWER
+  name        String
+  description String?
+  createdAt   DateTime     @default(now())
+  permissions Permission[]
+  users       UserRole[]
+}
+
+model Permission {
+  id       String @id @default(uuid())
+  roleId   String
+  role     Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  resource String // toss_case, appointment, visit, contract, entry, user, master, system ...
+  action   String // view, create, edit, delete, export, import
+  scope    String // OWN, TEAM, DEPT, ALL
+
+  @@unique([roleId, resource, action])
+  @@index([roleId])
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  replacedBy String?
+  createdByIp String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  actor        User?    @relation(fields: [actorUserId], references: [id])
+  action       String
+  ipAddress    String?
+  userAgent    String?
+  targetType   String?
+  targetId     String?
+  before       Json?
+  after        Json?
+  success      Boolean
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  key   String @id
+  value Json
+}

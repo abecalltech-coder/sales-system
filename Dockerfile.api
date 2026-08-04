@@ -1,0 +1,29 @@
+FROM node:20-alpine AS base
+RUN corepack enable
+WORKDIR /repo
+
+FROM base AS deps
+COPY pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY prisma prisma
+RUN pnpm install --frozen-lockfile=false
+
+FROM deps AS build
+COPY . .
+RUN pnpm exec prisma generate --schema prisma/schema.prisma
+RUN pnpm --filter @sales-system/api build
+
+FROM node:20-alpine AS runner
+RUN corepack enable
+WORKDIR /repo
+ENV NODE_ENV=production
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /repo/apps/api/dist ./apps/api/dist
+COPY --from=build /repo/prisma ./prisma
+COPY --from=build /repo/apps/api/package.json ./apps/api/package.json
+
+EXPOSE 4000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD wget -qO- http://localhost:4000/health || exit 1
+
+CMD ["node", "apps/api/dist/main.js"]

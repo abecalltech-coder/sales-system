@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+coverage/
+.turbo/
+apps/api/dist/
+apps/web/dist/
+prisma/migrations/.gitkeep
+.DS_Store

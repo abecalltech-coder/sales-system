@@ -1,0 +1,22 @@
+{
+  "name": "sales-system",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @sales-system/api start:dev",
+    "dev:web": "pnpm --filter @sales-system/web dev",
+    "build": "pnpm -r --filter=./apps/* build",
+    "test": "pnpm -r --filter=./apps/* test",
+    "lint": "pnpm -r --filter=./apps/* lint",
+    "prisma:generate": "prisma generate --schema prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "packageManager": "pnpm@9.12.0"
+}
