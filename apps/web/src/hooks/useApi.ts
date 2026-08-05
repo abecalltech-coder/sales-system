@@ -330,3 +330,36 @@ export function useCustomFields(entityType?: string) {
     queryFn: () => api.get<CustomFieldItem[]>(`/custom-fields${entityType ? `?entityType=${entityType}` : ''}`),
   });
 }
+
+// ============================================================
+// モバイル訪問営業
+// ============================================================
+export interface MobileVisitItem {
+  id: string;
+  caseNumber: string;
+  scheduledAt: string;
+  statusId: string;
+  arrivedAt: string | null;
+  version: number;
+  appointment: {
+    visitAddress: string | null;
+    customer: { corporateName: string | null; contactName: string | null; phone: string | null; address: string | null } | null;
+  };
+}
+
+export function useMobileHome() {
+  return useQuery({ queryKey: ['mobile', 'home'], queryFn: () => api.get<MobileVisitItem[]>('/mobile/home') });
+}
+
+export function useMobileVisit(id: string) {
+  return useQuery({
+    queryKey: ['visits', id, 'mobile'],
+    queryFn: () =>
+      api.get<
+        MobileVisitItem & {
+          meetingSession: { meetingStartedAt: string | null; meetingEndedAt: string | null; meetingResult: string | null } | null;
+        }
+      >(`/visits/${id}`),
+    enabled: !!id,
+  });
+}

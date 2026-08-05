@@ -16,6 +16,8 @@ import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
 import { CustomFieldsAdminPage } from './pages/admin/CustomFieldsAdminPage';
+import { MobileHomePage } from './pages/mobile/MobileHomePage';
+import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
 import { RequireAuth } from './components/RequireAuth';
 
 function protect(element: JSX.Element) {
@@ -43,6 +45,8 @@ export function App() {
         <Route path="/admin/organizations" element={protect(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protect(<MastersAdminPage />)} />
         <Route path="/admin/custom-fields" element={protect(<CustomFieldsAdminPage />)} />
+        <Route path="/m" element={protect(<MobileHomePage />)} />
+        <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
