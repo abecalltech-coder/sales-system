@@ -16,6 +16,8 @@ import { MastersModule } from './masters/masters.module';
 import { StatusMasterModule } from './status-master/status-master.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { AutomationRulesModule } from './automation-rules/automation-rules.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { SummaryModule } from './summary/summary.module';
 
 @Module({
   imports: [
@@ -24,6 +26,7 @@ import { AutomationRulesModule } from './automation-rules/automation-rules.modul
       { name: 'default', ttl: 60_000, limit: 120 },
       { name: 'auth', ttl: 60_000, limit: 10 },
     ]),
+    RealtimeModule,
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -38,6 +41,7 @@ import { AutomationRulesModule } from './automation-rules/automation-rules.modul
     StatusMasterModule,
     CustomFieldsModule,
     AutomationRulesModule,
+    SummaryModule,
   ],
   controllers: [HealthController],
 })

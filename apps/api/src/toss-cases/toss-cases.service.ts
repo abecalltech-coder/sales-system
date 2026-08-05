@@ -6,6 +6,7 @@ import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class TossCasesService {
@@ -15,6 +16,7 @@ export class TossCasesService {
     private readonly statusResolver: StatusResolverService,
     private readonly caseHistory: CaseHistoryService,
     private readonly appointments: AppointmentsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(params: {
@@ -119,6 +121,23 @@ export class TossCasesService {
         updatedBy: actorUserId,
       },
     });
+
+    this.realtime.emitCaseUpdated(
+      [
+        'company:default',
+        ...(tossCase.snapshotDepartmentId ? [`department:${tossCase.snapshotDepartmentId}`] : []),
+        ...(tossCase.snapshotTeamId ? [`team:${tossCase.snapshotTeamId}`] : []),
+      ],
+      {
+        entityType: 'TOSS_CASE',
+        id: tossCase.id,
+        version: tossCase.version,
+        updatedAt: tossCase.updatedAt.toISOString(),
+        updatedBy: actorUserId,
+        action: 'created',
+      },
+    );
+
     return tossCase;
   }
 
@@ -147,6 +166,23 @@ export class TossCasesService {
     });
 
     await this.caseHistory.recordDiff('TOSS_CASE', id, existing, updated, userId);
+
+    this.realtime.emitCaseUpdated(
+      [
+        'company:default',
+        ...(updated.snapshotDepartmentId ? [`department:${updated.snapshotDepartmentId}`] : []),
+        ...(updated.snapshotTeamId ? [`team:${updated.snapshotTeamId}`] : []),
+        `toss:${id}`,
+      ],
+      {
+        entityType: 'TOSS_CASE',
+        id,
+        version: updated.version,
+        updatedAt: updated.updatedAt.toISOString(),
+        updatedBy: userId,
+        action: 'updated',
+      },
+    );
 
     // ステータスがTOSS_APPOINTMENTに変わった場合、アポ案件へ自動移行する(セクション10)。
     // ステータス変更自体は上のトランザクションで確定済み。アポ作成が失敗しても

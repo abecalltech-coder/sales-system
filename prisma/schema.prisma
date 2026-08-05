@@ -322,6 +322,8 @@ model Visit {
   fieldSalesUserId               String?
   scheduledAt                    DateTime
   statusId                       String
+  destinationLatitude            Float?    // 訪問先座標(住所ジオコーディング結果。未設定時は距離警告を行わない)
+  destinationLongitude           Float?
   departedAt                     DateTime?
   arrivedAt                      DateTime?
   arrivedByUserId                String?
@@ -561,4 +563,39 @@ model StatusAutomationRule {
   active         Boolean @default(true)
 
   @@index([statusMasterId])
+}
+
+// ============================================================
+// Phase6: モバイル訪問営業(位置情報記録・オフライン同期)
+// ============================================================
+
+model LocationRecord {
+  id          String   @id @default(uuid())
+  visitId     String?
+  eventType   String // ARRIVE/MEETING_START/MEETING_END
+  latitude    Float?
+  longitude   Float?
+  accuracy    Float?
+  userId      String?
+  capturedAt  DateTime @default(now())
+
+  @@index([visitId])
+}
+
+model OfflineAction {
+  id              String   @id @default(uuid())
+  idempotencyKey  String   @unique
+  userId          String
+  actionType      String // ARRIVE/START_MEETING/END_MEETING/COMMENT
+  targetEntityId  String
+  payload         Json
+  capturedAt      DateTime
+  status          String   @default("PENDING") // PENDING/SYNCED/FAILED
+  errorMessage    String?
+  retryCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  syncedAt        DateTime?
+
+  @@index([userId])
+  @@index([status])
 }

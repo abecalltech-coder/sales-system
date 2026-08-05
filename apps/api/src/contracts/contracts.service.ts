@@ -5,6 +5,7 @@ import { UpdateContractDto } from './dto/contract.dto';
 import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class ContractsService {
@@ -15,6 +16,7 @@ export class ContractsService {
     private readonly sequence: SequenceService,
     private readonly statusResolver: StatusResolverService,
     private readonly caseHistory: CaseHistoryService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
@@ -124,6 +126,16 @@ export class ContractsService {
     });
 
     await this.caseHistory.recordDiff('CONTRACT', id, existing, updated, userId);
+
+    this.realtime.emitCaseUpdated(['company:default', `contract:${id}`], {
+      entityType: 'CONTRACT',
+      id,
+      version: updated.version,
+      updatedAt: updated.updatedAt.toISOString(),
+      updatedBy: userId,
+      action: 'updated',
+    });
+
     return updated;
   }
 }

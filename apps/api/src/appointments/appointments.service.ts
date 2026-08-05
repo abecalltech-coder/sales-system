@@ -6,6 +6,7 @@ import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { ContractsService } from '../contracts/contracts.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class AppointmentsService {
@@ -17,6 +18,7 @@ export class AppointmentsService {
     private readonly statusResolver: StatusResolverService,
     private readonly caseHistory: CaseHistoryService,
     private readonly contracts: ContractsService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async list(params: {
@@ -143,6 +145,23 @@ export class AppointmentsService {
     });
 
     await this.caseHistory.recordDiff('APPOINTMENT', id, existing, updated, userId);
+
+    this.realtime.emitCaseUpdated(
+      [
+        'company:default',
+        ...(updated.snapshotDepartmentId ? [`department:${updated.snapshotDepartmentId}`] : []),
+        ...(updated.snapshotTeamId ? [`team:${updated.snapshotTeamId}`] : []),
+        `appointment:${id}`,
+      ],
+      {
+        entityType: 'APPOINTMENT',
+        id,
+        version: updated.version,
+        updatedAt: updated.updatedAt.toISOString(),
+        updatedBy: userId,
+        action: 'updated',
+      },
+    );
 
     // ステータスが成約(APO_CONTRACTED)に変わった場合、成約管理へ自動移行(セクション25)
     if (dto.meetingStatusId && dto.meetingStatusId !== existing.meetingStatusId) {
