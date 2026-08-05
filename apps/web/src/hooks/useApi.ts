@@ -363,3 +363,38 @@ export function useMobileVisit(id: string) {
     enabled: !!id,
   });
 }
+
+// ============================================================
+// 顧客管理
+// ============================================================
+export interface CustomerListItem {
+  id: string;
+  corporateName: string | null;
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  version: number;
+}
+
+export function useCustomers(params: { page: number; pageSize: number; keyword?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.keyword ? { keyword: params.keyword } : {}),
+  });
+  return useQuery({
+    queryKey: ['customers', params],
+    queryFn: () => api.get<{ items: CustomerListItem[]; total: number; page: number; pageSize: number }>(
+      `/customers?${query.toString()}`,
+    ),
+  });
+}
+
+export function useCustomer(id: string) {
+  return useQuery({
+    queryKey: ['customers', id],
+    queryFn: () => api.get<CustomerListItem & { postalCode: string | null; building: string | null; memo: string | null }>(`/customers/${id}`),
+    enabled: !!id,
+  });
+}

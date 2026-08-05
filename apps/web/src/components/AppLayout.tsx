@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useRealtimeSync } from '../lib/useRealtimeSync';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'ダッシュボード' },
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  useRealtimeSync();
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: 'sans-serif' }}>
       <nav style={{ width: 200, borderRight: '1px solid #e5e7eb', padding: '16px 0', flexShrink: 0 }}>

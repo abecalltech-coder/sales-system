@@ -18,6 +18,8 @@ import { MastersAdminPage } from './pages/admin/MastersAdminPage';
 import { CustomFieldsAdminPage } from './pages/admin/CustomFieldsAdminPage';
 import { MobileHomePage } from './pages/mobile/MobileHomePage';
 import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
+import { CustomersListPage } from './pages/customers/CustomersListPage';
+import { CustomerDetailPage } from './pages/customers/CustomerDetailPage';
 import { RequireAuth } from './components/RequireAuth';
 
 function protect(element: JSX.Element) {
@@ -47,6 +49,8 @@ export function App() {
         <Route path="/admin/custom-fields" element={protect(<CustomFieldsAdminPage />)} />
         <Route path="/m" element={protect(<MobileHomePage />)} />
         <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
+        <Route path="/customers" element={protect(<CustomersListPage />)} />
+        <Route path="/customers/:id" element={protect(<CustomerDetailPage />)} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
