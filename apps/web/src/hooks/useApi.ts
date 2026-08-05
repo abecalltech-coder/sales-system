@@ -239,3 +239,94 @@ export function useEntry(id: string) {
     enabled: !!id,
   });
 }
+
+// ============================================================
+// 管理者向け: ユーザー管理
+// ============================================================
+export interface UserListItem {
+  id: string;
+  email: string;
+  name: string;
+  employeeCode: string | null;
+  departmentId: string | null;
+  teamId: string | null;
+  status: string;
+  version: number;
+  roles: { role: { code: string; name: string } }[];
+}
+
+export function useUsers(params: { page: number; pageSize: number; keyword?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.keyword ? { keyword: params.keyword } : {}),
+  });
+  return useQuery({
+    queryKey: ['users', params],
+    queryFn: () => api.get<{ items: UserListItem[]; total: number; page: number; pageSize: number }>(
+      `/users?${query.toString()}`,
+    ),
+  });
+}
+
+// ============================================================
+// 管理者向け: 組織管理
+// ============================================================
+export interface TeamItem {
+  id: string;
+  name: string;
+  order: number;
+  active: boolean;
+  version: number;
+}
+export interface DepartmentItem {
+  id: string;
+  name: string;
+  order: number;
+  active: boolean;
+  version: number;
+  teams: TeamItem[];
+}
+
+export function useDepartments() {
+  return useQuery({ queryKey: ['departments'], queryFn: () => api.get<DepartmentItem[]>('/organizations/departments') });
+}
+
+// ============================================================
+// 管理者向け: マスタ管理(商材・流入元)
+// ============================================================
+export interface MasterItem {
+  id: string;
+  name: string;
+  active: boolean;
+  order: number;
+}
+
+export function useProducts() {
+  return useQuery({ queryKey: ['products'], queryFn: () => api.get<MasterItem[]>('/masters/products') });
+}
+export function useSources() {
+  return useQuery({ queryKey: ['sources'], queryFn: () => api.get<MasterItem[]>('/masters/sources') });
+}
+
+// ============================================================
+// 管理者向け: カスタム項目
+// ============================================================
+export interface CustomFieldItem {
+  id: string;
+  entityType: string;
+  fieldKey: string;
+  label: string;
+  dataType: string;
+  required: boolean;
+  order: number;
+  active: boolean;
+  options: { id: string; label: string; value: string }[];
+}
+
+export function useCustomFields(entityType?: string) {
+  return useQuery({
+    queryKey: ['custom-fields', entityType],
+    queryFn: () => api.get<CustomFieldItem[]>(`/custom-fields${entityType ? `?entityType=${entityType}` : ''}`),
+  });
+}

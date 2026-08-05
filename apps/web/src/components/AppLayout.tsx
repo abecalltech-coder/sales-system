@@ -10,6 +10,10 @@ const NAV_ITEMS = [
   { to: '/entries', label: 'エントリー管理' },
   { to: '/summary', label: 'サマリー' },
   { to: '/customers', label: '顧客管理' },
+  { to: '/admin/users', label: 'ユーザー管理' },
+  { to: '/admin/organizations', label: '組織管理' },
+  { to: '/admin/masters', label: 'マスタ管理' },
+  { to: '/admin/custom-fields', label: 'カスタム項目管理' },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {

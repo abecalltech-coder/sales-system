@@ -12,6 +12,10 @@ import { ContractsListPage } from './pages/contracts/ContractsListPage';
 import { ContractDetailPage } from './pages/contracts/ContractDetailPage';
 import { EntriesListPage } from './pages/entries/EntriesListPage';
 import { EntryDetailPage } from './pages/entries/EntryDetailPage';
+import { UsersAdminPage } from './pages/admin/UsersAdminPage';
+import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
+import { MastersAdminPage } from './pages/admin/MastersAdminPage';
+import { CustomFieldsAdminPage } from './pages/admin/CustomFieldsAdminPage';
 import { RequireAuth } from './components/RequireAuth';
 
 function protect(element: JSX.Element) {
@@ -35,6 +39,10 @@ export function App() {
         <Route path="/contracts/:id" element={protect(<ContractDetailPage />)} />
         <Route path="/entries" element={protect(<EntriesListPage />)} />
         <Route path="/entries/:id" element={protect(<EntryDetailPage />)} />
+        <Route path="/admin/users" element={protect(<UsersAdminPage />)} />
+        <Route path="/admin/organizations" element={protect(<OrganizationsAdminPage />)} />
+        <Route path="/admin/masters" element={protect(<MastersAdminPage />)} />
+        <Route path="/admin/custom-fields" element={protect(<CustomFieldsAdminPage />)} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
