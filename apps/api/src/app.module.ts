@@ -13,6 +13,9 @@ import { VisitsModule } from './visits/visits.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { EntriesModule } from './entries/entries.module';
 import { MastersModule } from './masters/masters.module';
+import { StatusMasterModule } from './status-master/status-master.module';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
+import { AutomationRulesModule } from './automation-rules/automation-rules.module';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { MastersModule } from './masters/masters.module';
     ContractsModule,
     EntriesModule,
     MastersModule,
+    StatusMasterModule,
+    CustomFieldsModule,
+    AutomationRulesModule,
   ],
   controllers: [HealthController],
 })

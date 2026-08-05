@@ -477,3 +477,88 @@ model CaseAttachment {
 
   @@index([entityType, entityId])
 }
+
+// ============================================================
+// Phase4: カスタム項目・自動処理ルール
+// ============================================================
+
+model CustomFieldDefinition {
+  id             String   @id @default(uuid())
+  entityType     String // CUSTOMER/TOSS/APPOINTMENT/VISIT/CONTRACT/ENTRY
+  fieldKey       String // 一度使ったら変更不可(再利用制限)
+  label          String
+  description    String?
+  dataType       String // TEXT/TEXTAREA/INT/DECIMAL/CURRENCY/PHONE/EMAIL/URL/DATE/DATETIME/TIME/SELECT/MULTISELECT/CHECKBOX/USER/DEPT/TEAM/PRODUCT/FORMULA
+  required       Boolean  @default(false)
+  defaultValue   String?
+  placeholder    String?
+  validationRule Json?
+  showInList     Boolean  @default(false)
+  showInDetail   Boolean  @default(true)
+  showInCreate   Boolean  @default(true)
+  showInEdit     Boolean  @default(true)
+  searchable     Boolean  @default(false)
+  filterable     Boolean  @default(false)
+  csvExportable  Boolean  @default(true)
+  csvImportable  Boolean  @default(true)
+  order          Int      @default(0)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  options        CustomFieldOption[]
+  permissions    CustomFieldPermission[]
+
+  @@unique([entityType, fieldKey])
+  @@index([entityType])
+}
+
+model CustomFieldOption {
+  id      String @id @default(uuid())
+  fieldId String
+  field   CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  label   String
+  value   String
+  order   Int    @default(0)
+
+  @@index([fieldId])
+}
+
+model CustomFieldValue {
+  id            String    @id @default(uuid())
+  fieldId       String
+  entityType    String
+  entityId      String
+  textValue     String?
+  numberValue   Decimal?  @db.Decimal(18, 4)
+  dateValue     DateTime?
+  dateTimeValue DateTime?
+  booleanValue  Boolean?
+  jsonValue     Json?
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([fieldId, entityId])
+  @@index([entityType, entityId])
+}
+
+model CustomFieldPermission {
+  id       String @id @default(uuid())
+  fieldId  String
+  field    CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  roleId   String
+  canView  Boolean @default(true)
+  canEdit  Boolean @default(true)
+
+  @@unique([fieldId, roleId])
+}
+
+model StatusAutomationRule {
+  id             String  @id @default(uuid())
+  statusMasterId String
+  action         String // CREATE_APPOINTMENT/CREATE_CALENDAR_EVENT/CREATE_MEET/CREATE_CONTRACT/... (固定文字列)
+  config         Json    @default("{}")
+  active         Boolean @default(true)
+
+  @@index([statusMasterId])
+}
