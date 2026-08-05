@@ -18,6 +18,8 @@ import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { AutomationRulesModule } from './automation-rules/automation-rules.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SummaryModule } from './summary/summary.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
+import { SystemSettingsModule } from './system-settings/system-settings.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { SummaryModule } from './summary/summary.module';
     CustomFieldsModule,
     AutomationRulesModule,
     SummaryModule,
+    AuditLogsModule,
+    SystemSettingsModule,
   ],
   controllers: [HealthController],
 })

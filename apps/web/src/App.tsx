@@ -20,6 +20,10 @@ import { MobileHomePage } from './pages/mobile/MobileHomePage';
 import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
 import { CustomersListPage } from './pages/customers/CustomersListPage';
 import { CustomerDetailPage } from './pages/customers/CustomerDetailPage';
+import { CalendarPage } from './pages/CalendarPage';
+import { AuditLogsPage } from './pages/admin/AuditLogsPage';
+import { SystemSettingsPage } from './pages/admin/SystemSettingsPage';
+import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { RequireAuth } from './components/RequireAuth';
 
 function protect(element: JSX.Element) {
@@ -51,6 +55,10 @@ export function App() {
         <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
         <Route path="/customers" element={protect(<CustomersListPage />)} />
         <Route path="/customers/:id" element={protect(<CustomerDetailPage />)} />
+        <Route path="/calendar" element={protect(<CalendarPage />)} />
+        <Route path="/admin/audit-logs" element={protect(<AuditLogsPage />)} />
+        <Route path="/admin/system-settings" element={protect(<SystemSettingsPage />)} />
+        <Route path="/admin/integrations" element={protect(<IntegrationsPage />)} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

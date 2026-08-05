@@ -10,11 +10,15 @@ const NAV_ITEMS = [
   { to: '/contracts', label: '成約管理' },
   { to: '/entries', label: 'エントリー管理' },
   { to: '/summary', label: 'サマリー' },
+  { to: '/calendar', label: 'カレンダー' },
   { to: '/customers', label: '顧客管理' },
   { to: '/admin/users', label: 'ユーザー管理' },
   { to: '/admin/organizations', label: '組織管理' },
   { to: '/admin/masters', label: 'マスタ管理' },
   { to: '/admin/custom-fields', label: 'カスタム項目管理' },
+  { to: '/admin/integrations', label: '連携設定' },
+  { to: '/admin/audit-logs', label: '操作ログ' },
+  { to: '/admin/system-settings', label: 'システム設定' },
 ];
 
 export function AppLayout({ children }: { children: ReactNode }) {

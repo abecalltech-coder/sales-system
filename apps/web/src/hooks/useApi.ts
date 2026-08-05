@@ -398,3 +398,34 @@ export function useCustomer(id: string) {
     enabled: !!id,
   });
 }
+
+// ============================================================
+// 操作ログ・システム設定
+// ============================================================
+export interface AuditLogItem {
+  id: string;
+  action: string;
+  success: boolean;
+  errorMessage: string | null;
+  createdAt: string;
+  actor: { name: string; email: string } | null;
+}
+
+export function useAuditLogs(params: { page: number; pageSize: number }) {
+  const query = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
+  return useQuery({
+    queryKey: ['audit-logs', params],
+    queryFn: () => api.get<{ items: AuditLogItem[]; total: number; page: number; pageSize: number }>(
+      `/audit-logs?${query.toString()}`,
+    ),
+  });
+}
+
+export interface SystemSettingItem {
+  key: string;
+  value: unknown;
+}
+
+export function useSystemSettings() {
+  return useQuery({ queryKey: ['system-settings'], queryFn: () => api.get<SystemSettingItem[]>('/system-settings') });
+}
