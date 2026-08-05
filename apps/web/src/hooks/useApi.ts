@@ -100,3 +100,142 @@ export function useTossCase(id: string) {
     enabled: !!id,
   });
 }
+
+// ============================================================
+// アポ
+// ============================================================
+export interface AppointmentListItem {
+  id: string;
+  caseNumber: string;
+  meetingStartAt: string | null;
+  meetingType: string;
+  meetingStatusId: string;
+  visitAddress: string | null;
+  calendarSyncStatus: string;
+  version: number;
+}
+
+export function useAppointments(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.keyword ? { keyword: params.keyword } : {}),
+    ...(params.statusId ? { statusId: params.statusId } : {}),
+  });
+  return useQuery({
+    queryKey: ['appointments', params],
+    queryFn: () => api.get<{ items: AppointmentListItem[]; total: number; page: number; pageSize: number }>(
+      `/appointments?${query.toString()}`,
+    ),
+  });
+}
+
+export function useAppointment(id: string) {
+  return useQuery({
+    queryKey: ['appointments', id],
+    queryFn: () => api.get<AppointmentListItem & { memo: string | null; contract: { id: string; caseNumber: string } | null }>(`/appointments/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ============================================================
+// 訪問
+// ============================================================
+export interface VisitListItem {
+  id: string;
+  caseNumber: string;
+  scheduledAt: string;
+  statusId: string;
+  visitKind: string;
+  version: number;
+}
+
+export function useVisits(params: { page: number; pageSize: number; statusId?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.statusId ? { statusId: params.statusId } : {}),
+  });
+  return useQuery({
+    queryKey: ['visits', params],
+    queryFn: () => api.get<{ items: VisitListItem[]; total: number; page: number; pageSize: number }>(
+      `/visits?${query.toString()}`,
+    ),
+  });
+}
+
+export function useVisit(id: string) {
+  return useQuery({
+    queryKey: ['visits', id],
+    queryFn: () => api.get<VisitListItem & { arrivedAt: string | null; meetingSession: { meetingResult: string | null } | null }>(`/visits/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ============================================================
+// 成約
+// ============================================================
+export interface ContractListItem {
+  id: string;
+  caseNumber: string;
+  matchingStatusId: string;
+  contractedAt: string | null;
+  contractAmount: string | null;
+  version: number;
+}
+
+export function useContracts(params: { page: number; pageSize: number; statusId?: string; keyword?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.statusId ? { statusId: params.statusId } : {}),
+    ...(params.keyword ? { keyword: params.keyword } : {}),
+  });
+  return useQuery({
+    queryKey: ['contracts', params],
+    queryFn: () => api.get<{ items: ContractListItem[]; total: number; page: number; pageSize: number }>(
+      `/contracts?${query.toString()}`,
+    ),
+  });
+}
+
+export function useContract(id: string) {
+  return useQuery({
+    queryKey: ['contracts', id],
+    queryFn: () => api.get<ContractListItem & { matchingAt: string | null; switchingAt: string | null; memo: string | null }>(`/contracts/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ============================================================
+// エントリー
+// ============================================================
+export interface EntryListItem {
+  id: string;
+  caseNumber: string;
+  statusId: string;
+  entryAt: string | null;
+  version: number;
+}
+
+export function useEntries(params: { page: number; pageSize: number; statusId?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.statusId ? { statusId: params.statusId } : {}),
+  });
+  return useQuery({
+    queryKey: ['entries', params],
+    queryFn: () => api.get<{ items: EntryListItem[]; total: number; page: number; pageSize: number }>(
+      `/entries?${query.toString()}`,
+    ),
+  });
+}
+
+export function useEntry(id: string) {
+  return useQuery({
+    queryKey: ['entries', id],
+    queryFn: () => api.get<EntryListItem & { memo: string | null; deficiencyNote: string | null }>(`/entries/${id}`),
+    enabled: !!id,
+  });
+}
