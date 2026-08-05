@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -28,6 +30,12 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
       { name: 'default', ttl: 60_000, limit: 120 },
       { name: 'auth', ttl: 60_000, limit: 10 },
     ]),
+    // フロントエンド(Vite build成果物)を同一サービスから配信する(初期段階はWeb/APIを同居させる方針、architecture.md参照)。
+    // Cookie認証がクロスオリジンにならないよう、当面はWeb/APIを同一オリジンでホストする。
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'web-dist'),
+      exclude: ['/api/(.*)', '/socket.io/(.*)', '/health'],
+    }),
     RealtimeModule,
     PrismaModule,
     AuthModule,

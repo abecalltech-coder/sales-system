@@ -5,6 +5,7 @@ WORKDIR /repo
 FROM base AS deps
 COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY prisma prisma
 RUN pnpm install --frozen-lockfile=false
 
@@ -12,6 +13,7 @@ FROM deps AS build
 COPY . .
 RUN pnpm exec prisma generate --schema prisma/schema.prisma
 RUN pnpm --filter @sales-system/api build
+RUN pnpm --filter @sales-system/web build
 
 FROM node:20-alpine AS runner
 RUN corepack enable
@@ -20,6 +22,7 @@ ENV NODE_ENV=production
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
+COPY --from=build /repo/apps/web/dist ./apps/api/web-dist
 COPY --from=build /repo/prisma ./prisma
 COPY --from=build /repo/apps/api/package.json ./apps/api/package.json
 
