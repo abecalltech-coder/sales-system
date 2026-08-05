@@ -159,3 +159,321 @@ model SystemSetting {
   key   String @id
   value Json
 }
+
+// ============================================================
+// Phase3: 案件管理(顧客/トス/アポ/訪問/成約/エントリー)
+// ============================================================
+
+enum MeetingType {
+  VISIT
+  GOOGLE_MEET
+  PHONE
+  OTHER
+}
+
+enum SyncStatus {
+  NOT_SYNCED
+  SYNCING
+  SYNCED
+  ERROR
+}
+
+// 案件番号(TOS-202608-000001等)の競合を防ぐためのトランザクション採番テーブル
+model SequenceCounter {
+  key       String @id // 例: "TOS-202608"
+  lastValue Int    @default(0)
+}
+
+model Product {
+  id     String  @id @default(uuid())
+  name   String
+  active Boolean @default(true)
+  order  Int     @default(0)
+}
+
+model Source {
+  id     String  @id @default(uuid())
+  name   String
+  active Boolean @default(true)
+  order  Int     @default(0)
+}
+
+model StatusMaster {
+  id           String  @id @default(uuid())
+  category     String // TOSS / APPOINTMENT / VISIT / MATCHING / ENTRY
+  internalCode String // 自動処理判定用の固定コード(表示名変更の影響を受けない)
+  displayName  String
+  color        String?
+  order        Int     @default(0)
+  active       Boolean @default(true)
+
+  @@unique([category, internalCode])
+  @@index([category])
+}
+
+model Customer {
+  id            String   @id @default(uuid())
+  corporateName String?
+  contactName   String?
+  phone         String?
+  email         String?
+  postalCode    String?
+  address       String?
+  building      String?
+  memo          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdBy     String?
+  updatedBy     String?
+  version       Int      @default(1)
+  deletedAt     DateTime?
+
+  tossCases    TossCase[]
+
+  @@index([phone])
+  @@index([email])
+  @@index([corporateName])
+}
+
+model TossCase {
+  id                   String    @id @default(uuid())
+  caseNumber           String    @unique
+  receivedAt           DateTime  @default(now())
+  googleFormResponseId String?
+  customerId           String?
+  customer             Customer? @relation(fields: [customerId], references: [id])
+  productId            String?
+  sourceId             String?
+  snapshotDepartmentId String?
+  snapshotTeamId       String?
+  tossUserId           String?
+  salesUserId          String?
+  fieldSalesUserId     String?
+  desiredAt            DateTime?
+  confirmedStartAt     DateTime?
+  confirmedEndAt       DateTime?
+  statusId             String
+  memo                 String?
+  tags                 String[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  createdBy            String?
+  updatedBy            String?
+  version              Int       @default(1)
+  deletedAt            DateTime?
+
+  appointment          Appointment?
+
+  @@index([statusId])
+  @@index([tossUserId])
+  @@index([salesUserId])
+  @@index([snapshotDepartmentId])
+  @@index([snapshotTeamId])
+  @@index([receivedAt])
+}
+
+model Appointment {
+  id                     String     @id @default(uuid())
+  caseNumber             String     @unique
+  tossCaseId             String?    @unique
+  tossCase               TossCase?  @relation(fields: [tossCaseId], references: [id])
+  customerId             String?
+  snapshotDepartmentId   String?
+  snapshotTeamId         String?
+  apoUserId              String?
+  meetingUserId          String?
+  fieldSalesUserId       String?
+  meetingStartAt         DateTime?
+  meetingEndAt           DateTime?
+  meetingType            MeetingType @default(VISIT)
+  visitAddress           String?
+  meetingUrl             String?
+  googleCalendarEventId  String?
+  calendarSyncStatus     SyncStatus  @default(NOT_SYNCED)
+  calendarSyncError      String?
+  meetingStatusId        String
+  meetingResultId        String?
+  nextActionAt           DateTime?
+  memo                   String?
+  idempotencyKey         String     @unique
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  createdBy              String?
+  updatedBy              String?
+  version                Int        @default(1)
+  deletedAt              DateTime?
+
+  visits                 Visit[]
+  contract               Contract?
+
+  @@index([meetingStatusId])
+  @@index([apoUserId])
+  @@index([meetingStartAt])
+  @@index([snapshotDepartmentId])
+  @@index([snapshotTeamId])
+}
+
+model Visit {
+  id                             String    @id @default(uuid())
+  caseNumber                     String    @unique
+  appointmentId                  String
+  appointment                    Appointment @relation(fields: [appointmentId], references: [id])
+  visitKind                      String    @default("INITIAL") // INITIAL/REVISIT/FINAL_CHECK
+  fieldSalesUserId               String?
+  scheduledAt                    DateTime
+  statusId                       String
+  departedAt                     DateTime?
+  arrivedAt                      DateTime?
+  arrivedByUserId                String?
+  arrivedLatitude                Float?
+  arrivedLongitude               Float?
+  arrivedAccuracy                Float?
+  arrivedDistanceFromDestination Float?
+  arrivedDeviceInfo              String?
+  arrivedIpAddress               String?
+  arrivedComment                 String?
+  locationPermissionStatus       String?
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @updatedAt
+  version                        Int       @default(1)
+  deletedAt                      DateTime?
+
+  meetingSession                 MeetingSession?
+  statusHistory                  VisitStatusHistory[]
+
+  @@index([appointmentId])
+  @@index([statusId])
+  @@index([fieldSalesUserId])
+  @@index([scheduledAt])
+}
+
+model VisitStatusHistory {
+  id        String   @id @default(uuid())
+  visitId   String
+  visit     Visit    @relation(fields: [visitId], references: [id])
+  fromStatusId String?
+  toStatusId   String
+  changedBy String?
+  changedAt DateTime @default(now())
+
+  @@index([visitId])
+}
+
+model MeetingSession {
+  id                            String    @id @default(uuid())
+  visitId                       String    @unique
+  visit                         Visit     @relation(fields: [visitId], references: [id])
+  meetingStartedAt              DateTime?
+  meetingStartedByUserId        String?
+  meetingStartLatitude          Float?
+  meetingStartLongitude         Float?
+  waitingMinutes                Int?
+  meetingEndedAt                DateTime?
+  meetingEndedByUserId          String?
+  meetingDurationMinutes        Int?
+  meetingResult                 String?
+  nextAction                    String?
+  nextActionDate                DateTime?
+  nextVisitAt                   DateTime?
+  meetingMemo                   String?
+  customerNeeds                 String?
+  rejectionReason               String?
+  estimatedContractProbability  Int?
+  contractExpectedDate          DateTime?
+  meetingEndLatitude             Float?
+  meetingEndLongitude            Float?
+}
+
+model Contract {
+  id                     String    @id @default(uuid())
+  caseNumber             String    @unique
+  appointmentId          String    @unique
+  appointment            Appointment @relation(fields: [appointmentId], references: [id])
+  tossCaseId             String?
+  contractUserId         String?
+  contractedAt           DateTime?
+  contractAmount         Decimal?  @db.Decimal(12, 2)
+  revenueForecast        Decimal?  @db.Decimal(12, 2)
+  feeForecast            Decimal?  @db.Decimal(12, 2)
+  contractNumber         String?
+  applicationNumber      String?
+  matchingStatusId       String
+  matchingAt             DateTime?
+  switchingScheduledAt   DateTime?
+  switchingAt            DateTime?
+  entryStatusId          String?
+  entryAt                DateTime?
+  deficiencyNote         String?
+  nextActionAt           DateTime?
+  memo                   String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  createdBy              String?
+  updatedBy              String?
+  version                Int       @default(1)
+  deletedAt              DateTime?
+
+  entries                Entry[]
+
+  @@index([matchingStatusId])
+  @@index([contractUserId])
+  @@index([contractedAt])
+}
+
+model Entry {
+  id                 String    @id @default(uuid())
+  caseNumber         String    @unique
+  contractId         String
+  contract           Contract  @relation(fields: [contractId], references: [id])
+  entryUserId        String?
+  entryAt            DateTime?
+  statusId           String
+  applicationNumber  String?
+  deficiencyNote     String?
+  resolvedAt         DateTime?
+  approvedAt         DateTime?
+  memo               String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  version            Int       @default(1)
+  deletedAt          DateTime?
+
+  @@index([contractId])
+  @@index([statusId])
+}
+
+model CaseComment {
+  id         String   @id @default(uuid())
+  entityType String // TOSS_CASE/APPOINTMENT/VISIT/CONTRACT/ENTRY/CUSTOMER
+  entityId   String
+  userId     String
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model CaseHistory {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  field      String
+  before     Json?
+  after      Json?
+  changedBy  String?
+  changedAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+model CaseAttachment {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  url        String
+  fileName   String
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}

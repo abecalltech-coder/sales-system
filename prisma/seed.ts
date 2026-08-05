@@ -73,8 +73,77 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
   { code: 'VIEWER', name: '閲覧専用', permissions: RESOURCES.map((r) => ({ resource: r, action: 'view', scope: 'ALL' })) },
 ];
 
+const STATUS_DEFS: { category: string; internalCode: string; displayName: string; color?: string }[] = [
+  // トス
+  { category: 'TOSS', internalCode: 'TOSS_NEW', displayName: '新規', color: '#3b82f6' },
+  { category: 'TOSS', internalCode: 'TOSS_UNHANDLED', displayName: '未対応', color: '#f97316' },
+  { category: 'TOSS', internalCode: 'TOSS_IN_PROGRESS', displayName: '対応中', color: '#eab308' },
+  { category: 'TOSS', internalCode: 'TOSS_ABSENT', displayName: '不在', color: '#a3a3a3' },
+  { category: 'TOSS', internalCode: 'TOSS_RECALL', displayName: '再架電', color: '#a3a3a3' },
+  { category: 'TOSS', internalCode: 'TOSS_PROSPECT', displayName: '見込み', color: '#22c55e' },
+  { category: 'TOSS', internalCode: 'TOSS_APPOINTMENT', displayName: 'アポイント', color: '#16a34a' },
+  { category: 'TOSS', internalCode: 'TOSS_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
+  { category: 'TOSS', internalCode: 'TOSS_EXCLUDED', displayName: '対象外', color: '#737373' },
+  { category: 'TOSS', internalCode: 'TOSS_DUPLICATE', displayName: '重複', color: '#737373' },
+  { category: 'TOSS', internalCode: 'TOSS_CLOSED', displayName: 'クローズ', color: '#737373' },
+  // アポ(商談ステータス)
+  { category: 'APPOINTMENT', internalCode: 'APO_CONFIRMED', displayName: 'アポ確定', color: '#3b82f6' },
+  { category: 'APPOINTMENT', internalCode: 'APO_BEFORE_MEETING', displayName: '商談前', color: '#eab308' },
+  { category: 'APPOINTMENT', internalCode: 'APO_IN_MEETING', displayName: '商談中', color: '#f97316' },
+  { category: 'APPOINTMENT', internalCode: 'APO_MEETING_DONE', displayName: '商談完了', color: '#22c55e' },
+  { category: 'APPOINTMENT', internalCode: 'APO_RESCHEDULE', displayName: '再商談', color: '#a3a3a3' },
+  { category: 'APPOINTMENT', internalCode: 'APO_REVISIT', displayName: '再訪問', color: '#a3a3a3' },
+  { category: 'APPOINTMENT', internalCode: 'APO_CONTRACTED', displayName: '成約', color: '#16a34a' },
+  { category: 'APPOINTMENT', internalCode: 'APO_ON_HOLD', displayName: '保留', color: '#a3a3a3' },
+  { category: 'APPOINTMENT', internalCode: 'APO_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
+  { category: 'APPOINTMENT', internalCode: 'APO_NO_CONTACT', displayName: '不通', color: '#737373' },
+  { category: 'APPOINTMENT', internalCode: 'APO_LOST', displayName: '失注', color: '#ef4444' },
+  { category: 'APPOINTMENT', internalCode: 'APO_EXCLUDED', displayName: '対象外', color: '#737373' },
+  // 訪問
+  { category: 'VISIT', internalCode: 'VISIT_SCHEDULED', displayName: '訪問予定', color: '#3b82f6' },
+  { category: 'VISIT', internalCode: 'VISIT_DEPARTED', displayName: '出発', color: '#eab308' },
+  { category: 'VISIT', internalCode: 'VISIT_IN_TRANSIT', displayName: '移動中', color: '#eab308' },
+  { category: 'VISIT', internalCode: 'VISIT_ARRIVED', displayName: '訪問到着', color: '#22c55e' },
+  { category: 'VISIT', internalCode: 'MEETING_IN_PROGRESS', displayName: '商談中', color: '#f97316' },
+  { category: 'VISIT', internalCode: 'MEETING_COMPLETED', displayName: '商談終了', color: '#16a34a' },
+  { category: 'VISIT', internalCode: 'VISIT_ABSENT', displayName: '不在', color: '#a3a3a3' },
+  { category: 'VISIT', internalCode: 'VISIT_DELAYED', displayName: '遅刻', color: '#f97316' },
+  { category: 'VISIT', internalCode: 'VISIT_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
+  { category: 'VISIT', internalCode: 'REVISIT_REQUIRED', displayName: '再訪問', color: '#a3a3a3' },
+  { category: 'VISIT', internalCode: 'VISIT_COMPLETED', displayName: '完了', color: '#16a34a' },
+  // マッチング
+  { category: 'MATCHING', internalCode: 'NOT_HANDLED', displayName: '未対応', color: '#a3a3a3' },
+  { category: 'MATCHING', internalCode: 'ERROR', displayName: 'エラー', color: '#ef4444' },
+  { category: 'MATCHING', internalCode: 'FACTOR_COLLECTING', displayName: 'ファクター回収中', color: '#eab308' },
+  { category: 'MATCHING', internalCode: 'SMS_APPROVAL_PENDING', displayName: 'SMS承認待ち', color: '#eab308' },
+  { category: 'MATCHING', internalCode: 'POST_CONFIRM_PENDING', displayName: '後確待ち', color: '#eab308' },
+  { category: 'MATCHING', internalCode: 'MATCHING_COMPLETED', displayName: 'マッチング完了', color: '#22c55e' },
+  { category: 'MATCHING', internalCode: 'SWITCHING_PENDING', displayName: 'スイッチング待ち', color: '#3b82f6' },
+  { category: 'MATCHING', internalCode: 'SWITCHING_COMPLETED', displayName: 'スイッチング完了', color: '#16a34a' },
+  { category: 'MATCHING', internalCode: 'CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
+  // エントリー
+  { category: 'ENTRY', internalCode: 'NOT_ENTERED', displayName: '未エントリー', color: '#a3a3a3' },
+  { category: 'ENTRY', internalCode: 'PREPARING', displayName: 'エントリー準備中', color: '#eab308' },
+  { category: 'ENTRY', internalCode: 'DEFICIENCY_CHECKING', displayName: '不備確認中', color: '#f97316' },
+  { category: 'ENTRY', internalCode: 'ENTERED', displayName: 'エントリー済み', color: '#22c55e' },
+  { category: 'ENTRY', internalCode: 'RETURNED', displayName: '差戻し', color: '#ef4444' },
+  { category: 'ENTRY', internalCode: 'RESUBMITTED', displayName: '再提出', color: '#eab308' },
+  { category: 'ENTRY', internalCode: 'APPROVED', displayName: '承認済み', color: '#16a34a' },
+  { category: 'ENTRY', internalCode: 'REJECTED', displayName: '却下', color: '#ef4444' },
+  { category: 'ENTRY', internalCode: 'ENTRY_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
+];
+
 async function main() {
   console.log('シード投入を開始します...');
+
+  for (const [i, def] of STATUS_DEFS.entries()) {
+    await prisma.statusMaster.upsert({
+      where: { category_internalCode: { category: def.category, internalCode: def.internalCode } },
+      update: { displayName: def.displayName, color: def.color },
+      create: { ...def, order: i },
+    });
+  }
+  console.log(`ステータスマスタ${STATUS_DEFS.length}件を投入しました`);
 
   for (const def of ROLE_DEFS) {
     const role = await prisma.role.upsert({
@@ -129,6 +198,24 @@ async function main() {
     },
   });
   console.log(`初期管理者: ${admin.email} (初回ログイン時パスワード変更が必要です)`);
+
+  const sampleProducts = ['エネパル電気(低圧)', 'エネパル電気(高圧)', 'ガスセット'];
+  for (const [i, name] of sampleProducts.entries()) {
+    await prisma.product.upsert({
+      where: { id: `seed-product-${i}` },
+      update: { name },
+      create: { id: `seed-product-${i}`, name, order: i },
+    });
+  }
+  const sampleSources = ['Googleフォーム', '紹介', '架電'];
+  for (const [i, name] of sampleSources.entries()) {
+    await prisma.source.upsert({
+      where: { id: `seed-source-${i}` },
+      update: { name },
+      create: { id: `seed-source-${i}`, name, order: i },
+    });
+  }
+  console.log('サンプル商材・流入元を投入しました(本番では実データに置き換えてください)');
 
   console.log('シード投入が完了しました');
 }

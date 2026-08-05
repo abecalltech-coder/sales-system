@@ -6,6 +6,13 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { HealthController } from './health.controller';
+import { CustomersModule } from './customers/customers.module';
+import { TossCasesModule } from './toss-cases/toss-cases.module';
+import { AppointmentsModule } from './appointments/appointments.module';
+import { VisitsModule } from './visits/visits.module';
+import { ContractsModule } from './contracts/contracts.module';
+import { EntriesModule } from './entries/entries.module';
+import { MastersModule } from './masters/masters.module';
 
 @Module({
   imports: [
@@ -18,6 +25,13 @@ import { HealthController } from './health.controller';
     AuthModule,
     UsersModule,
     OrganizationsModule,
+    CustomersModule,
+    TossCasesModule,
+    AppointmentsModule,
+    VisitsModule,
+    ContractsModule,
+    EntriesModule,
+    MastersModule,
   ],
   controllers: [HealthController],
 })
