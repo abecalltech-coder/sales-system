@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { CommentsPanel } from '../../components/CommentsPanel';
 import { useTossCase, useStatuses } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
@@ -92,6 +93,8 @@ export function TossCaseDetailPage() {
             メモを保存
           </button>
         </div>
+
+        <CommentsPanel entityType="TOSS_CASE" entityId={id} />
       </div>
     </AppLayout>
   );

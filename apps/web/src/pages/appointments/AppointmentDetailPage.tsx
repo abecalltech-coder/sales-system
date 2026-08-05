@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { CommentsPanel } from '../../components/CommentsPanel';
 import { useAppointment, useStatuses } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
@@ -82,6 +83,8 @@ export function AppointmentDetailPage() {
           <label style={{ fontSize: 13, color: '#6b7280' }}>訪問先住所</label>
           <p>{appointment.visitAddress ?? '-'}</p>
         </div>
+
+        <CommentsPanel entityType="APPOINTMENT" entityId={id} />
       </div>
     </AppLayout>
   );

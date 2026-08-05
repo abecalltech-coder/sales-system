@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { CommentsPanel } from '../../components/CommentsPanel';
 import { useEntry, useStatuses } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
@@ -59,6 +60,8 @@ export function EntryDetailPage() {
           <label style={{ fontSize: 13, color: '#6b7280' }}>不備内容</label>
           <p>{entry.deficiencyNote ?? 'なし'}</p>
         </div>
+
+        <CommentsPanel entityType="ENTRY" entityId={id} />
       </div>
     </AppLayout>
   );

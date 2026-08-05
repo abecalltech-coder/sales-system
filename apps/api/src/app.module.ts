@@ -22,6 +22,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { SummaryModule } from './summary/summary.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
     SummaryModule,
     AuditLogsModule,
     SystemSettingsModule,
+    CommentsModule,
   ],
   controllers: [HealthController],
 })

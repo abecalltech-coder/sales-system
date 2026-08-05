@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { AppLayout } from '../../components/AppLayout';
+import { CommentsPanel } from '../../components/CommentsPanel';
 import { useVisit, useStatuses } from '../../hooks/useApi';
 
 export function VisitDetailPage() {
@@ -48,6 +49,8 @@ export function VisitDetailPage() {
           <label style={{ fontSize: 13, color: '#6b7280' }}>商談結果</label>
           <p>{visit.meetingSession?.meetingResult ?? '未入力'}</p>
         </div>
+
+        <CommentsPanel entityType="VISIT" entityId={id} />
       </div>
     </AppLayout>
   );

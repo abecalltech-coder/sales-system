@@ -70,7 +70,12 @@ export function AppointmentsListPage() {
   return (
     <AppLayout>
       <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>アポ実績管理</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h1 style={{ fontSize: 20 }}>アポ実績管理</h1>
+          <a href="/api/appointments/export" style={{ fontSize: 13 }}>
+            CSV出力
+          </a>
+        </div>
 
         <div style={{ marginBottom: 16 }}>
           <select

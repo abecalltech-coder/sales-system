@@ -429,3 +429,23 @@ export interface SystemSettingItem {
 export function useSystemSettings() {
   return useQuery({ queryKey: ['system-settings'], queryFn: () => api.get<SystemSettingItem[]>('/system-settings') });
 }
+
+// ============================================================
+// コメント(全案件種別共通)
+// ============================================================
+export interface CommentItem {
+  id: string;
+  entityType: string;
+  entityId: string;
+  userId: string;
+  body: string;
+  createdAt: string;
+}
+
+export function useComments(entityType: string, entityId: string) {
+  return useQuery({
+    queryKey: ['comments', entityType, entityId],
+    queryFn: () => api.get<CommentItem[]>(`/comments?entityType=${entityType}&entityId=${entityId}`),
+    enabled: !!entityId,
+  });
+}

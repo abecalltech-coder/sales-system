@@ -43,7 +43,12 @@ export function EntriesListPage() {
   return (
     <AppLayout>
       <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>エントリー管理</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h1 style={{ fontSize: 20 }}>エントリー管理</h1>
+          <a href="/api/entries/export" style={{ fontSize: 13 }}>
+            CSV出力
+          </a>
+        </div>
 
         <div style={{ marginBottom: 16 }}>
           <select

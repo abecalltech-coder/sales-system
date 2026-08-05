@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { CommentsPanel } from '../../components/CommentsPanel';
 import { useContract, useStatuses } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
@@ -64,6 +65,8 @@ export function ContractDetailPage() {
             {contract.switchingAt ? new Date(contract.switchingAt).toLocaleDateString('ja-JP') : '未入力'}
           </p>
         </div>
+
+        <CommentsPanel entityType="CONTRACT" entityId={id} />
       </div>
     </AppLayout>
   );

@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
-import { stringify } from 'csv-stringify';
 import { TossCasesService } from './toss-cases.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto } from './dto/toss-case.dto';
@@ -8,6 +7,7 @@ import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
+import { streamCsvExport } from '../common/utils/csv-export.util';
 
 const CSV_COLUMNS = [
   'caseNumber',
@@ -40,43 +40,30 @@ export class TossCasesController {
   @RequirePermissions({ resource: 'toss_case', action: 'export' })
   @Get('export')
   async export(@Res() res: Response, @Query('statusId') statusId?: string) {
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="toss-cases-${Date.now()}.csv"`);
-
-    const stringifier = stringify({ header: true, columns: CSV_COLUMNS as unknown as string[] });
-    stringifier.pipe(res);
-
-    const BATCH_SIZE = 1000;
-    let cursor: string | undefined;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const rows = await this.prisma.tossCase.findMany({
-        where: { deletedAt: null, ...(statusId ? { statusId } : {}) },
-        take: BATCH_SIZE,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        orderBy: { id: 'asc' },
-        include: { customer: true },
-      });
-      if (rows.length === 0) break;
-
-      for (const row of rows) {
-        stringifier.write({
-          caseNumber: row.caseNumber,
-          receivedAt: row.receivedAt.toISOString(),
-          corporateName: row.customer?.corporateName ?? '',
-          contactName: row.customer?.contactName ?? '',
-          phone: row.customer?.phone ?? '',
-          email: row.customer?.email ?? '',
-          statusId: row.statusId,
-          memo: row.memo ?? '',
-        });
-      }
-      cursor = rows[rows.length - 1].id;
-      if (rows.length < BATCH_SIZE) break;
-    }
-
-    stringifier.end();
+    await streamCsvExport({
+      res,
+      filenamePrefix: 'toss-cases',
+      columns: [...CSV_COLUMNS],
+      getId: (row) => row.id,
+      fetchBatch: (cursor, batchSize) =>
+        this.prisma.tossCase.findMany({
+          where: { deletedAt: null, ...(statusId ? { statusId } : {}) },
+          take: batchSize,
+          ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+          orderBy: { id: 'asc' },
+          include: { customer: true },
+        }),
+      mapRow: (row) => ({
+        caseNumber: row.caseNumber,
+        receivedAt: row.receivedAt.toISOString(),
+        corporateName: row.customer?.corporateName ?? '',
+        contactName: row.customer?.contactName ?? '',
+        phone: row.customer?.phone ?? '',
+        email: row.customer?.email ?? '',
+        statusId: row.statusId,
+        memo: row.memo ?? '',
+      }),
+    });
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })

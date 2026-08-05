@@ -45,7 +45,12 @@ export function ContractsListPage() {
   return (
     <AppLayout>
       <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>成約管理</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h1 style={{ fontSize: 20 }}>成約管理</h1>
+          <a href="/api/contracts/export" style={{ fontSize: 13 }}>
+            CSV出力
+          </a>
+        </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <input
