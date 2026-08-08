@@ -15,6 +15,11 @@ interface CursorInfo {
   columnKey: string;
 }
 
+interface CursorSnapshot {
+  entityType: string;
+  cursors: CursorInfo[];
+}
+
 const CURSOR_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#d946ef', '#14b8a6'];
 
 /** userIdから決定的に色を割り当てる(同じユーザーは常に同じ色になる) */
@@ -38,6 +43,8 @@ export function usePresence(entityType: string, currentUserId: string | undefine
   useEffect(() => {
     const socket = getSocket();
 
+    const join = () => socket.emit('presence.join', { room: entityType });
+
     // React 18 StrictMode(開発時)はeffectを「マウント→即クリーンアップ→再マウント」と
     // 二重実行するため、離脱(leave)を即座に送ると再マウント後にjoinし直すまでの間
     // 在室情報やカーソル位置が一瞬失われる。離脱を少し遅延させ、直後の再マウントで
@@ -46,8 +53,14 @@ export function usePresence(entityType: string, currentUserId: string | undefine
       clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
     } else {
-      socket.emit('presence.join', { room: entityType });
+      if (socket.connected) join();
     }
+
+    // タブのバックグラウンド化等でSocket.IOが裏で切断→再接続すると、接続自体は復旧しても
+    // presence.joinを送り直さない限りルームへの再参加が行われず、以後のイベントを
+    // 受信できないまま固まって見える不具合があった。'connect'は再接続時にも発火するため、
+    // ここで毎回joinし直すことで復旧させる。
+    socket.on('connect', join);
 
     const onPresence = (payload: { entityType: string; viewers: PresenceViewer[] }) => {
       if (payload.entityType !== entityType) return;
@@ -62,15 +75,25 @@ export function usePresence(entityType: string, currentUserId: string | undefine
         setCursorVersion((v) => v + 1);
       }
     };
+    // join直後にサーバーから送られる現在のカーソル状況で置き換える(再接続直後、
+    // 他ユーザーがまだ何も動かしていなくても最新状態をすぐ復元できるようにする)。
+    const onCursorSnapshot = (payload: CursorSnapshot) => {
+      if (payload.entityType !== entityType) return;
+      cursorsRef.current = new Map(payload.cursors.map((c) => [c.socketId, c]));
+      setCursorVersion((v) => v + 1);
+    };
 
     socket.on('presence.updated', onPresence);
     socket.on('cursor.updated', onCursorUpdated);
     socket.on('cursor.cleared', onCursorCleared);
+    socket.on('cursor.snapshot', onCursorSnapshot);
 
     return () => {
+      socket.off('connect', join);
       socket.off('presence.updated', onPresence);
       socket.off('cursor.updated', onCursorUpdated);
       socket.off('cursor.cleared', onCursorCleared);
+      socket.off('cursor.snapshot', onCursorSnapshot);
       leaveTimerRef.current = setTimeout(() => {
         socket.emit('presence.leave', { room: entityType });
         cursorsRef.current.clear();

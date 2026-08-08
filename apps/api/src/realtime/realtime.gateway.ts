@@ -27,6 +27,14 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
 // プレゼンス/カーソル共有を許可する一覧種別(それ以外のroom名は無視する)
 const PRESENCE_ROOMS = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'ENTRY'];
 
+interface CursorPayload {
+  socketId: string;
+  userId: string;
+  userName: string;
+  rowId: string;
+  columnKey: string;
+}
+
 /**
  * ルーム設計(セクション32): company/department/team/userへ自動join、
  * 案件詳細画面表示中のみtoss/appointment/visit/contractへ動的join。
@@ -43,6 +51,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @WebSocketServer()
   server!: Server;
+
+  // entityType(room) -> socketId -> 直近のカーソル位置。タブのバックグラウンド化等で
+  // Socket.IOが裏で再接続した際、再joinしたクライアントへ現在の状態を即座に復元するために使う
+  // (再接続前に他ユーザーが動かしていなければcursor.updatedイベントが来ないため)。
+  private cursorState = new Map<string, Map<string, CursorPayload>>();
 
   constructor(
     private readonly jwt: JwtService,
@@ -80,18 +93,25 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     // disconnect時点ではSocket.IOが既に全roomから離脱させているため、client.roomsでの判定は当てにせず
     // 全プレゼンスroomへ無条件でカーソル解除を配信する(.to()は宛先room側の在室者にのみ届くため副作用はない)。
     for (const room of PRESENCE_ROOMS) {
+      this.cursorState.get(room)?.delete(client.id);
       client.to(`presence:${room}`).emit('cursor.cleared', { socketId: client.id });
       this.broadcastPresence(room);
     }
     this.logger.debug(`disconnected: ${client.id}`);
   }
 
-  /** 一覧画面を開いた時に呼ぶ。誰が閲覧中かを共有するルームへjoinする。 */
+  /**
+   * 一覧画面を開いた時、およびタブのバックグラウンド化等でSocket.IOが裏で再接続した時に呼ぶ。
+   * 誰が閲覧中かを共有するルームへjoinし、joinしたクライアントへ現在のカーソル状況を
+   * スナップショットとして返す(再接続後、他ユーザーが動かすまで何も見えない問題を防ぐ)。
+   */
   @SubscribeMessage('presence.join')
   handlePresenceJoin(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
     if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
     client.join(`presence:${data.room}`);
     this.broadcastPresence(data.room);
+    const cursors = [...(this.cursorState.get(data.room)?.values() ?? [])];
+    client.emit('cursor.snapshot', { entityType: data.room, cursors });
   }
 
   /** 一覧画面を離れた時に呼ぶ。 */
@@ -99,6 +119,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   handlePresenceLeave(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
     if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
     client.leave(`presence:${data.room}`);
+    this.cursorState.get(data.room)?.delete(client.id);
     client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
     this.broadcastPresence(data.room);
   }
@@ -107,19 +128,23 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   @SubscribeMessage('cursor.move')
   handleCursorMove(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string; rowId?: string; columnKey?: string }) {
     if (!data?.room || !PRESENCE_ROOMS.includes(data.room) || !data.rowId || !data.columnKey) return;
-    client.to(`presence:${data.room}`).emit('cursor.updated', {
+    const payload: CursorPayload = {
       socketId: client.id,
       userId: client.data.userId,
       userName: client.data.userName,
       rowId: data.rowId,
       columnKey: data.columnKey,
-    });
+    };
+    if (!this.cursorState.has(data.room)) this.cursorState.set(data.room, new Map());
+    this.cursorState.get(data.room)!.set(client.id, payload);
+    client.to(`presence:${data.room}`).emit('cursor.updated', payload);
   }
 
   /** セルからフォーカスが外れた時に呼ぶ。 */
   @SubscribeMessage('cursor.clear')
   handleCursorClear(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
     if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
+    this.cursorState.get(data.room)?.delete(client.id);
     client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
   }
 
