@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // ローカル開発(Windows/Mac等)に加え、Railway等のnode:20-alpine(OpenSSL 3系)ランタイム向けの
+  // エンジンも生成する。指定しないとOpenSSL 1.1前提のエンジンになりコンテナ内で起動に失敗する。
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

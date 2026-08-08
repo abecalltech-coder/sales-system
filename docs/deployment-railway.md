@@ -6,25 +6,8 @@
 
 ## 0. 前提: ローカルでの最終確認(必須)
 
-このシステムの開発はサンドボックス環境で行われており、**Prismaのマイグレーションファイルが
-まだ1つも生成されていません**。あなたのPC(ネットワーク制限のない環境)で、デプロイ前に
-必ず以下を実行してください。
-
-```bash
-git clone <あなたのリポジトリURL>
-cd sales-system
-cp .env.example .env
-# .envのDATABASE_URLをローカルPostgreSQLに合わせて編集(またはdocker compose up -d postgresを使う)
-
-pnpm install
-pnpm exec prisma migrate dev --name init --schema prisma/schema.prisma
-```
-
-これにより `prisma/migrations/` 配下にマイグレーションファイルが生成されます。
-生成されたファイルは**必ずgit commit & pushしてください**(Railway上での
-`prisma migrate deploy`はこのファイルを参照します)。
-
-続けて、実際にローカルでビルド・起動できることを確認してください。
+`prisma/migrations/` 配下のマイグレーションファイルは生成済み・pushされています。
+デプロイ前に、実際にローカルでビルド・起動できることを確認してください。
 
 ```bash
 pnpm --filter @sales-system/api build

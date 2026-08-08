@@ -17,6 +17,9 @@ RUN pnpm --filter @sales-system/web build
 
 FROM node:20-alpine AS runner
 RUN corepack enable
+# PrismaのクエリエンジンがOpenSSLの共有ライブラリを必要とするため明示的に入れておく
+# (未インストールだとlibssl.so.1.1が無く起動時にクラッシュし、ヘルスチェック失敗の原因になる)
+RUN apk add --no-cache openssl
 WORKDIR /repo
 ENV NODE_ENV=production
 COPY --from=build /repo/node_modules ./node_modules
