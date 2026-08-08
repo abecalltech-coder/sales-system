@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { Module } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAutomationRuleDto, UpdateAutomationRuleDto } from './dto/automation-rule.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
@@ -15,14 +16,24 @@ class AutomationRulesService {
 
   create(dto: CreateAutomationRuleDto) {
     return this.prisma.statusAutomationRule.create({
-      data: { statusMasterId: dto.statusMasterId, action: dto.action, config: dto.config ?? {} },
+      data: {
+        statusMasterId: dto.statusMasterId,
+        action: dto.action,
+        config: (dto.config ?? {}) as Prisma.InputJsonValue,
+      },
     });
   }
 
   async update(id: string, dto: UpdateAutomationRuleDto) {
     const existing = await this.prisma.statusAutomationRule.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('自動処理ルールが見つかりません');
-    return this.prisma.statusAutomationRule.update({ where: { id }, data: dto });
+    return this.prisma.statusAutomationRule.update({
+      where: { id },
+      data: {
+        active: dto.active,
+        ...(dto.config !== undefined ? { config: dto.config as Prisma.InputJsonValue } : {}),
+      },
+    });
   }
 
   async remove(id: string) {

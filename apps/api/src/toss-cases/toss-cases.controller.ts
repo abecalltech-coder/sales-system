@@ -2,22 +2,37 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@
 import { Response } from 'express';
 import { TossCasesService } from './toss-cases.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto } from './dto/toss-case.dto';
+import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto, SetCallingFlagDto } from './dto/toss-case.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
 import { ListQueryDto } from '../common/dto/list-query.dto';
 import { streamCsvExport } from '../common/utils/csv-export.util';
+import { extractPrefecture } from '../common/utils/prefecture.util';
 
 const CSV_COLUMNS = [
   'caseNumber',
   'receivedAt',
+  'nextActionAt',
+  'apStaffName',
+  'preConfirmStatusId',
+  'department',
   'corporateName',
+  'memo',
   'contactName',
   'phone',
+  'prefecture',
+  'address',
+  'proposal',
+  'progressStatusId',
+  'ngReasonStatusId',
+  'listName',
+  'callDirection',
+  'industry',
+  'hook',
+  'existingContract',
   'email',
   'statusId',
-  'memo',
 ] as const;
 
 @Controller('toss-cases')
@@ -40,12 +55,13 @@ export class TossCasesController {
   @RequirePermissions({ resource: 'toss_case', action: 'export' })
   @Get('export')
   async export(@Res() res: Response, @Query('statusId') statusId?: string) {
-    await streamCsvExport({
-      res,
-      filenamePrefix: 'toss-cases',
-      columns: [...CSV_COLUMNS],
-      getId: (row) => row.id,
-      fetchBatch: (cursor, batchSize) =>
+    const statusMasters = await this.prisma.statusMaster.findMany({
+      where: { category: { in: ['TOSS', 'TOSS_PRE_CONFIRM', 'TOSS_PROGRESS', 'TOSS_NG_REASON'] } },
+    });
+    const statusLabel = (id: string | null) => (id ? statusMasters.find((s) => s.id === id)?.displayName ?? id : '');
+
+    await streamCsvExport(
+      (cursor, batchSize) =>
         this.prisma.tossCase.findMany({
           where: { deletedAt: null, ...(statusId ? { statusId } : {}) },
           take: batchSize,
@@ -53,17 +69,37 @@ export class TossCasesController {
           orderBy: { id: 'asc' },
           include: { customer: true },
         }),
-      mapRow: (row) => ({
-        caseNumber: row.caseNumber,
-        receivedAt: row.receivedAt.toISOString(),
-        corporateName: row.customer?.corporateName ?? '',
-        contactName: row.customer?.contactName ?? '',
-        phone: row.customer?.phone ?? '',
-        email: row.customer?.email ?? '',
-        statusId: row.statusId,
-        memo: row.memo ?? '',
-      }),
-    });
+      {
+        res,
+        filenamePrefix: 'toss-cases',
+        columns: [...CSV_COLUMNS],
+        getId: (row) => row.id,
+        mapRow: (row) => ({
+          caseNumber: row.caseNumber,
+          receivedAt: row.receivedAt.toISOString(),
+          nextActionAt: row.nextActionAt?.toISOString() ?? '',
+          apStaffName: row.apStaffName ?? '',
+          preConfirmStatusId: statusLabel(row.preConfirmStatusId),
+          department: row.department ?? '',
+          corporateName: row.customer?.corporateName ?? '',
+          memo: row.memo ?? '',
+          contactName: row.customer?.contactName ?? '',
+          phone: row.customer?.phone ?? '',
+          prefecture: extractPrefecture(row.customer?.address) ?? '',
+          address: row.customer?.address ?? '',
+          proposal: row.proposal ?? '',
+          progressStatusId: statusLabel(row.progressStatusId),
+          ngReasonStatusId: statusLabel(row.ngReasonStatusId),
+          listName: row.listName ?? '',
+          callDirection: row.callDirection ?? '',
+          industry: row.industry ?? '',
+          hook: row.hook ?? '',
+          existingContract: row.existingContract ?? '',
+          email: row.customer?.email ?? '',
+          statusId: statusLabel(row.statusId),
+        }),
+      },
+    );
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })
@@ -82,6 +118,13 @@ export class TossCasesController {
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateTossCaseDto, @CurrentUser() user: AuthenticatedUser) {
     return this.tossCasesService.update(id, dto, user.id);
+  }
+
+  /** 対応中フラグ(架電中ボタン)の切替。全員へリアルタイム共有し、二重架電を防止する。 */
+  @RequirePermissions({ resource: 'toss_case', action: 'edit' })
+  @Patch(':id/calling-flag')
+  setCallingFlag(@Param('id') id: string, @Body() dto: SetCallingFlagDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.tossCasesService.setCallingFlag(id, dto.active, user.id);
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'edit' })

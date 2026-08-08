@@ -10,7 +10,50 @@ const CATEGORIES = [
   { value: 'VISIT', label: '訪問' },
   { value: 'MATCHING', label: 'マッチング' },
   { value: 'ENTRY', label: 'エントリー' },
+  { value: 'TOSS_PRE_CONFIRM', label: 'トス実績: 前確担当者' },
+  { value: 'TOSS_PROGRESS', label: 'トス実績: 進捗' },
+  { value: 'TOSS_NG_REASON', label: 'トス実績: NG理由' },
+  { value: 'APPOINTMENT_RE_PRE_CONFIRM', label: 'アポ実績: 再前確担当' },
+  { value: 'APPOINTMENT_PRE_CONTACT', label: 'アポ実績: 前連担当' },
+  { value: 'APPOINTMENT_CLOSER', label: 'アポ実績: CL(クロージング担当)' },
+  { value: 'APPOINTMENT_HP_PROGRESS', label: 'アポ実績: HP進捗' },
+  { value: 'APPOINTMENT_TYPE', label: 'アポ実績: 種別' },
+  { value: 'APPOINTMENT_PROGRESS', label: 'アポ実績: 進捗' },
+  { value: 'APPOINTMENT_ACQUISITION_METHOD', label: 'アポ実績: 獲得方法' },
+  { value: 'APPOINTMENT_ANSHIN_BIZ_STATUS', label: 'アポ実績: あんしんBiz' },
+  { value: 'APPOINTMENT_ANSHIN_BIZ_LOST_REASON', label: 'アポ実績: あんしんBiz失注理由' },
+  { value: 'APPOINTMENT_MOBILE_STATUS', label: 'アポ実績: モバイル' },
+  { value: 'APPOINTMENT_MOBILE_LOST_REASON', label: 'アポ実績: モバイル失注理由' },
+  { value: 'APPOINTMENT_FUNFO_STATUS', label: 'アポ実績: funfo' },
+  { value: 'APPOINTMENT_FUNFO_LOST_REASON', label: 'アポ実績: funfo失注理由' },
+  { value: 'APPOINTMENT_CONSENT_FORM_TYPE', label: 'アポ実績: 同意書種別' },
+  { value: 'APPOINTMENT_DELIVERY_METHOD', label: 'アポ実績: 交付方法' },
+  { value: 'APPOINTMENT_DELIVERY_STATUS', label: 'アポ実績: 交付状況' },
 ];
+
+// これらのカテゴリは内部コードの意味を持たず、単純な選択肢名の管理として使うため
+// 追加フォームでは表示名のみ入力させ、内部コードは自動採番する。
+const SIMPLE_LABEL_CATEGORIES = new Set([
+  'TOSS_PRE_CONFIRM',
+  'TOSS_PROGRESS',
+  'TOSS_NG_REASON',
+  'APPOINTMENT_RE_PRE_CONFIRM',
+  'APPOINTMENT_PRE_CONTACT',
+  'APPOINTMENT_CLOSER',
+  'APPOINTMENT_HP_PROGRESS',
+  'APPOINTMENT_TYPE',
+  'APPOINTMENT_PROGRESS',
+  'APPOINTMENT_ACQUISITION_METHOD',
+  'APPOINTMENT_ANSHIN_BIZ_STATUS',
+  'APPOINTMENT_ANSHIN_BIZ_LOST_REASON',
+  'APPOINTMENT_MOBILE_STATUS',
+  'APPOINTMENT_MOBILE_LOST_REASON',
+  'APPOINTMENT_FUNFO_STATUS',
+  'APPOINTMENT_FUNFO_LOST_REASON',
+  'APPOINTMENT_CONSENT_FORM_TYPE',
+  'APPOINTMENT_DELIVERY_METHOD',
+  'APPOINTMENT_DELIVERY_STATUS',
+]);
 
 interface StatusRow {
   id: string;
@@ -41,8 +84,14 @@ export function MastersAdminPage() {
 
   const [newCode, setNewCode] = useState('');
   const [newLabel, setNewLabel] = useState('');
+  const isSimpleLabelCategory = SIMPLE_LABEL_CATEGORIES.has(category);
   const createMutation = useMutation({
-    mutationFn: () => api.post('/status-master', { category, internalCode: newCode, displayName: newLabel }),
+    mutationFn: () =>
+      api.post('/status-master', {
+        category,
+        internalCode: isSimpleLabelCategory ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode,
+        displayName: newLabel,
+      }),
     onSuccess: () => {
       setNewCode('');
       setNewLabel('');
@@ -79,7 +128,7 @@ export function MastersAdminPage() {
           <table style={{ width: '100%', fontSize: 13, marginBottom: 16, borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
-                <th style={{ padding: 6 }}>内部コード</th>
+                {!isSimpleLabelCategory && <th style={{ padding: 6 }}>内部コード</th>}
                 <th style={{ padding: 6 }}>表示名</th>
                 <th style={{ padding: 6 }}>色</th>
                 <th style={{ padding: 6 }}>有効</th>
@@ -88,7 +137,7 @@ export function MastersAdminPage() {
             <tbody>
               {statuses?.map((s) => (
                 <tr key={s.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: 6, color: '#9ca3af' }}>{s.internalCode}</td>
+                  {!isSimpleLabelCategory && <td style={{ padding: 6, color: '#9ca3af' }}>{s.internalCode}</td>}
                   <td style={{ padding: 6 }}>
                     <input
                       defaultValue={s.displayName}
@@ -117,10 +166,17 @@ export function MastersAdminPage() {
         )}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
-          <input placeholder="内部コード(例: TOSS_CUSTOM)" value={newCode} onChange={(e) => setNewCode(e.target.value)} style={{ padding: 6, fontSize: 13 }} />
-          <input placeholder="表示名" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} style={{ padding: 6, fontSize: 13 }} />
-          <button onClick={() => createMutation.mutate()} disabled={!newCode || !newLabel}>
-            ステータス追加
+          {!isSimpleLabelCategory && (
+            <input placeholder="内部コード(例: TOSS_CUSTOM)" value={newCode} onChange={(e) => setNewCode(e.target.value)} style={{ padding: 6, fontSize: 13 }} />
+          )}
+          <input
+            placeholder={isSimpleLabelCategory ? '名称を入力' : '表示名'}
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            style={{ padding: 6, fontSize: 13 }}
+          />
+          <button onClick={() => createMutation.mutate()} disabled={(!isSimpleLabelCategory && !newCode) || !newLabel}>
+            追加
           </button>
         </div>
 

@@ -1,12 +1,32 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { AppLayout } from '../components/AppLayout';
 import { useKpiSummary, useMe } from '../hooks/useApi';
 
 function KpiCard({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, minWidth: 120 }}>
-      <div style={{ fontSize: 12, color: '#6b7280' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700 }}>{value.toLocaleString()}</div>
+    <div className="card" style={{ minWidth: 140, flex: '1 1 140px', padding: 16 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function RateChip({ label, value }: { label: string; value: number }) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        background: '#fff',
+        border: '1px solid var(--color-border)',
+        borderRadius: 999,
+        padding: '6px 12px',
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+      <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{value}%</span>
     </div>
   );
 }
@@ -28,15 +48,15 @@ export function DashboardPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 4 }}>ダッシュボード</h1>
-        {me && <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 20 }}>ようこそ、{me.name}さん</p>}
+      <div style={{ padding: '28px 32px', maxWidth: 1100 }}>
+        <h1 style={{ fontSize: 22, marginBottom: 4 }}>ダッシュボード</h1>
+        {me && <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginBottom: 24 }}>ようこそ、{me.name}さん</p>}
 
-        {isLoading && <p>読み込み中...</p>}
+        {isLoading && <p style={{ color: 'var(--color-text-faint)' }}>読み込み中...</p>}
 
         {kpi && (
           <>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
               <KpiCard label="当月トス数" value={kpi.counts.tossCount} />
               <KpiCard label="当月アポ数" value={kpi.counts.appointmentCount} />
               <KpiCard label="当月訪問到着数" value={kpi.counts.visitArrivedCount} />
@@ -45,21 +65,22 @@ export function DashboardPage() {
               <KpiCard label="当月エントリー数" value={kpi.counts.entryCount} />
             </div>
 
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 24, fontSize: 13 }}>
-              <span>トス→アポ転換率: {kpi.conversionRates.tossToAppointment}%</span>
-              <span>アポ→訪問転換率: {kpi.conversionRates.appointmentToVisit}%</span>
-              <span>訪問→商談転換率: {kpi.conversionRates.visitToMeeting}%</span>
-              <span>商談→成約転換率: {kpi.conversionRates.meetingToContract}%</span>
-              <span>成約→エントリー転換率: {kpi.conversionRates.contractToEntry}%</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
+              <RateChip label="トス→アポ" value={kpi.conversionRates.tossToAppointment} />
+              <RateChip label="アポ→訪問" value={kpi.conversionRates.appointmentToVisit} />
+              <RateChip label="訪問→商談" value={kpi.conversionRates.visitToMeeting} />
+              <RateChip label="商談→成約" value={kpi.conversionRates.meetingToContract} />
+              <RateChip label="成約→エントリー" value={kpi.conversionRates.contractToEntry} />
             </div>
 
-            <div style={{ height: 260 }}>
+            <div className="card" style={{ height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={funnelData}>
-                  <XAxis dataKey="name" fontSize={12} />
-                  <YAxis fontSize={12} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#3b82f6" />
+                  <CartesianGrid stroke="#f0f0f0" vertical={false} />
+                  <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
+                  <YAxis fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: 8, borderColor: '#e5e7eb', fontSize: 13 }} />
+                  <Bar dataKey="count" fill="#2563eb" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

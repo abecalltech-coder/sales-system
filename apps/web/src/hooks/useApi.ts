@@ -39,11 +39,27 @@ interface PagedResult<T> {
 
 export interface TossCaseListItem {
   id: string;
-  caseNumber: string;
   receivedAt: string;
   statusId: string;
   memo: string | null;
-  customer: { corporateName: string | null; contactName: string | null; phone: string | null } | null;
+  customer: { corporateName: string | null; contactName: string | null; phone: string | null; address: string | null } | null;
+  prefecture: string | null;
+  nextActionAt: string | null;
+  apStaffName: string | null;
+  department: string | null;
+  proposal: string | null;
+  listName: string | null;
+  callDirection: string | null;
+  industry: string | null;
+  hook: string | null;
+  existingContract: string | null;
+  preConfirmStatusId: string | null;
+  progressStatusId: string | null;
+  ngReasonStatusId: string | null;
+  isCallingInProgress: boolean;
+  callingByUserId: string | null;
+  version: number;
+  appointment: { id: string; caseNumber: string } | null;
 }
 
 export function useTossCases(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
@@ -83,36 +99,61 @@ export function useKpiSummary() {
   return useQuery({ queryKey: ['summary', 'kpi'], queryFn: () => api.get<KpiSummary>('/summary/kpi') });
 }
 
-export interface TossCaseDetail extends TossCaseListItem {
-  version: number;
-  desiredAt: string | null;
-  confirmedStartAt: string | null;
-  confirmedEndAt: string | null;
-  tossUserId: string | null;
-  salesUserId: string | null;
-  appointment: { id: string; caseNumber: string } | null;
-}
-
-export function useTossCase(id: string) {
-  return useQuery({
-    queryKey: ['toss-cases', id],
-    queryFn: () => api.get<TossCaseDetail>(`/toss-cases/${id}`),
-    enabled: !!id,
-  });
-}
-
 // ============================================================
 // アポ
 // ============================================================
 export interface AppointmentListItem {
   id: string;
   caseNumber: string;
+  createdAt: string;
+  storeName: string | null;
+  customer: { corporateName: string | null; contactName: string | null; phone: string | null; address: string | null; email: string | null } | null;
+  prefecture: string | null;
   meetingStartAt: string | null;
   meetingType: string;
   meetingStatusId: string;
   visitAddress: string | null;
   calendarSyncStatus: string;
+  calendarSyncError: string | null;
+  memo: string | null;
   version: number;
+  contract: { id: string; caseNumber: string } | null;
+
+  apStaffName: string | null;
+  preConfirmStatusId: string | null;
+  rePreConfirmStatusId: string | null;
+  preContactStatusId: string | null;
+  closerStatusId: string | null;
+  hook: string | null;
+  department: string | null;
+  industry: string | null;
+  importantMattersOkAt: string | null;
+  electronicContractAt: string | null;
+  nextActionAt: string | null;
+  hpProgressStatusId: string | null;
+  typeStatusId: string | null;
+  progressStatusId: string | null;
+  listName: string | null;
+  acquisitionMethodStatusId: string | null;
+  proposalLocation: string | null;
+  existingContract: string | null;
+  anshinBizProposed: boolean;
+  anshinBizStatusId: string | null;
+  anshinBizLostReasonStatusId: string | null;
+  anshinBizPoints: number | null;
+  mobileProposed: boolean;
+  mobileStatusId: string | null;
+  mobileLostReasonStatusId: string | null;
+  funfoProposed: boolean;
+  funfoStatusId: string | null;
+  funfoLostReasonStatusId: string | null;
+  deductionNote: string | null;
+  consentFormTypeStatusId: string | null;
+  acquiredCompanyName: string | null;
+  deliveryMethodStatusId: string | null;
+  deliveryStatusStatusId: string | null;
+  deliveredAt: string | null;
+  specialNotes: string | null;
 }
 
 export function useAppointments(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
@@ -130,23 +171,18 @@ export function useAppointments(params: { page: number; pageSize: number; keywor
   });
 }
 
-export function useAppointment(id: string) {
-  return useQuery({
-    queryKey: ['appointments', id],
-    queryFn: () => api.get<AppointmentListItem & { memo: string | null; contract: { id: string; caseNumber: string } | null }>(`/appointments/${id}`),
-    enabled: !!id,
-  });
-}
-
 // ============================================================
 // 訪問
 // ============================================================
 export interface VisitListItem {
   id: string;
   caseNumber: string;
+  storeName: string | null;
   scheduledAt: string;
   statusId: string;
   visitKind: string;
+  arrivedAt: string | null;
+  meetingSession: { meetingResult: string | null } | null;
   version: number;
 }
 
@@ -164,23 +200,19 @@ export function useVisits(params: { page: number; pageSize: number; statusId?: s
   });
 }
 
-export function useVisit(id: string) {
-  return useQuery({
-    queryKey: ['visits', id],
-    queryFn: () => api.get<VisitListItem & { arrivedAt: string | null; meetingSession: { meetingResult: string | null } | null }>(`/visits/${id}`),
-    enabled: !!id,
-  });
-}
-
 // ============================================================
 // 成約
 // ============================================================
 export interface ContractListItem {
   id: string;
   caseNumber: string;
+  storeName: string | null;
   matchingStatusId: string;
   contractedAt: string | null;
   contractAmount: string | null;
+  matchingAt: string | null;
+  switchingAt: string | null;
+  memo: string | null;
   version: number;
 }
 
@@ -199,22 +231,17 @@ export function useContracts(params: { page: number; pageSize: number; statusId?
   });
 }
 
-export function useContract(id: string) {
-  return useQuery({
-    queryKey: ['contracts', id],
-    queryFn: () => api.get<ContractListItem & { matchingAt: string | null; switchingAt: string | null; memo: string | null }>(`/contracts/${id}`),
-    enabled: !!id,
-  });
-}
-
 // ============================================================
 // エントリー
 // ============================================================
 export interface EntryListItem {
   id: string;
   caseNumber: string;
+  storeName: string | null;
   statusId: string;
   entryAt: string | null;
+  deficiencyNote: string | null;
+  memo: string | null;
   version: number;
 }
 
@@ -229,14 +256,6 @@ export function useEntries(params: { page: number; pageSize: number; statusId?: 
     queryFn: () => api.get<{ items: EntryListItem[]; total: number; page: number; pageSize: number }>(
       `/entries?${query.toString()}`,
     ),
-  });
-}
-
-export function useEntry(id: string) {
-  return useQuery({
-    queryKey: ['entries', id],
-    queryFn: () => api.get<EntryListItem & { memo: string | null; deficiencyNote: string | null }>(`/entries/${id}`),
-    enabled: !!id,
   });
 }
 
@@ -255,11 +274,12 @@ export interface UserListItem {
   roles: { role: { code: string; name: string } }[];
 }
 
-export function useUsers(params: { page: number; pageSize: number; keyword?: string }) {
+export function useUsers(params: { page: number; pageSize: number; keyword?: string; status?: string }) {
   const query = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
     ...(params.keyword ? { keyword: params.keyword } : {}),
+    ...(params.status ? { status: params.status } : {}),
   });
   return useQuery({
     queryKey: ['users', params],

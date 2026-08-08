@@ -21,4 +21,5 @@ export class UpdateVisitDto {
   @IsOptional() @IsUUID() fieldSalesUserId?: string;
   @IsOptional() @IsDateString() scheduledAt?: string;
   @IsOptional() @IsString() statusId?: string;
+  @IsOptional() @IsString() corporateName?: string; // 店舗名(アポ経由の顧客レコードへ反映)
 }

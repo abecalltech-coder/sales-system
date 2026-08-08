@@ -25,27 +25,29 @@ export class ContractsController {
   @RequirePermissions({ resource: 'contract', action: 'export' })
   @Get('export')
   async export(@Res() res: Response, @Query('statusId') statusId?: string) {
-    await streamCsvExport({
-      res,
-      filenamePrefix: 'contracts',
-      columns: ['caseNumber', 'contractedAt', 'contractAmount', 'matchingStatusId', 'matchingAt', 'switchingAt'],
-      getId: (row) => row.id,
-      fetchBatch: (cursor, batchSize) =>
+    await streamCsvExport(
+      (cursor, batchSize) =>
         this.prisma.contract.findMany({
           where: { deletedAt: null, ...(statusId ? { matchingStatusId: statusId } : {}) },
           take: batchSize,
           ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
           orderBy: { id: 'asc' },
         }),
-      mapRow: (row) => ({
-        caseNumber: row.caseNumber,
-        contractedAt: row.contractedAt?.toISOString() ?? '',
-        contractAmount: row.contractAmount?.toString() ?? '',
-        matchingStatusId: row.matchingStatusId,
-        matchingAt: row.matchingAt?.toISOString() ?? '',
-        switchingAt: row.switchingAt?.toISOString() ?? '',
-      }),
-    });
+      {
+        res,
+        filenamePrefix: 'contracts',
+        columns: ['caseNumber', 'contractedAt', 'contractAmount', 'matchingStatusId', 'matchingAt', 'switchingAt'],
+        getId: (row) => row.id,
+        mapRow: (row) => ({
+          caseNumber: row.caseNumber,
+          contractedAt: row.contractedAt?.toISOString() ?? '',
+          contractAmount: row.contractAmount?.toString() ?? '',
+          matchingStatusId: row.matchingStatusId,
+          matchingAt: row.matchingAt?.toISOString() ?? '',
+          switchingAt: row.switchingAt?.toISOString() ?? '',
+        }),
+      },
+    );
   }
 
   @RequirePermissions({ resource: 'contract', action: 'view' })

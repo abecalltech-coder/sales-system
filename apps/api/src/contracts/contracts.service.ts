@@ -23,7 +23,14 @@ export class ContractsService {
     const where: Prisma.ContractWhereInput = {
       deletedAt: null,
       ...(params.statusId ? { matchingStatusId: params.statusId } : {}),
-      ...(params.keyword ? { caseNumber: { contains: params.keyword, mode: 'insensitive' } } : {}),
+      ...(params.keyword
+        ? {
+            OR: [
+              { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
+              { appointment: { is: { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } } } },
+            ],
+          }
+        : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.contract.findMany({
@@ -31,19 +38,25 @@ export class ContractsService {
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
+        include: { appointment: { include: { customer: true } } },
       }),
       this.prisma.contract.count({ where }),
     ]);
-    return { items, total, page: params.page, pageSize: params.pageSize };
+    return {
+      items: items.map((item) => ({ ...item, storeName: item.appointment?.customer?.corporateName ?? null })),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
   }
 
   async findOne(id: string) {
     const contract = await this.prisma.contract.findFirst({
       where: { id, deletedAt: null },
-      include: { entries: true },
+      include: { entries: true, appointment: { include: { customer: true } } },
     });
     if (!contract) throw new NotFoundException('成約案件が見つかりません');
-    return contract;
+    return { ...contract, storeName: contract.appointment?.customer?.corporateName ?? null };
   }
 
   /** アポ案件の商談結果が成約になった際の自動移行(セクション25)。appointmentIdのunique制約で二重作成防止。 */
@@ -53,12 +66,13 @@ export class ContractsService {
 
     const appointment = await this.prisma.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
     const matchingStatusId = await this.statusResolver.resolveId('MATCHING', 'NOT_HANDLED');
-    const caseNumber = await this.sequence.nextCaseNumber('CONTRACT');
+    // 案件番号・案件名はアポ案件からそのまま引き継ぐ(要望: トス/アポ/成約で番号・名称を統一する)
 
     try {
       const contract = await this.prisma.contract.create({
         data: {
-          caseNumber,
+          caseNumber: appointment.caseNumber,
+          caseName: appointment.caseName,
           appointmentId,
           tossCaseId: appointment.tossCaseId,
           contractUserId: appointment.meetingUserId ?? appointment.fieldSalesUserId,
@@ -91,7 +105,7 @@ export class ContractsService {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
 
-    const { version, contractedAt, matchingAt, switchingScheduledAt, switchingAt, nextActionAt, ...rest } = dto;
+    const { version, contractedAt, matchingAt, switchingScheduledAt, switchingAt, nextActionAt, corporateName, ...rest } = dto;
 
     // マッチング完了/スイッチング完了へ変更した際、日付が空欄なら現在日を自動入力する(セクション26)
     let resolvedMatchingAt = matchingAt ? new Date(matchingAt) : existing.matchingAt ?? undefined;
@@ -108,6 +122,19 @@ export class ContractsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (corporateName !== undefined) {
+        const customerId = existing.appointment?.customerId;
+        if (customerId) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { corporateName, updatedBy: userId, version: { increment: 1 } },
+          });
+        } else if (existing.appointment) {
+          const customer = await tx.customer.create({ data: { corporateName, createdBy: userId, updatedBy: userId } });
+          await tx.appointment.update({ where: { id: existing.appointment.id }, data: { customerId: customer.id } });
+        }
+      }
+
       const result = await tx.contract.updateMany({
         where: { id, version },
         data: {

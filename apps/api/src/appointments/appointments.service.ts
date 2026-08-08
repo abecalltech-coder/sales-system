@@ -7,6 +7,8 @@ import { StatusResolverService } from '../common/services/status-resolver.servic
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { toDateOrUndefined } from '../common/utils/date.util';
+import { extractPrefecture } from '../common/utils/prefecture.util';
 
 @Injectable()
 export class AppointmentsService {
@@ -44,27 +46,45 @@ export class AppointmentsService {
             },
           }
         : {}),
-      ...(params.keyword ? { caseNumber: { contains: params.keyword, mode: 'insensitive' } } : {}),
+      ...(params.keyword
+        ? {
+            OR: [
+              { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
+              { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.appointment.findMany({
         where,
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
-        orderBy: { meetingStartAt: 'asc' },
+        // 商談日時が近い順に上から並べる(未設定は末尾)。要望: 商談日時順で自動並び替え。
+        orderBy: [{ meetingStartAt: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
+        include: { customer: true, contract: { select: { id: true, caseNumber: true } } },
       }),
       this.prisma.appointment.count({ where }),
     ]);
-    return { items, total, page: params.page, pageSize: params.pageSize };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        storeName: item.customer?.corporateName ?? null,
+        prefecture: extractPrefecture(item.customer?.address),
+      })),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
   }
 
   async findOne(id: string) {
     const appointment = await this.prisma.appointment.findFirst({
       where: { id, deletedAt: null },
-      include: { visits: true, contract: true },
+      include: { visits: true, contract: true, customer: true },
     });
     if (!appointment) throw new NotFoundException('アポ案件が見つかりません');
-    return appointment;
+    return { ...appointment, storeName: appointment.customer?.corporateName ?? null, prefecture: extractPrefecture(appointment.customer?.address) };
   }
 
   /**
@@ -79,12 +99,13 @@ export class AppointmentsService {
 
     const tossCase = await this.prisma.tossCase.findUniqueOrThrow({ where: { id: tossCaseId } });
     const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
-    const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');
+    // 案件番号・案件名はトス案件からそのまま引き継ぐ(要望: トス/アポ/成約で番号・名称を統一する)
 
     try {
       const appointment = await this.prisma.appointment.create({
         data: {
-          caseNumber,
+          caseNumber: tossCase.caseNumber,
+          caseName: tossCase.caseName,
           tossCaseId,
           customerId: tossCase.customerId,
           snapshotDepartmentId: tossCase.snapshotDepartmentId,
@@ -126,22 +147,66 @@ export class AppointmentsService {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
 
-    const { version, meetingStartAt, meetingEndAt, nextActionAt, ...rest } = dto;
+    const {
+      version,
+      meetingStartAt,
+      meetingEndAt,
+      nextActionAt,
+      importantMattersOkAt,
+      electronicContractAt,
+      deliveredAt,
+      corporateName,
+      contactName,
+      phone,
+      address,
+      email,
+      ...rest
+    } = dto;
+
+    const hasCustomerChanges =
+      corporateName !== undefined || contactName !== undefined || phone !== undefined || address !== undefined || email !== undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      let customerId = existing.customerId;
+      if (hasCustomerChanges) {
+        if (customerId) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: {
+              ...(corporateName !== undefined ? { corporateName } : {}),
+              ...(contactName !== undefined ? { contactName } : {}),
+              ...(phone !== undefined ? { phone } : {}),
+              ...(address !== undefined ? { address } : {}),
+              ...(email !== undefined ? { email } : {}),
+              updatedBy: userId,
+              version: { increment: 1 },
+            },
+          });
+        } else {
+          const customer = await tx.customer.create({
+            data: { corporateName, contactName, phone, address, email, createdBy: userId, updatedBy: userId },
+          });
+          customerId = customer.id;
+        }
+      }
+
       const result = await tx.appointment.updateMany({
         where: { id, version },
         data: {
           ...rest,
-          meetingStartAt: meetingStartAt ? new Date(meetingStartAt) : undefined,
-          meetingEndAt: meetingEndAt ? new Date(meetingEndAt) : undefined,
-          nextActionAt: nextActionAt ? new Date(nextActionAt) : undefined,
+          ...(hasCustomerChanges && !existing.customerId ? { customerId } : {}),
+          meetingStartAt: toDateOrUndefined(meetingStartAt),
+          meetingEndAt: toDateOrUndefined(meetingEndAt),
+          nextActionAt: toDateOrUndefined(nextActionAt),
+          importantMattersOkAt: toDateOrUndefined(importantMattersOkAt),
+          electronicContractAt: toDateOrUndefined(electronicContractAt),
+          deliveredAt: toDateOrUndefined(deliveredAt),
           updatedBy: userId,
           version: { increment: 1 },
         },
       });
       if (result.count === 0) throw new ConflictException('他のユーザーがこのデータを更新しています');
-      return tx.appointment.findUniqueOrThrow({ where: { id } });
+      return tx.appointment.findUniqueOrThrow({ where: { id }, include: { customer: true } });
     });
 
     await this.caseHistory.recordDiff('APPOINTMENT', id, existing, updated, userId);

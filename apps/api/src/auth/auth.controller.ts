@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -29,6 +30,13 @@ const REFRESH_COOKIE_OPTIONS = {
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Public()
+  @Throttle({ auth: { limit: 5, ttl: 60_000 } })
+  @Post('register')
+  async register(@Body() dto: RegisterDto, @Req() req: Request) {
+    return this.authService.register(dto, req.ip);
+  }
 
   @Public()
   @Throttle({ auth: { limit: 5, ttl: 60_000 } })

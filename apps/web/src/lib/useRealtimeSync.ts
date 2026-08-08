@@ -4,6 +4,14 @@ import { useQueryClient } from '@tanstack/react-query';
 
 let socket: Socket | null = null;
 
+/** アプリ全体で単一のSocket.IO接続を共有する(プレゼンス/カーソル共有など複数フックから利用) */
+export function getSocket(): Socket {
+  if (!socket) {
+    socket = io('/', { withCredentials: true, path: '/socket.io' });
+  }
+  return socket;
+}
+
 const ENTITY_QUERY_KEY: Record<string, string> = {
   TOSS_CASE: 'toss-cases',
   APPOINTMENT: 'appointments',
@@ -27,9 +35,7 @@ export function useRealtimeSync() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!socket) {
-      socket = io('/', { withCredentials: true, path: '/socket.io' });
-    }
+    const s = getSocket();
 
     const handleCaseUpdated = (event: CaseUpdatedEvent) => {
       const key = ENTITY_QUERY_KEY[event.entityType];
@@ -38,9 +44,9 @@ export function useRealtimeSync() {
       }
     };
 
-    socket.on('case.updated', handleCaseUpdated);
+    s.on('case.updated', handleCaseUpdated);
     return () => {
-      socket?.off('case.updated', handleCaseUpdated);
+      s.off('case.updated', handleCaseUpdated);
     };
   }, [queryClient]);
 }

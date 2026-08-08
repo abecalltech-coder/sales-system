@@ -1,0 +1,164 @@
+:root {
+  --color-bg: #f7f8fa;
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-faint: #9ca3af;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+  --color-success: #16a34a;
+  --color-success-soft: #f0fdf4;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
+  --color-warning: #d97706;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans',
+    'Noto Sans JP', Meiryo, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* プライマリボタン: 保存・登録・作成系。テキストで判定できないため、ページ側でstyleを重ねて使う想定の
+   デフォルトは中立ボタン。プライマリ色にしたい場合は className="btn-primary" を付与する。 */
+.btn-primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-faint);
+}
+
+label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* カード風コンテナ(フォーム・パネル用の共通クラス) */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 20px;
+}
+
+/* ステータスバッジ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.6;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

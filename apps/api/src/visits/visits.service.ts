@@ -41,27 +41,39 @@ export class VisitsService {
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { scheduledAt: 'asc' },
+        include: { appointment: { include: { customer: true } }, meetingSession: true },
       }),
       this.prisma.visit.count({ where }),
     ]);
-    return { items, total, page: params.page, pageSize: params.pageSize };
+    return {
+      items: items.map((item) => ({ ...item, storeName: item.appointment?.customer?.corporateName ?? null })),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
   }
 
   async findOne(id: string) {
     const visit = await this.prisma.visit.findFirst({
       where: { id, deletedAt: null },
-      include: { meetingSession: true, statusHistory: { orderBy: { changedAt: 'desc' } } },
+      include: {
+        meetingSession: true,
+        statusHistory: { orderBy: { changedAt: 'desc' } },
+        appointment: { include: { customer: true } },
+      },
     });
     if (!visit) throw new NotFoundException('訪問案件が見つかりません');
-    return visit;
+    return { ...visit, storeName: visit.appointment?.customer?.corporateName ?? null };
   }
 
   async create(dto: CreateVisitDto, userId: string) {
     const statusId = await this.statusResolver.resolveId('VISIT', 'VISIT_SCHEDULED');
     const caseNumber = await this.sequence.nextCaseNumber('VISIT');
+    const appointment = await this.prisma.appointment.findUniqueOrThrow({ where: { id: dto.appointmentId } });
     return this.prisma.visit.create({
       data: {
         caseNumber,
+        caseName: appointment.caseName,
         appointmentId: dto.appointmentId,
         visitKind: dto.visitKind ?? 'INITIAL',
         fieldSalesUserId: dto.fieldSalesUserId,
@@ -76,9 +88,22 @@ export class VisitsService {
     if (existing.version !== dto.version) {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
-    const { version, scheduledAt, ...rest } = dto;
+    const { version, scheduledAt, corporateName, ...rest } = dto;
 
     return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (corporateName !== undefined) {
+        const customerId = existing.appointment?.customerId;
+        if (customerId) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { corporateName, updatedBy: userId, version: { increment: 1 } },
+          });
+        } else if (existing.appointment) {
+          const customer = await tx.customer.create({ data: { corporateName, createdBy: userId, updatedBy: userId } });
+          await tx.appointment.update({ where: { id: existing.appointment.id }, data: { customerId: customer.id } });
+        }
+      }
+
       const result = await tx.visit.updateMany({
         where: { id, version },
         data: {
@@ -377,7 +402,7 @@ export class VisitsService {
         } else if (item.actionType === 'START_MEETING') {
           await this.startMeeting(item.targetEntityId, item.payload as StartMeetingDto, userId);
         } else if (item.actionType === 'END_MEETING') {
-          await this.endMeeting(item.targetEntityId, item.payload as EndMeetingDto, userId);
+          await this.endMeeting(item.targetEntityId, item.payload as unknown as EndMeetingDto, userId);
         }
         await this.prisma.offlineAction.update({
           where: { id: record.id },

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 
 export function LoginPage() {
@@ -48,9 +48,12 @@ export function LoginPage() {
           />
         </label>
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
-        <button type="submit" disabled={loading} style={{ width: '100%', padding: 8 }}>
+        <button type="submit" disabled={loading} style={{ width: '100%', padding: 8, marginBottom: 12 }}>
           {loading ? 'ログイン中...' : 'ログイン'}
         </button>
+        <div style={{ textAlign: 'center', fontSize: 13 }}>
+          <Link to="/register">新規登録はこちら</Link>
+        </div>
       </form>
     </div>
   );

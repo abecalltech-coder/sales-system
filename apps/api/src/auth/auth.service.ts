@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -26,8 +26,8 @@ export class AuthService {
   async login(email: string, password: string, ip: string | undefined) {
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    if (!user || user.deletedAt || user.status !== 'ACTIVE') {
-      await this.recordAudit(null, 'LOGIN_FAILED', ip, false, `unknown or inactive user: ${email}`);
+    if (!user || user.deletedAt) {
+      await this.recordAudit(null, 'LOGIN_FAILED', ip, false, `unknown or deleted user: ${email}`);
       throw new UnauthorizedException('メールアドレスまたはパスワードが正しくありません');
     }
 
@@ -50,6 +50,16 @@ export class AuthService {
       throw new UnauthorizedException('メールアドレスまたはパスワードが正しくありません');
     }
 
+    // パスワード確認後にのみ在籍状態を判定する(未承認/停止であることをパスワード未入力の第三者に知らせないため)
+    if (user.status === 'PENDING') {
+      await this.recordAudit(user.id, 'LOGIN_FAILED', ip, false, 'pending approval');
+      throw new UnauthorizedException('アカウントは管理者の承認待ちです。承認され次第ログインできます');
+    }
+    if (user.status !== 'ACTIVE') {
+      await this.recordAudit(user.id, 'LOGIN_FAILED', ip, false, `inactive status: ${user.status}`);
+      throw new UnauthorizedException('このアカウントは現在ご利用いただけません。管理者にお問い合わせください');
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { failedLoginCount: 0, lockedUntil: null },
@@ -61,6 +71,29 @@ export class AuthService {
     await this.recordAudit(user.id, 'LOGIN_SUCCESS', ip, true);
 
     return { accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
+  }
+
+  /** 自己登録(セクション追加要望)。承認待ち状態で作成し、ログイン・権限は管理者の承認後に有効化される。 */
+  async register(dto: { email: string; password: string; name: string; employeeCode?: string }, ip: string | undefined) {
+    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (existing) {
+      throw new ConflictException('このメールアドレスは既に登録されています');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        name: dto.name,
+        employeeCode: dto.employeeCode,
+        passwordHash,
+        status: 'PENDING',
+        mustChangePassword: false,
+      },
+    });
+
+    await this.recordAudit(user.id, 'USER_REGISTERED', ip, true);
+    return { ok: true };
   }
 
   signAccessToken(userId: string, email: string): string {

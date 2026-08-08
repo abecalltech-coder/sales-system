@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 
 interface AppointmentItem {
   id: string;
-  caseNumber: string;
+  storeName: string | null;
   meetingStartAt: string | null;
   meetingType: string;
 }
@@ -38,7 +38,7 @@ export function CalendarPage() {
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{day}</div>
             {items.map((item) => (
               <div key={item.id} style={{ padding: '8px 12px', border: '1px solid #e5e7eb', borderRadius: 8, marginBottom: 6, fontSize: 13 }}>
-                {new Date(item.meetingStartAt!).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} — {item.caseNumber}({item.meetingType})
+                {new Date(item.meetingStartAt!).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} — {item.storeName ?? '(店舗名未設定)'}({item.meetingType})
               </div>
             ))}
           </div>

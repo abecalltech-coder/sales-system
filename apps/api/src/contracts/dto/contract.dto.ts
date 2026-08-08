@@ -5,6 +5,8 @@ export class UpdateContractDto {
   version!: number;
 
   @IsOptional() @IsString() contractUserId?: string;
+  @IsOptional() @IsString() caseName?: string;
+  @IsOptional() @IsString() corporateName?: string; // 店舗名(アポ経由の顧客レコードへ反映)
   @IsOptional() @IsDateString() contractedAt?: string;
   @IsOptional() @IsNumber() contractAmount?: number;
   @IsOptional() @IsNumber() revenueForecast?: number;

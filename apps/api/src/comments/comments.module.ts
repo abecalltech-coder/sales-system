@@ -39,7 +39,6 @@ class CommentsService {
     return this.prisma.caseComment.findMany({
       where: { entityType, entityId },
       orderBy: { createdAt: 'asc' },
-      include: { }, // userへのリレーションは持たせていないため、フロント側でユーザーIDから氏名を引く
     });
   }
 

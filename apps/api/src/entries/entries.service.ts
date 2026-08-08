@@ -26,25 +26,36 @@ export class EntriesService {
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
+        include: { contract: { include: { appointment: { include: { customer: true } } } } },
       }),
       this.prisma.entry.count({ where }),
     ]);
-    return { items, total, page: params.page, pageSize: params.pageSize };
+    return {
+      items: items.map((item) => ({ ...item, storeName: item.contract?.appointment?.customer?.corporateName ?? null })),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
   }
 
   async findOne(id: string) {
-    const entry = await this.prisma.entry.findFirst({ where: { id, deletedAt: null } });
+    const entry = await this.prisma.entry.findFirst({
+      where: { id, deletedAt: null },
+      include: { contract: { include: { appointment: { include: { customer: true } } } } },
+    });
     if (!entry) throw new NotFoundException('エントリー案件が見つかりません');
-    return entry;
+    return { ...entry, storeName: entry.contract?.appointment?.customer?.corporateName ?? null };
   }
 
   /** 初期実装は1成約につき最新1件のエントリーを管理する(セクション27、複数エントリー対応は将来拡張) */
   async create(dto: CreateEntryDto, userId: string) {
     const statusId = dto.statusId ?? (await this.statusResolver.resolveId('ENTRY', 'NOT_ENTERED'));
     const caseNumber = await this.sequence.nextCaseNumber('ENTRY');
+    const contract = await this.prisma.contract.findUniqueOrThrow({ where: { id: dto.contractId } });
     const entry = await this.prisma.entry.create({
       data: {
         caseNumber,
+        caseName: contract.caseName,
         contractId: dto.contractId,
         entryUserId: dto.entryUserId,
         statusId,
@@ -64,9 +75,22 @@ export class EntriesService {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
 
-    const { version, entryAt, resolvedAt, approvedAt, ...rest } = dto;
+    const { version, entryAt, resolvedAt, approvedAt, corporateName, ...rest } = dto;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      if (corporateName !== undefined) {
+        const customerId = existing.contract?.appointment?.customerId;
+        if (customerId) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { corporateName, updatedBy: userId, version: { increment: 1 } },
+          });
+        } else if (existing.contract?.appointment) {
+          const customer = await tx.customer.create({ data: { corporateName, createdBy: userId, updatedBy: userId } });
+          await tx.appointment.update({ where: { id: existing.contract.appointment.id }, data: { customerId: customer.id } });
+        }
+      }
+
       const result = await tx.entry.updateMany({
         where: { id, version },
         data: {

@@ -3,6 +3,9 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
+  ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
@@ -21,10 +24,16 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   );
 }
 
+// プレゼンス/カーソル共有を許可する一覧種別(それ以外のroom名は無視する)
+const PRESENCE_ROOMS = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'ENTRY'];
+
 /**
  * ルーム設計(セクション32): company/department/team/userへ自動join、
  * 案件詳細画面表示中のみtoss/appointment/visit/contractへ動的join。
  * 複数APIインスタンスへのスケールはRedis Adapter(Phase7拡張、REDIS_URL設定時に有効化)で対応する。
+ *
+ * プレゼンス/カーソル共有(セクション追加要望)は単一インスタンス前提でSocket.IOのルーム機能のみで
+ * 実現し、Redis等の追加インフラを必要としない(メモリ上で完結)。
  */
 @WebSocketGateway({
   cors: { origin: process.env.SOCKET_CORS_ORIGIN ?? 'http://localhost:5173', credentials: true },
@@ -55,6 +64,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (!user || user.status !== 'ACTIVE') throw new Error('inactive user');
 
       client.data.userId = user.id;
+      client.data.userName = user.name;
       await client.join(`user:${user.id}`);
       if (user.departmentId) await client.join(`department:${user.departmentId}`);
       if (user.teamId) await client.join(`team:${user.teamId}`);
@@ -67,6 +77,61 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   handleDisconnect(client: Socket) {
+    // disconnect時点ではSocket.IOが既に全roomから離脱させているため、client.roomsでの判定は当てにせず
+    // 全プレゼンスroomへ無条件でカーソル解除を配信する(.to()は宛先room側の在室者にのみ届くため副作用はない)。
+    for (const room of PRESENCE_ROOMS) {
+      client.to(`presence:${room}`).emit('cursor.cleared', { socketId: client.id });
+      this.broadcastPresence(room);
+    }
     this.logger.debug(`disconnected: ${client.id}`);
+  }
+
+  /** 一覧画面を開いた時に呼ぶ。誰が閲覧中かを共有するルームへjoinする。 */
+  @SubscribeMessage('presence.join')
+  handlePresenceJoin(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
+    client.join(`presence:${data.room}`);
+    this.broadcastPresence(data.room);
+  }
+
+  /** 一覧画面を離れた時に呼ぶ。 */
+  @SubscribeMessage('presence.leave')
+  handlePresenceLeave(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
+    client.leave(`presence:${data.room}`);
+    client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
+    this.broadcastPresence(data.room);
+  }
+
+  /** セルにフォーカスした時に呼ぶ。同じ一覧を見ている他ユーザーへカーソル位置を配信する。 */
+  @SubscribeMessage('cursor.move')
+  handleCursorMove(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string; rowId?: string; columnKey?: string }) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room) || !data.rowId || !data.columnKey) return;
+    client.to(`presence:${data.room}`).emit('cursor.updated', {
+      socketId: client.id,
+      userId: client.data.userId,
+      userName: client.data.userName,
+      rowId: data.rowId,
+      columnKey: data.columnKey,
+    });
+  }
+
+  /** セルからフォーカスが外れた時に呼ぶ。 */
+  @SubscribeMessage('cursor.clear')
+  handleCursorClear(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
+    client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
+  }
+
+  private broadcastPresence(entityType: string) {
+    const room = `presence:${entityType}`;
+    const socketIds = this.server.sockets.adapter.rooms.get(room) ?? new Set<string>();
+    const viewers = [...socketIds]
+      .map((id) => {
+        const s = this.server.sockets.sockets.get(id);
+        return s ? { socketId: id, userId: s.data.userId as string, userName: s.data.userName as string } : null;
+      })
+      .filter((v): v is { socketId: string; userId: string; userName: string } => v !== null);
+    this.server.to(room).emit('presence.updated', { entityType, viewers });
   }
 }

@@ -9,7 +9,66 @@ const ROLE_OPTIONS = [
   'ADMIN', 'MANAGER', 'LEADER', 'INSIDE_SALES', 'FIELD_SALES', 'ENTRY_OPERATOR', 'USER', 'VIEWER',
 ];
 
-const STATUS_LABEL: Record<string, string> = { ACTIVE: '在籍中', SUSPENDED: '停止中', RETIRED: '退職済み' };
+const STATUS_LABEL: Record<string, string> = { PENDING: '承認待ち', ACTIVE: '在籍中', SUSPENDED: '停止中', RETIRED: '退職済み' };
+
+function PendingApprovalRow({
+  user,
+  departments,
+  onApproved,
+  onError,
+}: {
+  user: UserListItem;
+  departments: { id: string; name: string }[] | undefined;
+  onApproved: () => void;
+  onError: (message: string) => void;
+}) {
+  const [departmentId, setDepartmentId] = useState('');
+  const [roleCode, setRoleCode] = useState('USER');
+
+  const approveMutation = useMutation({
+    mutationFn: () =>
+      api.post(`/users/${user.id}/approve`, {
+        departmentId: departmentId || undefined,
+        roleCodes: [roleCode],
+      }),
+    onSuccess: onApproved,
+    onError: (err) => onError(err instanceof ApiError ? err.message : '承認に失敗しました'),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => api.post(`/users/${user.id}/reject`),
+    onSuccess: onApproved,
+    onError: (err) => onError(err instanceof ApiError ? err.message : '却下に失敗しました'),
+  });
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: 13 }}>
+      <div style={{ width: 140 }}>{user.name}</div>
+      <div style={{ flex: 1, color: '#6b7280' }}>{user.email}</div>
+      <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={{ padding: 4 }}>
+        <option value="">部署未設定</option>
+        {departments?.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+      <select value={roleCode} onChange={(e) => setRoleCode(e.target.value)} style={{ padding: 4 }}>
+        {ROLE_OPTIONS.map((r) => (
+          <option key={r} value={r}>
+            {r}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => approveMutation.mutate()} disabled={approveMutation.isPending}>
+        承認
+      </button>
+      <button onClick={() => rejectMutation.mutate()} disabled={rejectMutation.isPending}>
+        却下
+      </button>
+    </div>
+  );
+}
 
 export function UsersAdminPage() {
   const [page, setPage] = useState(1);
@@ -17,12 +76,18 @@ export function UsersAdminPage() {
   const pageSize = 20;
   const queryClient = useQueryClient();
   const { data, isLoading } = useUsers({ page, pageSize, keyword: keyword || undefined });
+  const { data: pending } = useUsers({ page: 1, pageSize: 50, status: 'PENDING' });
   const { data: departments } = useDepartments();
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ email: '', name: '', roleCodes: ['USER'], departmentId: '' });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const invalidateUsers = () => {
+    setError(null);
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+  };
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -80,6 +145,17 @@ export function UsersAdminPage() {
 
         {message && <p style={{ color: '#16a34a', fontSize: 13, marginBottom: 12 }}>{message}</p>}
         {error && <p style={{ color: 'crimson', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+        {(pending?.items.length ?? 0) > 0 && (
+          <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 8, marginBottom: 20 }}>
+            <div style={{ padding: '10px 12px', fontWeight: 700, fontSize: 13, borderBottom: '1px solid #fde68a' }}>
+              承認待ちのユーザー({pending?.items.length}件)
+            </div>
+            {pending?.items.map((u) => (
+              <PendingApprovalRow key={u.id} user={u} departments={departments} onApproved={invalidateUsers} onError={setError} />
+            ))}
+          </div>
+        )}
 
         {showCreate && (
           <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, marginBottom: 16, maxWidth: 480 }}>

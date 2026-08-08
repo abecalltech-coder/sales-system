@@ -25,26 +25,28 @@ export class EntriesController {
   @RequirePermissions({ resource: 'entry', action: 'export' })
   @Get('export')
   async export(@Res() res: Response, @Query('statusId') statusId?: string) {
-    await streamCsvExport({
-      res,
-      filenamePrefix: 'entries',
-      columns: ['caseNumber', 'entryAt', 'statusId', 'applicationNumber', 'deficiencyNote'],
-      getId: (row) => row.id,
-      fetchBatch: (cursor, batchSize) =>
+    await streamCsvExport(
+      (cursor, batchSize) =>
         this.prisma.entry.findMany({
           where: { deletedAt: null, ...(statusId ? { statusId } : {}) },
           take: batchSize,
           ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
           orderBy: { id: 'asc' },
         }),
-      mapRow: (row) => ({
-        caseNumber: row.caseNumber,
-        entryAt: row.entryAt?.toISOString() ?? '',
-        statusId: row.statusId,
-        applicationNumber: row.applicationNumber ?? '',
-        deficiencyNote: row.deficiencyNote ?? '',
-      }),
-    });
+      {
+        res,
+        filenamePrefix: 'entries',
+        columns: ['caseNumber', 'entryAt', 'statusId', 'applicationNumber', 'deficiencyNote'],
+        getId: (row) => row.id,
+        mapRow: (row) => ({
+          caseNumber: row.caseNumber,
+          entryAt: row.entryAt?.toISOString() ?? '',
+          statusId: row.statusId,
+          applicationNumber: row.applicationNumber ?? '',
+          deficiencyNote: row.deficiencyNote ?? '',
+        }),
+      },
+    );
   }
 
   @RequirePermissions({ resource: 'entry', action: 'view' })

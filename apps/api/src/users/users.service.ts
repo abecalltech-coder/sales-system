@@ -4,16 +4,18 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ApproveUserDto } from './dto/approve-user.dto';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(params: { page: number; pageSize: number; keyword?: string; departmentId?: string }) {
-    const { page, pageSize, keyword, departmentId } = params;
+  async list(params: { page: number; pageSize: number; keyword?: string; departmentId?: string; status?: string }) {
+    const { page, pageSize, keyword, departmentId, status } = params;
     const where = {
       deletedAt: null,
       ...(departmentId ? { departmentId } : {}),
+      ...(status ? { status: status as 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'RETIRED' } : {}),
       ...(keyword
         ? {
             OR: [
@@ -141,6 +143,41 @@ export class UsersService {
 
   /** 退職者などは物理削除せず論理削除する(セクション36) */
   async softDelete(id: string) {
+    await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: 'RETIRED' } });
+    return { ok: true };
+  }
+
+  /** 自己登録ユーザーの承認(セクション追加要望)。所属・ロールを設定してACTIVE化する。 */
+  async approve(id: string, dto: ApproveUserDto) {
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null, status: 'PENDING' } });
+    if (!user) throw new NotFoundException('承認待ちのユーザーが見つかりません');
+
+    const roles = await this.prisma.role.findMany({ where: { code: { in: dto.roleCodes } } });
+    if (roles.length !== dto.roleCodes.length) {
+      throw new NotFoundException('指定されたロールの一部が存在しません');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+          departmentId: dto.departmentId,
+          teamId: dto.teamId,
+          version: { increment: 1 },
+        },
+      });
+      await tx.userRole.deleteMany({ where: { userId: id } });
+      await tx.userRole.createMany({ data: roles.map((r) => ({ userId: id, roleId: r.id })) });
+      return tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } } } });
+    });
+  }
+
+  /** 自己登録ユーザーの却下(セクション追加要望)。在籍者の停止とは区別し、承認待ちのみ対象にする。 */
+  async reject(id: string) {
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null, status: 'PENDING' } });
+    if (!user) throw new NotFoundException('承認待ちのユーザーが見つかりません');
+
     await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: 'RETIRED' } });
     return { ok: true };
   }

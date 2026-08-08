@@ -21,4 +21,5 @@ export class UpdateEntryDto {
   @IsOptional() @IsDateString() resolvedAt?: string;
   @IsOptional() @IsDateString() approvedAt?: string;
   @IsOptional() @IsString() memo?: string;
+  @IsOptional() @IsString() corporateName?: string; // 店舗名(成約→アポ経由の顧客レコードへ反映)
 }

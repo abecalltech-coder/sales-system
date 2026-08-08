@@ -8,6 +8,7 @@ datasource db {
 }
 
 enum UserStatus {
+  PENDING // 自己登録直後、管理者の承認待ち(ログイン不可)
   ACTIVE
   SUSPENDED
   RETIRED
@@ -229,6 +230,7 @@ model Customer {
   deletedAt     DateTime?
 
   tossCases    TossCase[]
+  appointments Appointment[]
 
   @@index([phone])
   @@index([email])
@@ -238,6 +240,7 @@ model Customer {
 model TossCase {
   id                   String    @id @default(uuid())
   caseNumber           String    @unique
+  caseName             String? // 案件名(セクション追加要望: 法人名に代わり案件番号・案件名を主軸に管理する)
   receivedAt           DateTime  @default(now())
   googleFormResponseId String?
   customerId           String?
@@ -255,6 +258,26 @@ model TossCase {
   statusId             String
   memo                 String?
   tags                 String[]
+
+  // トス実績一覧(セクション追加要望)向け項目。Googleフォーム連携実装までは表示/手入力欄として保持する。
+  apStaffName          String? // AP: アポ担当者名
+  department           String? // 部署(フォーム提供の部署ラベル。snapshotDepartmentIdとは別概念)
+  proposal             String? // 提案
+  listName             String? // リスト
+  callDirection        String? // 架電or入電
+  industry             String? // 業種
+  hook                 String? // フック
+  existingContract     String? // 既契約
+  preConfirmStatusId   String? // 前確担当者(StatusMaster category=TOSS_PRE_CONFIRM)
+  progressStatusId     String? // 進捗(StatusMaster category=TOSS_PROGRESS)
+  ngReasonStatusId     String? // NG理由(StatusMaster category=TOSS_NG_REASON)
+  nextActionAt         DateTime? // 次回対応日+対応時間
+
+  // 対応中フラグ(架電中ボタン)。押下で全ユーザーへリアルタイム共有し、行を赤色表示する。
+  isCallingInProgress  Boolean   @default(false)
+  callingByUserId      String?
+  callingStartedAt     DateTime?
+
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   createdBy            String?
@@ -275,9 +298,11 @@ model TossCase {
 model Appointment {
   id                     String     @id @default(uuid())
   caseNumber             String     @unique
+  caseName               String? // トス案件から引き継がれる(セクション追加要望)
   tossCaseId             String?    @unique
   tossCase               TossCase?  @relation(fields: [tossCaseId], references: [id])
   customerId             String?
+  customer               Customer?  @relation(fields: [customerId], references: [id])
   snapshotDepartmentId   String?
   snapshotTeamId         String?
   apoUserId              String?
@@ -293,9 +318,50 @@ model Appointment {
   calendarSyncError      String?
   meetingStatusId        String
   meetingResultId        String?
-  nextActionAt           DateTime?
-  memo                   String?
+  nextActionAt           DateTime? // 決着予定日
+  memo                   String? // 備考
   idempotencyKey         String     @unique
+
+  // アポ実績一覧(セクション追加要望)向け項目
+  apStaffName                  String? // AP: アポ担当者名
+  preConfirmStatusId           String? // 前確(StatusMaster category=TOSS_PRE_CONFIRM、トスと共有)
+  rePreConfirmStatusId         String? // 再前確担当(StatusMaster category=APPOINTMENT_RE_PRE_CONFIRM)
+  preContactStatusId           String? // 前連担当(StatusMaster category=APPOINTMENT_PRE_CONTACT)
+  closerStatusId                String? // CL: クロージング担当者(StatusMaster category=APPOINTMENT_CLOSER)
+  hook                          String? // フック
+  department                    String? // 部署
+  industry                      String? // 業種
+  importantMattersOkAt          DateTime? // 重説OK日
+  electronicContractAt          DateTime? // ET日(電子契約完了日)
+  hpProgressStatusId            String? // HP進捗(StatusMaster category=APPOINTMENT_HP_PROGRESS)
+  typeStatusId                  String? // 種別(StatusMaster category=APPOINTMENT_TYPE)
+  progressStatusId               String? // 進捗(StatusMaster category=APPOINTMENT_PROGRESS)
+  listName                       String? // リスト
+  acquisitionMethodStatusId      String? // 獲得方法(StatusMaster category=APPOINTMENT_ACQUISITION_METHOD)
+  proposalLocation                String? // 提案場所
+  existingContract                 String? // 既契約
+
+  anshinBizProposed              Boolean  @default(false) // あんしんBiz(提案)
+  anshinBizStatusId               String? // あんしんBiz(StatusMaster category=APPOINTMENT_ANSHIN_BIZ_STATUS)
+  anshinBizLostReasonStatusId     String? // あんしんBiz失注理由(StatusMaster category=APPOINTMENT_ANSHIN_BIZ_LOST_REASON)
+  anshinBizPoints                  Int?    // あんしんBiz Pt
+
+  mobileProposed                   Boolean  @default(false) // モバイル(提案)
+  mobileStatusId                    String? // モバイル(StatusMaster category=APPOINTMENT_MOBILE_STATUS)
+  mobileLostReasonStatusId          String? // モバイル失注理由(StatusMaster category=APPOINTMENT_MOBILE_LOST_REASON)
+
+  funfoProposed                     Boolean  @default(false) // funfo(提案)
+  funfoStatusId                      String? // funfo(StatusMaster category=APPOINTMENT_FUNFO_STATUS)
+  funfoLostReasonStatusId            String? // funfo失注理由(StatusMaster category=APPOINTMENT_FUNFO_LOST_REASON)
+
+  deductionNote                      String? // ※減算※
+  consentFormTypeStatusId            String? // 同意書種別(StatusMaster category=APPOINTMENT_CONSENT_FORM_TYPE)
+  acquiredCompanyName                String? // 獲得社名
+  deliveryMethodStatusId             String? // 交付方法(StatusMaster category=APPOINTMENT_DELIVERY_METHOD)
+  deliveryStatusStatusId             String? // 交付状況(StatusMaster category=APPOINTMENT_DELIVERY_STATUS)
+  deliveredAt                        DateTime? // 交付日
+  specialNotes                       String? // メモ・特記事項(備考=memoとは別項目)
+
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
   createdBy              String?
@@ -316,6 +382,7 @@ model Appointment {
 model Visit {
   id                             String    @id @default(uuid())
   caseNumber                     String    @unique
+  caseName                       String? // 親アポ案件から表示用にコピー(訪問固有の番号は維持)
   appointmentId                  String
   appointment                    Appointment @relation(fields: [appointmentId], references: [id])
   visitKind                      String    @default("INITIAL") // INITIAL/REVISIT/FINAL_CHECK
@@ -389,6 +456,7 @@ model MeetingSession {
 model Contract {
   id                     String    @id @default(uuid())
   caseNumber             String    @unique
+  caseName               String? // アポ案件から引き継がれる(セクション追加要望)
   appointmentId          String    @unique
   appointment            Appointment @relation(fields: [appointmentId], references: [id])
   tossCaseId             String?
@@ -425,6 +493,7 @@ model Contract {
 model Entry {
   id                 String    @id @default(uuid())
   caseNumber         String    @unique
+  caseName           String? // 成約案件から表示用にコピー
   contractId         String
   contract           Contract  @relation(fields: [contractId], references: [id])
   entryUserId        String?
@@ -511,6 +580,7 @@ model CustomFieldDefinition {
 
   options        CustomFieldOption[]
   permissions    CustomFieldPermission[]
+  values         CustomFieldValue[]
 
   @@unique([entityType, fieldKey])
   @@index([entityType])
@@ -530,6 +600,7 @@ model CustomFieldOption {
 model CustomFieldValue {
   id            String    @id @default(uuid())
   fieldId       String
+  field         CustomFieldDefinition @relation(fields: [fieldId], references: [id])
   entityType    String
   entityId      String
   textValue     String?
