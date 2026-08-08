@@ -11,7 +11,12 @@ RUN pnpm install --frozen-lockfile=false
 
 FROM deps AS build
 COPY . .
-RUN pnpm exec prisma generate --schema prisma/schema.prisma
+# Railwayがビルド時に自動で渡すコミットSHAをARGとして受け取ることで、
+# 以降のRUN命令の実行内容をコミットごとに変化させ、prisma generateレイヤーの
+# ビルドキャッシュが古いエンジン(誤ったOpenSSLバージョン等)のまま
+# 再利用され続けるのを防ぐ。
+ARG RAILWAY_GIT_COMMIT_SHA=local
+RUN echo "commit: ${RAILWAY_GIT_COMMIT_SHA}" && pnpm exec prisma generate --schema prisma/schema.prisma
 RUN pnpm --filter @sales-system/api build
 RUN pnpm --filter @sales-system/web build
 
