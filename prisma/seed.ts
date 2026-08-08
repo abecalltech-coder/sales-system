@@ -213,9 +213,17 @@ async function main() {
   const passwordHash = await bcrypt.hash(adminPassword, 12);
   const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { code: 'SUPER_ADMIN' } });
 
+  // 既に管理者アカウントが存在する場合、誰も一度もログイン(初回パスワード変更)していない
+  // 間だけADMIN_INITIAL_PASSWORDでパスワードを再設定できるようにする。これによりseed再実行時に
+  // 「最初の実行時のパスワードのまま変わらない」事象を防ぎつつ、実際にログインして
+  // パスワードを変更済みの管理者を誤って上書きしないようにする。
+  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
   const admin = await prisma.user.upsert({
     where: { email: adminEmail },
-    update: {},
+    update:
+      existingAdmin && existingAdmin.mustChangePassword
+        ? { passwordHash, mustChangePassword: true, failedLoginCount: 0, lockedUntil: null }
+        : {},
     create: {
       email: adminEmail,
       name: 'システム管理者',
