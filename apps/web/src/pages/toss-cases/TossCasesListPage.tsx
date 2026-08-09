@@ -26,7 +26,9 @@ export function TossCasesListPage() {
   const [statusId, setStatusId] = useState('');
   // 列フィルター(Googleスプレッドシート風)。自分の画面だけのローカルstateで、他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
-  const pageSize = 200;
+  // ステータスごとのグループ化・列フィルターをページ内で完結させるため、
+  // 一覧APIの許容上限(ListQueryDto: 最大100件)いっぱいまで1ページで取得する
+  const pageSize = 100;
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined, statusId: statusId || undefined });
