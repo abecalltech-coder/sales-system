@@ -84,14 +84,12 @@ export interface KpiSummary {
     visitArrivedCount: number;
     meetingCount: number;
     contractCount: number;
-    entryCount: number;
   };
   conversionRates: {
     tossToAppointment: number;
     appointmentToVisit: number;
     visitToMeeting: number;
     meetingToContract: number;
-    contractToEntry: number;
   };
 }
 
@@ -171,35 +169,6 @@ export function useAppointments(params: { page: number; pageSize: number; keywor
 }
 
 // ============================================================
-// 訪問
-// ============================================================
-export interface VisitListItem {
-  id: string;
-  caseNumber: string;
-  storeName: string | null;
-  scheduledAt: string;
-  statusId: string;
-  visitKind: string;
-  arrivedAt: string | null;
-  meetingSession: { meetingResult: string | null } | null;
-  version: number;
-}
-
-export function useVisits(params: { page: number; pageSize: number; statusId?: string }) {
-  const query = new URLSearchParams({
-    page: String(params.page),
-    pageSize: String(params.pageSize),
-    ...(params.statusId ? { statusId: params.statusId } : {}),
-  });
-  return useQuery({
-    queryKey: ['visits', params],
-    queryFn: () => api.get<{ items: VisitListItem[]; total: number; page: number; pageSize: number }>(
-      `/visits?${query.toString()}`,
-    ),
-  });
-}
-
-// ============================================================
 // 成約
 // ============================================================
 export interface ContractListItem {
@@ -235,34 +204,6 @@ export function useContracts(params: { page: number; pageSize: number; statusId?
     queryKey: ['contracts', params],
     queryFn: () => api.get<{ items: ContractListItem[]; total: number; page: number; pageSize: number }>(
       `/contracts?${query.toString()}`,
-    ),
-  });
-}
-
-// ============================================================
-// エントリー
-// ============================================================
-export interface EntryListItem {
-  id: string;
-  caseNumber: string;
-  storeName: string | null;
-  statusId: string;
-  entryAt: string | null;
-  deficiencyNote: string | null;
-  memo: string | null;
-  version: number;
-}
-
-export function useEntries(params: { page: number; pageSize: number; statusId?: string }) {
-  const query = new URLSearchParams({
-    page: String(params.page),
-    pageSize: String(params.pageSize),
-    ...(params.statusId ? { statusId: params.statusId } : {}),
-  });
-  return useQuery({
-    queryKey: ['entries', params],
-    queryFn: () => api.get<{ items: EntryListItem[]; total: number; page: number; pageSize: number }>(
-      `/entries?${query.toString()}`,
     ),
   });
 }

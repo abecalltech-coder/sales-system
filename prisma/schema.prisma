@@ -475,8 +475,6 @@ model Contract {
   switchingAt            DateTime?
   cancelledAt            DateTime? // キャンセル日時(ET管理・セクション追加要望)
   terminatedAt           DateTime? // 解約日時(ET管理・セクション追加要望)
-  entryStatusId          String?
-  entryAt                DateTime?
   deficiencyNote         String?
   nextActionAt           DateTime?
   memo                   String?
@@ -487,39 +485,14 @@ model Contract {
   version                Int       @default(1)
   deletedAt              DateTime?
 
-  entries                Entry[]
-
   @@index([matchingStatusId])
   @@index([contractUserId])
   @@index([contractedAt])
 }
 
-model Entry {
-  id                 String    @id @default(uuid())
-  caseNumber         String    @unique
-  caseName           String? // 成約案件から表示用にコピー
-  contractId         String
-  contract           Contract  @relation(fields: [contractId], references: [id])
-  entryUserId        String?
-  entryAt            DateTime?
-  statusId           String
-  applicationNumber  String?
-  deficiencyNote     String?
-  resolvedAt         DateTime?
-  approvedAt         DateTime?
-  memo               String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  version            Int       @default(1)
-  deletedAt          DateTime?
-
-  @@index([contractId])
-  @@index([statusId])
-}
-
 model CaseComment {
   id         String   @id @default(uuid())
-  entityType String // TOSS_CASE/APPOINTMENT/VISIT/CONTRACT/ENTRY/CUSTOMER
+  entityType String // TOSS_CASE/APPOINTMENT/VISIT/CONTRACT/CUSTOMER
   entityId   String
   userId     String
   body       String

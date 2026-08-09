@@ -2,12 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const PREFIX: Record<'TOSS' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'ENTRY', string> = {
+const PREFIX: Record<'TOSS' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT', string> = {
   TOSS: 'TOS',
   APPOINTMENT: 'APO',
   VISIT: 'VIS',
   CONTRACT: 'CNT',
-  ENTRY: 'ENT',
 };
 
 /**

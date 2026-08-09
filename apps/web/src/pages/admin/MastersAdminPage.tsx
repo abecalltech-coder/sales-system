@@ -9,7 +9,6 @@ const CATEGORIES = [
   { value: 'APPOINTMENT', label: 'アポ' },
   { value: 'VISIT', label: '訪問' },
   { value: 'MATCHING', label: 'マッチング' },
-  { value: 'ENTRY', label: 'エントリー' },
   { value: 'TOSS_PRE_CONFIRM', label: 'トス実績: 前確担当者' },
   { value: 'TOSS_PROGRESS', label: 'トス実績: 進捗' },
   { value: 'TOSS_NG_REASON', label: 'トス実績: NG理由' },

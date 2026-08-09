@@ -54,9 +54,9 @@ export class ContractsService {
   async findOne(id: string) {
     const contract = await this.prisma.contract.findFirst({
       where: { id, deletedAt: null },
-      include: { entries: true, appointment: { include: { customer: true } } },
+      include: { appointment: { include: { customer: true } } },
     });
-    if (!contract) throw new NotFoundException('成約案件が見つかりません');
+    if (!contract) throw new NotFoundException('エントリー案件が見つかりません');
     return { ...contract, storeName: contract.appointment?.customer?.corporateName ?? null };
   }
 

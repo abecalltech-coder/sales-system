@@ -13,7 +13,6 @@ import { TossCasesModule } from './toss-cases/toss-cases.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { VisitsModule } from './visits/visits.module';
 import { ContractsModule } from './contracts/contracts.module';
-import { EntriesModule } from './entries/entries.module';
 import { MastersModule } from './masters/masters.module';
 import { StatusMasterModule } from './status-master/status-master.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
@@ -47,7 +46,6 @@ import { CommentsModule } from './comments/comments.module';
     AppointmentsModule,
     VisitsModule,
     ContractsModule,
-    EntriesModule,
     MastersModule,
     StatusMasterModule,
     CustomFieldsModule,

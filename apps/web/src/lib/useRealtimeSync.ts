@@ -17,7 +17,6 @@ const ENTITY_QUERY_KEY: Record<string, string> = {
   APPOINTMENT: 'appointments',
   VISIT: 'visits',
   CONTRACT: 'contracts',
-  ENTRY: 'entries',
   CUSTOMER: 'customers',
 };
 

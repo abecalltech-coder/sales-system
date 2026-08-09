@@ -29,16 +29,14 @@ export class SummaryService {
       ...(query.teamId ? { snapshotTeamId: query.teamId } : {}),
     };
 
-    const [tossCount, appointmentCount, visitScheduledCount, visitArrivedCount, meetingCount, contractCount, entryCount] =
-      await Promise.all([
-        this.prisma.tossCase.count({ where: { deletedAt: null, receivedAt: range, ...scopeWhere } }),
-        this.prisma.appointment.count({ where: { deletedAt: null, createdAt: range, ...scopeWhere } }),
-        this.prisma.visit.count({ where: { deletedAt: null, scheduledAt: range } }),
-        this.prisma.visit.count({ where: { deletedAt: null, arrivedAt: range } }),
-        this.prisma.meetingSession.count({ where: { meetingStartedAt: range } }),
-        this.prisma.contract.count({ where: { deletedAt: null, contractedAt: range } }),
-        this.prisma.entry.count({ where: { deletedAt: null, entryAt: range } }),
-      ]);
+    const [tossCount, appointmentCount, visitScheduledCount, visitArrivedCount, meetingCount, contractCount] = await Promise.all([
+      this.prisma.tossCase.count({ where: { deletedAt: null, receivedAt: range, ...scopeWhere } }),
+      this.prisma.appointment.count({ where: { deletedAt: null, createdAt: range, ...scopeWhere } }),
+      this.prisma.visit.count({ where: { deletedAt: null, scheduledAt: range } }),
+      this.prisma.visit.count({ where: { deletedAt: null, arrivedAt: range } }),
+      this.prisma.meetingSession.count({ where: { meetingStartedAt: range } }),
+      this.prisma.contract.count({ where: { deletedAt: null, contractedAt: range } }),
+    ]);
 
     const rate = (num: number, den: number) => (den === 0 ? 0 : Math.round((num / den) * 1000) / 10);
 
@@ -51,14 +49,12 @@ export class SummaryService {
         visitArrivedCount,
         meetingCount,
         contractCount,
-        entryCount,
       },
       conversionRates: {
         tossToAppointment: rate(appointmentCount, tossCount),
         appointmentToVisit: rate(visitArrivedCount, appointmentCount),
         visitToMeeting: rate(meetingCount, visitArrivedCount),
         meetingToContract: rate(contractCount, meetingCount),
-        contractToEntry: rate(entryCount, contractCount),
       },
     };
   }
@@ -116,7 +112,6 @@ export class SummaryService {
         { label: '訪問到着', count: kpi.counts.visitArrivedCount },
         { label: '商談', count: kpi.counts.meetingCount },
         { label: '成約', count: kpi.counts.contractCount },
-        { label: 'エントリー', count: kpi.counts.entryCount },
       ],
     };
   }

@@ -8,7 +8,6 @@ const RESOURCES = [
   'appointment',
   'visit',
   'contract',
-  'entry',
   'customer',
   'user',
   'master',
@@ -31,12 +30,10 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
   {
     code: 'LEADER',
     name: 'チームリーダー',
-    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'entry', 'customer'].flatMap(
-      (resource) => [
-        { resource, action: 'view', scope: 'TEAM' },
-        { resource, action: 'edit', scope: 'TEAM' },
-      ],
-    ),
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'customer'].flatMap((resource) => [
+      { resource, action: 'view', scope: 'TEAM' },
+      { resource, action: 'edit', scope: 'TEAM' },
+    ]),
   },
   {
     code: 'INSIDE_SALES',
@@ -56,9 +53,10 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
     ]),
   },
   {
+    // エントリー管理(旧ET管理、Contractデータがそのまま実体)の担当ロール
     code: 'ENTRY_OPERATOR',
     name: 'エントリー担当',
-    permissions: ['contract', 'entry'].flatMap((resource) => [
+    permissions: ['contract'].flatMap((resource) => [
       { resource, action: 'view', scope: 'ALL' },
       { resource, action: 'edit', scope: 'ALL' },
     ]),
@@ -66,9 +64,9 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
   {
     code: 'USER',
     name: '一般ユーザー',
-    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'entry', 'customer'].flatMap(
-      (resource) => [{ resource, action: 'view', scope: 'TEAM' }],
-    ),
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'customer'].flatMap((resource) => [
+      { resource, action: 'view', scope: 'TEAM' },
+    ]),
   },
   { code: 'VIEWER', name: '閲覧専用', permissions: RESOURCES.map((r) => ({ resource: r, action: 'view', scope: 'ALL' })) },
 ];
@@ -144,16 +142,6 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'MATCHING', internalCode: 'SWITCHING_PENDING', displayName: 'スイッチング待ち', color: '#3b82f6' },
   { category: 'MATCHING', internalCode: 'SWITCHING_COMPLETED', displayName: 'スイッチング完了', color: '#16a34a' },
   { category: 'MATCHING', internalCode: 'CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
-  // エントリー
-  { category: 'ENTRY', internalCode: 'NOT_ENTERED', displayName: '未エントリー', color: '#a3a3a3' },
-  { category: 'ENTRY', internalCode: 'PREPARING', displayName: 'エントリー準備中', color: '#eab308' },
-  { category: 'ENTRY', internalCode: 'DEFICIENCY_CHECKING', displayName: '不備確認中', color: '#f97316' },
-  { category: 'ENTRY', internalCode: 'ENTERED', displayName: 'エントリー済み', color: '#22c55e' },
-  { category: 'ENTRY', internalCode: 'RETURNED', displayName: '差戻し', color: '#ef4444' },
-  { category: 'ENTRY', internalCode: 'RESUBMITTED', displayName: '再提出', color: '#eab308' },
-  { category: 'ENTRY', internalCode: 'APPROVED', displayName: '承認済み', color: '#16a34a' },
-  { category: 'ENTRY', internalCode: 'REJECTED', displayName: '却下', color: '#ef4444' },
-  { category: 'ENTRY', internalCode: 'ENTRY_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
   // トス実績: 進捗(前確架電の結果)
   { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_PRE_CONFIRM_OK', displayName: '前確OK', color: '#16a34a' },
   { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_NG', displayName: 'NG', color: '#ef4444' },

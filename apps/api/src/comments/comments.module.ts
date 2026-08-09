@@ -5,14 +5,13 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
 import { RealtimeService } from '../realtime/realtime.service';
 
-const ENTITY_TYPES = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'ENTRY', 'CUSTOMER'] as const;
+const ENTITY_TYPES = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'CUSTOMER'] as const;
 
 const ENTITY_TO_RESOURCE: Record<string, string> = {
   TOSS_CASE: 'toss_case',
   APPOINTMENT: 'appointment',
   VISIT: 'visit',
   CONTRACT: 'contract',
-  ENTRY: 'entry',
   CUSTOMER: 'customer',
 };
 

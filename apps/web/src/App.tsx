@@ -5,9 +5,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
 import { AppointmentsListPage } from './pages/appointments/AppointmentsListPage';
-import { VisitsListPage } from './pages/visits/VisitsListPage';
 import { ContractsListPage } from './pages/contracts/ContractsListPage';
-import { EntriesListPage } from './pages/entries/EntriesListPage';
 import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
@@ -36,9 +34,7 @@ export function App() {
         <Route path="/dashboard" element={protect(<DashboardPage />)} />
         <Route path="/toss-cases" element={protect(<TossCasesListPage />)} />
         <Route path="/appointments" element={protect(<AppointmentsListPage />)} />
-        <Route path="/visits" element={protect(<VisitsListPage />)} />
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
-        <Route path="/entries" element={protect(<EntriesListPage />)} />
         <Route path="/admin/users" element={protect(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protect(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protect(<MastersAdminPage />)} />

@@ -42,7 +42,6 @@ export function DashboardPage() {
         { name: '訪問到着', count: kpi.counts.visitArrivedCount },
         { name: '商談', count: kpi.counts.meetingCount },
         { name: '成約', count: kpi.counts.contractCount },
-        { name: 'エントリー', count: kpi.counts.entryCount },
       ]
     : [];
 
@@ -62,7 +61,6 @@ export function DashboardPage() {
               <KpiCard label="当月訪問到着数" value={kpi.counts.visitArrivedCount} />
               <KpiCard label="当月商談数" value={kpi.counts.meetingCount} />
               <KpiCard label="当月成約数" value={kpi.counts.contractCount} />
-              <KpiCard label="当月エントリー数" value={kpi.counts.entryCount} />
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
@@ -70,7 +68,6 @@ export function DashboardPage() {
               <RateChip label="アポ→訪問" value={kpi.conversionRates.appointmentToVisit} />
               <RateChip label="訪問→商談" value={kpi.conversionRates.visitToMeeting} />
               <RateChip label="商談→成約" value={kpi.conversionRates.meetingToContract} />
-              <RateChip label="成約→エントリー" value={kpi.conversionRates.contractToEntry} />
             </div>
 
             <div className="card" style={{ height: 300 }}>

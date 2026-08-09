@@ -1,7 +1,7 @@
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-const ENTITY_TYPES = ['CUSTOMER', 'TOSS', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'ENTRY'] as const;
+const ENTITY_TYPES = ['CUSTOMER', 'TOSS', 'APPOINTMENT', 'VISIT', 'CONTRACT'] as const;
 const DATA_TYPES = [
   'TEXT', 'TEXTAREA', 'INT', 'DECIMAL', 'CURRENCY', 'PHONE', 'EMAIL', 'URL',
   'DATE', 'DATETIME', 'TIME', 'SELECT', 'MULTISELECT', 'CHECKBOX',

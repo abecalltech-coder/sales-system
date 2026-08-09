@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { RealtimeGateway } from './realtime.gateway';
 
 export interface CaseUpdatedEvent {
-  entityType: 'TOSS_CASE' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'ENTRY' | 'CUSTOMER';
+  entityType: 'TOSS_CASE' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'CUSTOMER';
   id: string;
   version: number;
   updatedAt: string;

@@ -376,7 +376,7 @@ export function AppointmentsListPage() {
             <div>
               {r.contract && (
                 <p style={{ fontSize: 13, marginBottom: 8 }}>
-                  ✅ ET案件が作成済みです。 <a href="/contracts">ET管理一覧を見る →</a>
+                  ✅ エントリー案件が作成済みです。 <a href="/contracts">エントリー管理一覧を見る →</a>
                 </p>
               )}
               <div style={{ display: 'flex', gap: 24, marginBottom: 12, fontSize: 13 }}>

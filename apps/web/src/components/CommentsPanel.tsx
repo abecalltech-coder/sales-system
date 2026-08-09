@@ -4,7 +4,7 @@ import { useComments } from '../hooks/useApi';
 import { api, ApiError } from '../lib/api';
 
 interface CommentsPanelProps {
-  entityType: 'TOSS_CASE' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'ENTRY' | 'CUSTOMER';
+  entityType: 'TOSS_CASE' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'CUSTOMER';
   entityId: string;
 }
 

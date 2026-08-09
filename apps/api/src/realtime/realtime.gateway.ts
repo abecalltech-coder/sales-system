@@ -25,7 +25,7 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
 }
 
 // プレゼンス/カーソル共有を許可する一覧種別(それ以外のroom名は無視する)
-const PRESENCE_ROOMS = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT', 'ENTRY'];
+const PRESENCE_ROOMS = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT'];
 
 interface CursorPayload {
   socketId: string;

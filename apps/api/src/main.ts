@@ -28,7 +28,7 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('営業案件管理システム API')
-    .setDescription('トス/アポ/訪問/成約/エントリー管理API')
+    .setDescription('トス/アポ/訪問/エントリー管理API')
     .setVersion('0.1')
     .addCookieAuth('access_token')
     .build();

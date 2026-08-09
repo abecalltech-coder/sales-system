@@ -9,8 +9,7 @@ const ENTITY_TYPES = [
   { value: 'TOSS', label: 'トス' },
   { value: 'APPOINTMENT', label: 'アポ' },
   { value: 'VISIT', label: '訪問' },
-  { value: 'CONTRACT', label: '成約' },
-  { value: 'ENTRY', label: 'エントリー' },
+  { value: 'CONTRACT', label: 'エントリー' },
 ];
 
 const DATA_TYPES = [
