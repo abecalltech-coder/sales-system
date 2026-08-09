@@ -9,6 +9,7 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
       { to: '/dashboard', label: 'ダッシュボード', icon: '📊' },
       { to: '/toss-cases', label: 'トス実績管理', icon: '📥' },
       { to: '/appointments', label: 'アポ実績管理', icon: '📅' },
+      { to: '/cl-calendar', label: 'CLカレンダー', icon: '🗓️' },
       { to: '/contracts', label: 'エントリー管理', icon: '📄' },
     ],
   },

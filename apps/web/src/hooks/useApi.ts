@@ -108,6 +108,7 @@ export interface AppointmentListItem {
   customer: { corporateName: string | null; contactName: string | null; phone: string | null; address: string | null; email: string | null } | null;
   prefecture: string | null;
   meetingStartAt: string | null;
+  meetingEndAt: string | null;
   meetingType: string;
   meetingStatusId: string;
   visitAddress: string | null;
@@ -151,14 +152,30 @@ export interface AppointmentListItem {
   deliveryStatusStatusId: string | null;
   deliveredAt: string | null;
   specialNotes: string | null;
+  calendarColor: string | null;
 }
 
-export function useAppointments(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
+export function useAppointments(params: {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  statusId?: string;
+  userId?: string;
+  departmentId?: string;
+  closerStatusId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+}) {
   const query = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
     ...(params.keyword ? { keyword: params.keyword } : {}),
     ...(params.statusId ? { statusId: params.statusId } : {}),
+    ...(params.userId ? { userId: params.userId } : {}),
+    ...(params.departmentId ? { departmentId: params.departmentId } : {}),
+    ...(params.closerStatusId ? { closerStatusId: params.closerStatusId } : {}),
+    ...(params.dateFrom ? { dateFrom: params.dateFrom } : {}),
+    ...(params.dateTo ? { dateTo: params.dateTo } : {}),
   });
   return useQuery({
     queryKey: ['appointments', params],

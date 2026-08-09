@@ -1,7 +1,8 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpdateAppointmentDto } from './dto/appointment.dto';
+import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
 import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
@@ -29,12 +30,16 @@ export class AppointmentsService {
     keyword?: string;
     statusId?: string;
     userId?: string;
+    departmentId?: string;
+    closerStatusId?: string;
     dateFrom?: string;
     dateTo?: string;
   }) {
     const where: Prisma.AppointmentWhereInput = {
       deletedAt: null,
       ...(params.statusId ? { meetingStatusId: params.statusId } : {}),
+      ...(params.departmentId ? { snapshotDepartmentId: params.departmentId } : {}),
+      ...(params.closerStatusId ? { closerStatusId: params.closerStatusId } : {}),
       ...(params.userId
         ? { OR: [{ apoUserId: params.userId }, { meetingUserId: params.userId }, { fieldSalesUserId: params.userId }] }
         : {}),
@@ -142,6 +147,69 @@ export class AppointmentsService {
       }
       throw err;
     }
+  }
+
+  /** CLカレンダーから直接予定を作成する(トス経由の自動作成ルートとは別、セクション追加要望) */
+  async create(dto: CreateAppointmentDto, userId: string) {
+    const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');
+    const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
+
+    let customerId: string | undefined;
+    if (dto.corporateName) {
+      const customer = await this.prisma.customer.create({
+        data: { corporateName: dto.corporateName, createdBy: userId, updatedBy: userId },
+      });
+      customerId = customer.id;
+    }
+
+    const appointment = await this.prisma.appointment.create({
+      data: {
+        caseNumber,
+        customerId,
+        snapshotDepartmentId: dto.snapshotDepartmentId,
+        meetingUserId: dto.meetingUserId,
+        fieldSalesUserId: dto.fieldSalesUserId,
+        closerStatusId: dto.closerStatusId,
+        meetingStartAt: new Date(dto.meetingStartAt),
+        meetingEndAt: dto.meetingEndAt ? new Date(dto.meetingEndAt) : undefined,
+        meetingType: dto.meetingType,
+        visitAddress: dto.visitAddress,
+        calendarColor: dto.calendarColor,
+        memo: dto.memo,
+        meetingStatusId,
+        idempotencyKey: randomUUID(),
+        createdBy: userId,
+        updatedBy: userId,
+      },
+      include: { customer: true },
+    });
+
+    await this.caseHistory.record({
+      entityType: 'APPOINTMENT',
+      entityId: appointment.id,
+      field: 'created',
+      before: null,
+      after: { source: 'CL_CALENDAR' },
+      changedBy: userId,
+    });
+
+    this.realtime.emitCaseUpdated(
+      [
+        'company:default',
+        ...(appointment.snapshotDepartmentId ? [`department:${appointment.snapshotDepartmentId}`] : []),
+        `appointment:${appointment.id}`,
+      ],
+      {
+        entityType: 'APPOINTMENT',
+        id: appointment.id,
+        version: appointment.version,
+        updatedAt: appointment.updatedAt.toISOString(),
+        updatedBy: userId,
+        action: 'created',
+      },
+    );
+
+    return { ...appointment, storeName: appointment.customer?.corporateName ?? null, prefecture: extractPrefecture(appointment.customer?.address) };
   }
 
   async update(id: string, dto: UpdateAppointmentDto, userId: string) {

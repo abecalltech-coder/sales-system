@@ -1,0 +1,627 @@
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AppLayout } from '../components/AppLayout';
+import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem } from '../hooks/useApi';
+import { api, ApiError } from '../lib/api';
+import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
+import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
+
+const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#6b7280'];
+const DEFAULT_COLOR = '#3b82f6';
+const HOUR_HEIGHT = 48; // 週/日表示: 1時間あたりの高さ(px)
+const DAY_START_HOUR = 7;
+const DAY_END_HOUR = 21;
+
+const MEETING_TYPE_OPTIONS = [
+  { id: 'VISIT', label: '訪問' },
+  { id: 'GOOGLE_MEET', label: 'オンライン(Google Meet)' },
+  { id: 'PHONE', label: '電話' },
+  { id: 'OTHER', label: 'その他' },
+];
+
+type ViewMode = 'month' | 'week' | 'day';
+
+interface DraftEvent {
+  id?: string;
+  version?: number;
+  corporateName: string;
+  dateText: string;
+  startTimeText: string;
+  endTimeText: string;
+  meetingType: string;
+  closerStatusId: string;
+  snapshotDepartmentId: string;
+  meetingUserId: string;
+  calendarColor: string;
+  memo: string;
+}
+
+function eventToDraft(ev: AppointmentListItem): DraftEvent {
+  return {
+    id: ev.id,
+    version: ev.version,
+    corporateName: ev.storeName ?? '',
+    dateText: isoToDateInput(ev.meetingStartAt),
+    startTimeText: isoToTimeInput(ev.meetingStartAt),
+    endTimeText: isoToTimeInput(ev.meetingEndAt),
+    meetingType: ev.meetingType,
+    closerStatusId: ev.closerStatusId ?? '',
+    snapshotDepartmentId: '',
+    meetingUserId: '',
+    calendarColor: ev.calendarColor ?? DEFAULT_COLOR,
+    memo: ev.memo ?? '',
+  };
+}
+
+function slotToDraft(slot: Date): DraftEvent {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const startMin = snapTo15(slot.getHours() * 60 + slot.getMinutes());
+  const endMin = startMin + 60;
+  const toHm = (totalMin: number) => `${pad(Math.floor(totalMin / 60) % 24)}:${pad(totalMin % 60)}`;
+  return {
+    corporateName: '',
+    dateText: `${slot.getMonth() + 1}/${slot.getDate()}`,
+    startTimeText: toHm(startMin),
+    endTimeText: toHm(endMin),
+    meetingType: 'VISIT',
+    closerStatusId: '',
+    snapshotDepartmentId: '',
+    meetingUserId: '',
+    calendarColor: DEFAULT_COLOR,
+    memo: '',
+  };
+}
+
+export function CLCalendarPage() {
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [anchor, setAnchor] = useState(() => new Date());
+  const [departmentId, setDepartmentId] = useState('');
+  const [closerStatusId, setCloserStatusId] = useState('');
+  const [accountUserId, setAccountUserId] = useState('');
+  const [draft, setDraft] = useState<DraftEvent | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const { data: departments } = useDepartments();
+  const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
+  const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
+
+  const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
+  const { data, isLoading } = useAppointments({
+    page: 1,
+    pageSize: 100,
+    dateFrom: range.from.toISOString(),
+    dateTo: range.to.toISOString(),
+    departmentId: departmentId || undefined,
+    closerStatusId: closerStatusId || undefined,
+    userId: accountUserId || undefined,
+  });
+  const events = useMemo(() => (data?.items ?? []).filter((e) => e.meetingStartAt), [data]);
+
+  const closerLabel = (id: string | null) => closerOptions?.find((s) => s.id === id)?.displayName ?? '';
+
+  const createMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.post('/appointments', body),
+    onSuccess: () => {
+      setDraft(null);
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
+  });
+  const updateMutation = useMutation({
+    mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
+      api.patch(`/appointments/${vars.id}`, { version: vars.version, ...vars.patch }),
+    onSuccess: () => {
+      setDraft(null);
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
+  });
+
+  const saveDraft = (d: DraftEvent) => {
+    const parsedDate = parseDateText(d.dateText);
+    if (!parsedDate) {
+      setError('日付は 8/10・8-10・0810 のような形式で入力してください');
+      return;
+    }
+    const parsedStart = parseTimeText(d.startTimeText);
+    if (!parsedStart) {
+      setError('開始時間は 9:00・9：00・0900 のような形式で入力してください');
+      return;
+    }
+    const meetingStartAt = new Date(`${parsedDate}T${parsedStart}`).toISOString();
+    let meetingEndAt: string | undefined;
+    if (d.endTimeText.trim()) {
+      const parsedEnd = parseTimeText(d.endTimeText);
+      if (!parsedEnd) {
+        setError('終了時間は 10:00・10：00・1000 のような形式で入力してください');
+        return;
+      }
+      meetingEndAt = new Date(`${parsedDate}T${parsedEnd}`).toISOString();
+    }
+
+    const body: Record<string, unknown> = {
+      corporateName: d.corporateName || undefined,
+      meetingStartAt,
+      meetingEndAt,
+      meetingType: d.meetingType,
+      closerStatusId: d.closerStatusId || undefined,
+      snapshotDepartmentId: d.snapshotDepartmentId || undefined,
+      meetingUserId: d.meetingUserId || undefined,
+      calendarColor: d.calendarColor,
+      memo: d.memo || undefined,
+    };
+
+    if (d.id && d.version != null) {
+      updateMutation.mutate({ id: d.id, version: d.version, patch: body });
+    } else {
+      createMutation.mutate(body);
+    }
+  };
+
+  const navigate = (dir: -1 | 1) => {
+    setAnchor((a) => (viewMode === 'month' ? addMonths(a, dir) : viewMode === 'week' ? addDays(a, dir * 7) : addDays(a, dir)));
+  };
+
+  const title =
+    viewMode === 'month'
+      ? `${anchor.getFullYear()}年${anchor.getMonth() + 1}月`
+      : viewMode === 'week'
+        ? (() => {
+            const days = weekGridDays(anchor);
+            return `${days[0].getFullYear()}年${days[0].getMonth() + 1}月${days[0].getDate()}日 〜 ${days[6].getMonth() + 1}月${days[6].getDate()}日`;
+          })()
+        : `${anchor.getFullYear()}年${anchor.getMonth() + 1}月${anchor.getDate()}日`;
+
+  return (
+    <AppLayout>
+      <div style={{ padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+          <h1 style={{ fontSize: 20 }}>CLカレンダー</h1>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setViewMode(v)}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 6,
+                  background: viewMode === v ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: viewMode === v ? '#fff' : 'inherit',
+                }}
+              >
+                {v === 'month' ? '月' : v === 'week' ? '週' : '日'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => navigate(-1)}>← 前へ</button>
+            <button onClick={() => setAnchor(new Date())}>今日</button>
+            <button onClick={() => navigate(1)}>次へ →</button>
+            <span style={{ fontWeight: 700, fontSize: 15, marginLeft: 8 }}>{title}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={{ fontSize: 12, padding: 4 }}>
+              <option value="">全部署</option>
+              {departments?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <select value={closerStatusId} onChange={(e) => setCloserStatusId(e.target.value)} style={{ fontSize: 12, padding: 4 }}>
+              <option value="">全CL</option>
+              {closerOptions?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.displayName}
+                </option>
+              ))}
+            </select>
+            <select value={accountUserId} onChange={(e) => setAccountUserId(e.target.value)} style={{ fontSize: 12, padding: 4 }}>
+              <option value="">全アカウント</option>
+              {usersData?.items.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {isLoading && <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
+
+        {viewMode === 'month' && (
+          <MonthGrid
+            anchor={anchor}
+            events={events}
+            closerLabel={closerLabel}
+            onSlotClick={(day) => setDraft(slotToDraft(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0)))}
+            onEventClick={(ev) => setDraft(eventToDraft(ev))}
+          />
+        )}
+        {viewMode !== 'month' && (
+          <TimeGrid
+            days={viewMode === 'week' ? weekGridDays(anchor) : [startOfDay(anchor)]}
+            events={events}
+            closerLabel={closerLabel}
+            onSlotClick={(slot) => setDraft(slotToDraft(slot))}
+            onEventClick={(ev) => setDraft(eventToDraft(ev))}
+          />
+        )}
+      </div>
+
+      {draft && (
+        <EventFormModal
+          draft={draft}
+          departments={departments}
+          closerOptions={closerOptions}
+          users={usersData?.items}
+          saving={createMutation.isPending || updateMutation.isPending}
+          onChange={setDraft}
+          onSave={() => saveDraft(draft)}
+          onClose={() => {
+            setDraft(null);
+            setError(null);
+          }}
+        />
+      )}
+    </AppLayout>
+  );
+}
+
+function eventLabel(ev: AppointmentListItem): string {
+  return ev.storeName || '(店舗名未設定)';
+}
+
+function MonthGrid({
+  anchor,
+  events,
+  closerLabel,
+  onSlotClick,
+  onEventClick,
+}: {
+  anchor: Date;
+  events: AppointmentListItem[];
+  closerLabel: (id: string | null) => string;
+  onSlotClick: (day: Date) => void;
+  onEventClick: (ev: AppointmentListItem) => void;
+}) {
+  const days = monthGridDays(anchor);
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, AppointmentListItem[]>();
+    for (const ev of events) {
+      if (!ev.meetingStartAt) continue;
+      const d = new Date(ev.meetingStartAt);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const list = map.get(key) ?? [];
+      list.push(ev);
+      map.set(key, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => new Date(a.meetingStartAt!).getTime() - new Date(b.meetingStartAt!).getTime());
+    return map;
+  }, [events]);
+
+  return (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#fafafa', borderBottom: '1px solid var(--color-border)' }}>
+        {['日', '月', '火', '水', '木', '金', '土'].map((w) => (
+          <div key={w} style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+            {w}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: '110px' }}>
+        {days.map((day, i) => {
+          const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+          const dayEvents = eventsByDay.get(key) ?? [];
+          const inMonth = day.getMonth() === anchor.getMonth();
+          return (
+            <div
+              key={i}
+              onClick={() => onSlotClick(day)}
+              style={{
+                borderRight: (i + 1) % 7 === 0 ? 'none' : '1px solid var(--color-border)',
+                borderBottom: '1px solid var(--color-border)',
+                padding: 4,
+                cursor: 'pointer',
+                background: inMonth ? 'var(--color-surface)' : '#fafafa',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: isToday(day) ? 800 : 500,
+                  color: isToday(day) ? 'var(--color-primary)' : inMonth ? 'inherit' : 'var(--color-text-faint)',
+                  marginBottom: 3,
+                }}
+              >
+                {day.getDate()}
+              </div>
+              {dayEvents.slice(0, 3).map((ev) => (
+                <div
+                  key={ev.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEventClick(ev);
+                  }}
+                  title={`${closerLabel(ev.closerStatusId)} ${eventLabel(ev)}`}
+                  style={{
+                    fontSize: 10,
+                    padding: '1px 4px',
+                    marginBottom: 2,
+                    borderRadius: 3,
+                    background: ev.calendarColor ?? DEFAULT_COLOR,
+                    color: '#fff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {new Date(ev.meetingStartAt!).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {eventLabel(ev)}
+                </div>
+              ))}
+              {dayEvents.length > 3 && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>+{dayEvents.length - 3}件</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TimeGrid({
+  days,
+  events,
+  closerLabel,
+  onSlotClick,
+  onEventClick,
+}: {
+  days: Date[];
+  events: AppointmentListItem[];
+  closerLabel: (id: string | null) => string;
+  onSlotClick: (slot: Date) => void;
+  onEventClick: (ev: AppointmentListItem) => void;
+}) {
+  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
+  const gridHeight = (DAY_END_HOUR - DAY_START_HOUR) * HOUR_HEIGHT;
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, AppointmentListItem[]>();
+    for (const ev of events) {
+      if (!ev.meetingStartAt) continue;
+      const d = new Date(ev.meetingStartAt);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const list = map.get(key) ?? [];
+      list.push(ev);
+      map.set(key, list);
+    }
+    return map;
+  }, [events]);
+
+  return (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'flex' }}>
+      <div style={{ width: 48, flexShrink: 0, borderRight: '1px solid var(--color-border)' }}>
+        <div style={{ height: 28, borderBottom: '1px solid var(--color-border)' }} />
+        {hours.map((h) => (
+          <div key={h} style={{ height: HOUR_HEIGHT, fontSize: 10, color: 'var(--color-text-faint)', textAlign: 'right', paddingRight: 4, position: 'relative' }}>
+            <span style={{ position: 'absolute', top: -6, right: 4 }}>{h}:00</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flex: 1, overflowX: 'auto' }}>
+        {days.map((day, i) => {
+          const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
+          const dayEvents = eventsByDay.get(key) ?? [];
+          return (
+            <div key={i} style={{ flex: 1, minWidth: 90, borderRight: i === days.length - 1 ? 'none' : '1px solid var(--color-border)' }}>
+              <div
+                style={{
+                  height: 28,
+                  borderBottom: '1px solid var(--color-border)',
+                  fontSize: 11,
+                  fontWeight: isToday(day) ? 800 : 600,
+                  color: isToday(day) ? 'var(--color-primary)' : 'inherit',
+                  textAlign: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                }}
+              >
+                {'日月火水木金土'[day.getDay()]} {day.getDate()}
+              </div>
+              <div
+                style={{ position: 'relative', height: gridHeight }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const offsetY = e.clientY - rect.top;
+                  const minutesFromStart = (offsetY / HOUR_HEIGHT) * 60;
+                  const totalMinutes = snapTo15(DAY_START_HOUR * 60 + minutesFromStart);
+                  const slot = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(totalMinutes / 60), totalMinutes % 60);
+                  onSlotClick(slot);
+                }}
+              >
+                {hours.map((h, hi) => (
+                  <div key={h} style={{ position: 'absolute', top: hi * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderBottom: '1px solid #f1f1f1' }} />
+                ))}
+                {dayEvents.map((ev) => {
+                  const start = new Date(ev.meetingStartAt!);
+                  const startMin = start.getHours() * 60 + start.getMinutes() - DAY_START_HOUR * 60;
+                  const durationMin = ev.meetingEndAt ? (new Date(ev.meetingEndAt).getTime() - start.getTime()) / 60000 : 60;
+                  const top = (Math.max(startMin, 0) / 60) * HOUR_HEIGHT;
+                  const height = Math.max((durationMin / 60) * HOUR_HEIGHT, 16);
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEventClick(ev);
+                      }}
+                      title={`${closerLabel(ev.closerStatusId)} ${eventLabel(ev)}`}
+                      style={{
+                        position: 'absolute',
+                        top,
+                        left: 2,
+                        right: 2,
+                        height,
+                        background: ev.calendarColor ?? DEFAULT_COLOR,
+                        color: '#fff',
+                        borderRadius: 4,
+                        padding: '2px 4px',
+                        fontSize: 10,
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {eventLabel(ev)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventFormModal({
+  draft,
+  departments,
+  closerOptions,
+  users,
+  saving,
+  onChange,
+  onSave,
+  onClose,
+}: {
+  draft: DraftEvent;
+  departments: { id: string; name: string }[] | undefined;
+  closerOptions: { id: string; displayName: string }[] | undefined;
+  users: { id: string; name: string }[] | undefined;
+  saving: boolean;
+  onChange: (d: DraftEvent) => void;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const set = (patch: Partial<DraftEvent>) => onChange({ ...draft, ...patch });
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.3)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="card"
+        style={{ width: 380, maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
+      >
+        <h2 style={{ fontSize: 16, marginBottom: 14 }}>{draft.id ? '予定を編集' : '予定を追加'}</h2>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>店舗名</label>
+        <input value={draft.corporateName} onChange={(e) => set({ corporateName: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>日付</label>
+            <input value={draft.dateText} onChange={(e) => set({ dateText: e.target.value })} placeholder="8/10" style={{ width: '100%' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>開始</label>
+            <input value={draft.startTimeText} onChange={(e) => set({ startTimeText: e.target.value })} placeholder="9:00" style={{ width: '100%' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>終了</label>
+            <input value={draft.endTimeText} onChange={(e) => set({ endTimeText: e.target.value })} placeholder="10:00" style={{ width: '100%' }} />
+          </div>
+        </div>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>形式</label>
+        <select value={draft.meetingType} onChange={(e) => set({ meetingType: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+          {MEETING_TYPE_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>CL</label>
+        <select value={draft.closerStatusId} onChange={(e) => set({ closerStatusId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+          <option value="">未選択</option>
+          {closerOptions?.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.displayName}
+            </option>
+          ))}
+        </select>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>部署</label>
+        <select value={draft.snapshotDepartmentId} onChange={(e) => set({ snapshotDepartmentId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+          <option value="">未選択</option>
+          {departments?.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>担当アカウント</label>
+        <select value={draft.meetingUserId} onChange={(e) => set({ meetingUserId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+          <option value="">未選択</option>
+          {users?.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>備考</label>
+        <textarea value={draft.memo} onChange={(e) => set({ memo: e.target.value })} style={{ width: '100%', minHeight: 50, marginBottom: 10 }} />
+
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>色</label>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {COLOR_PALETTE.map((c) => (
+            <button
+              key={c}
+              onClick={() => set({ calendarColor: c })}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: '50%',
+                background: c,
+                border: draft.calendarColor === c ? '2px solid var(--color-text)' : '2px solid transparent',
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose}>キャンセル</button>
+          <button className="btn-primary" onClick={onSave} disabled={saving}>
+            {draft.id ? '更新する' : '追加する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AppointmentsService } from './appointments.service';
-import { UpdateAppointmentDto } from './dto/appointment.dto';
+import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -87,6 +87,12 @@ export class AppointmentsController {
   @Get()
   list(@Query() query: ListQueryDto) {
     return this.appointmentsService.list(query);
+  }
+
+  @RequirePermissions({ resource: 'appointment', action: 'create' })
+  @Post()
+  create(@Body() dto: CreateAppointmentDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.appointmentsService.create(dto, user.id);
   }
 
   @RequirePermissions({ resource: 'appointment', action: 'export' })

@@ -7,6 +7,21 @@ enum MeetingTypeDto {
   OTHER = 'OTHER',
 }
 
+/** CLカレンダーから直接予定を作成する場合に使う(トス経由の自動作成とは別ルート) */
+export class CreateAppointmentDto {
+  @IsOptional() @IsString() corporateName?: string;
+  @IsOptional() @IsUUID() meetingUserId?: string;
+  @IsOptional() @IsUUID() fieldSalesUserId?: string;
+  @IsOptional() @IsString() snapshotDepartmentId?: string;
+  @IsOptional() @IsString() closerStatusId?: string;
+  @IsDateString() meetingStartAt!: string;
+  @IsOptional() @IsDateString() meetingEndAt?: string;
+  @IsOptional() @IsEnum(MeetingTypeDto) meetingType?: MeetingTypeDto;
+  @IsOptional() @IsString() visitAddress?: string;
+  @IsOptional() @IsString() calendarColor?: string;
+  @IsOptional() @IsString() memo?: string;
+}
+
 export class UpdateAppointmentDto {
   @IsInt()
   version!: number;
@@ -69,4 +84,5 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsString() deliveryStatusStatusId?: string;
   @IsOptional() @IsDateString() deliveredAt?: string;
   @IsOptional() @IsString() specialNotes?: string;
+  @IsOptional() @IsString() calendarColor?: string; // CLカレンダー表示色
 }

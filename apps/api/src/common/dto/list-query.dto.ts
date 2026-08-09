@@ -37,6 +37,10 @@ export class ListQueryDto {
 
   @IsOptional()
   @IsString()
+  closerStatusId?: string;
+
+  @IsOptional()
+  @IsString()
   dateFrom?: string;
 
   @IsOptional()

@@ -324,6 +324,7 @@ model Appointment {
   nextActionAt           DateTime? // 決着予定日
   memo                   String? // 備考
   idempotencyKey         String     @unique
+  calendarColor          String? // CLカレンダーでの表示色(セクション追加要望)
 
   // アポ実績一覧(セクション追加要望)向け項目
   apStaffName                  String? // AP: アポ担当者名

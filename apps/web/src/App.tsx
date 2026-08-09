@@ -5,6 +5,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
 import { AppointmentsListPage } from './pages/appointments/AppointmentsListPage';
+import { CLCalendarPage } from './pages/CLCalendarPage';
 import { ContractsListPage } from './pages/contracts/ContractsListPage';
 import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
@@ -34,6 +35,7 @@ export function App() {
         <Route path="/dashboard" element={protect(<DashboardPage />)} />
         <Route path="/toss-cases" element={protect(<TossCasesListPage />)} />
         <Route path="/appointments" element={protect(<AppointmentsListPage />)} />
+        <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
         <Route path="/admin/users" element={protect(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protect(<OrganizationsAdminPage />)} />
