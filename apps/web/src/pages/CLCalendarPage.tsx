@@ -6,11 +6,16 @@ import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
 
-const COLOR_PALETTE = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#6b7280'];
+const COLOR_PALETTE = [
+  '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
+  '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4', '#14b8a6', '#10b981',
+  '#22c55e', '#84cc16', '#eab308', '#f59e0b', '#f97316', '#78716c',
+  '#6b7280', '#1f2937',
+];
 const DEFAULT_COLOR = '#3b82f6';
 const HOUR_HEIGHT = 48; // 週/日表示: 1時間あたりの高さ(px)
 const DAY_START_HOUR = 7;
-const DAY_END_HOUR = 21;
+const DAY_END_HOUR = 24;
 
 const MEETING_TYPE_OPTIONS = [
   { id: 'VISIT', label: '訪問' },
@@ -412,11 +417,16 @@ function TimeGrid({
     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'flex' }}>
       <div style={{ width: 48, flexShrink: 0, borderRight: '1px solid var(--color-border)' }}>
         <div style={{ height: 28, borderBottom: '1px solid var(--color-border)' }} />
-        {hours.map((h) => (
-          <div key={h} style={{ height: HOUR_HEIGHT, fontSize: 10, color: 'var(--color-text-faint)', textAlign: 'right', paddingRight: 4, position: 'relative' }}>
-            <span style={{ position: 'absolute', top: -6, right: 4 }}>{h}:00</span>
-          </div>
-        ))}
+        <div style={{ position: 'relative', height: gridHeight }}>
+          {hours.map((h, hi) => (
+            <span
+              key={h}
+              style={{ position: 'absolute', top: hi * HOUR_HEIGHT - 6, right: 4, fontSize: 10, color: 'var(--color-text-faint)' }}
+            >
+              {h % 24}:00
+            </span>
+          ))}
+        </div>
       </div>
       <div style={{ display: 'flex', flex: 1, overflowX: 'auto' }}>
         {days.map((day, i) => {
