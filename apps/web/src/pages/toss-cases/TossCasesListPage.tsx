@@ -7,7 +7,7 @@ import { InlineText, InlineSelect } from '../../components/InlineEdit';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { formatDate, formatTime, isoToDateInput, isoToDateKey, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 
 const CALL_DIRECTION_OPTIONS = [
@@ -149,7 +149,6 @@ export function TossCasesListPage() {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="8/10, 0810"
           defaultValue={isoToDateInput(r.nextActionAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -182,7 +181,6 @@ export function TossCasesListPage() {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="9:05, 9：05"
           defaultValue={isoToTimeInput(r.nextActionAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -195,11 +193,11 @@ export function TossCasesListPage() {
             }
             const parsed = parseTimeText(raw);
             if (!parsed) {
-              setError('対応時間は 9:05 のような形式で入力してください(全角：も可)');
+              setError('対応時間は 9:05・9：05・0905 のような形式で入力してください');
               e.target.value = current;
               return;
             }
-            const date = isoToDateInput(r.nextActionAt) || isoToDateInput(new Date().toISOString());
+            const date = isoToDateKey(r.nextActionAt) || isoToDateKey(new Date().toISOString());
             save(r, { nextActionAt: new Date(`${date}T${parsed}`).toISOString() });
           }}
           style={inlineInputStyle}

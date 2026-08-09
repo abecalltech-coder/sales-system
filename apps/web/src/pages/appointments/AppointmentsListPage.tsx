@@ -7,7 +7,7 @@ import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { formatDate, isoToDateInput, isoToDateKey, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -78,7 +78,6 @@ export function AppointmentsListPage() {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="YYYY-MM-DD"
           defaultValue={isoToDateInput(value)}
           onClick={stop}
           onBlur={(e) => {
@@ -91,7 +90,7 @@ export function AppointmentsListPage() {
             }
             const parsed = parseDateText(raw);
             if (!parsed) {
-              setError(`${label}はYYYY-MM-DD形式で入力してください(例: 2026-08-10)`);
+              setError(`${label}は 8/10・8-10・0810 のような形式で入力してください`);
               e.target.value = current;
               return;
             }
@@ -146,7 +145,6 @@ export function AppointmentsListPage() {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="YYYY-MM-DD"
           defaultValue={isoToDateInput(r.meetingStartAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -159,7 +157,7 @@ export function AppointmentsListPage() {
             }
             const parsed = parseDateText(raw);
             if (!parsed) {
-              setError('商談日はYYYY-MM-DD形式で入力してください(例: 2026-08-10)');
+              setError('商談日は 8/10・8-10・0810 のような形式で入力してください');
               e.target.value = current;
               return;
             }
@@ -178,7 +176,6 @@ export function AppointmentsListPage() {
         <input
           type="text"
           inputMode="numeric"
-          placeholder="HH:MM"
           defaultValue={isoToTimeInput(r.meetingStartAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -191,11 +188,11 @@ export function AppointmentsListPage() {
             }
             const parsed = parseTimeText(raw);
             if (!parsed) {
-              setError('商談時間はHH:MM形式で入力してください(例: 14:30)');
+              setError('商談時間は 14:30・14：30・1430 のような形式で入力してください');
               e.target.value = current;
               return;
             }
-            const date = isoToDateInput(r.meetingStartAt) || isoToDateInput(new Date().toISOString());
+            const date = isoToDateKey(r.meetingStartAt) || isoToDateKey(new Date().toISOString());
             save(r, { meetingStartAt: new Date(`${date}T${parsed}`).toISOString() });
           }}
           style={inlineInputStyle}

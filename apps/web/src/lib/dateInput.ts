@@ -7,11 +7,18 @@ export function formatDate(iso: string | null) {
 export function formatTime(iso: string | null) {
   return iso ? new Date(iso).toLocaleTimeString('ja-JP', TIME_OPTS) : '-';
 }
-export function isoToDateInput(iso: string | null) {
+/** 日付計算用の内部キー(YYYY-MM-DD)。時刻と組み合わせてnew Date()に渡す時など、表示用ではなく機械的な用途に使う */
+export function isoToDateKey(iso: string | null) {
   if (!iso) return '';
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+/** 「次回対応日」等の手入力欄の表示用。入力方法(-区切り/区切り/区切りなし)によらず月/日の半角/表記に統一する */
+export function isoToDateInput(iso: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 export function isoToTimeInput(iso: string | null) {
   if (!iso) return '';
@@ -62,10 +69,14 @@ export function parseDateText(val: string): string | null {
 
   return null;
 }
-/** "9:5" "9：5"(全角コロン)のような手入力表記も許容し、HH:mmへ正規化する(不正な場合はnull) */
+/**
+ * 手入力の時刻表記を幅広く許容し、半角HH:mmへ正規化する(不正な場合はnull)。
+ * 対応形式: "9:5" "9：5"(全角コロン) "0905"(区切りなし4桁)
+ */
 export function parseTimeText(val: string): string | null {
   const normalized = val.trim().replace(/：/g, ':');
-  const m = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
+  let m = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
+  if (!m) m = normalized.match(/^(\d{2})(\d{2})$/);
   if (!m) return null;
   const hh = Number(m[1]);
   const mm = Number(m[2]);
