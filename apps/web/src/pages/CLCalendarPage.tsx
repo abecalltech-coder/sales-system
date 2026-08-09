@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
-import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem } from '../hooks/useApi';
+import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS } from '../hooks/useApi';
 import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
@@ -24,6 +24,16 @@ const MEETING_TYPE_OPTIONS = [
   { id: 'OTHER', label: 'その他' },
 ];
 
+const REMINDER_MINUTES_OPTIONS = [
+  { minutes: 5, label: '5分前' },
+  { minutes: 10, label: '10分前' },
+  { minutes: 15, label: '15分前' },
+  { minutes: 30, label: '30分前' },
+  { minutes: 60, label: '1時間前' },
+  { minutes: 120, label: '2時間前' },
+  { minutes: 1440, label: '前日' },
+];
+
 type ViewMode = 'month' | 'week' | 'day';
 
 interface DraftEvent {
@@ -39,6 +49,8 @@ interface DraftEvent {
   meetingUserId: string;
   calendarColor: string;
   memo: string;
+  reminderEnabled: boolean;
+  reminderMinutesBefore: number;
 }
 
 function eventToDraft(ev: AppointmentListItem): DraftEvent {
@@ -55,6 +67,8 @@ function eventToDraft(ev: AppointmentListItem): DraftEvent {
     meetingUserId: '',
     calendarColor: ev.calendarColor ?? DEFAULT_COLOR,
     memo: ev.memo ?? '',
+    reminderEnabled: ev.reminderEnabled,
+    reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
   };
 }
 
@@ -74,6 +88,8 @@ function slotToDraft(slot: Date): DraftEvent {
     meetingUserId: '',
     calendarColor: DEFAULT_COLOR,
     memo: '',
+    reminderEnabled: false,
+    reminderMinutesBefore: 30,
   };
 }
 
@@ -157,6 +173,8 @@ export function CLCalendarPage() {
       meetingUserId: d.meetingUserId || undefined,
       calendarColor: d.calendarColor,
       memo: d.memo || undefined,
+      reminderEnabled: d.reminderEnabled,
+      reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
     };
 
     if (d.id && d.version != null) {
@@ -625,6 +643,28 @@ function EventFormModal({
           ))}
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: draft.reminderEnabled ? 8 : 16 }}>
+          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={draft.reminderEnabled} onChange={(e) => set({ reminderEnabled: e.target.checked })} />
+            リマインド
+          </label>
+        </div>
+        {draft.reminderEnabled && (
+          <select
+            value={draft.reminderMinutesBefore}
+            onChange={(e) => set({ reminderMinutesBefore: Number(e.target.value) })}
+            style={{ width: '100%', marginBottom: 16 }}
+          >
+            {REMINDER_MINUTES_OPTIONS.map((o) => (
+              <option key={o.minutes} value={o.minutes}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {draft.id && <ReportSection appointmentId={draft.id} />}
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onClose}>キャンセル</button>
           <button className="btn-primary" onClick={onSave} disabled={saving}>
@@ -632,6 +672,79 @@ function EventFormModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 実施報告(前連結果・訪問状況等)の提出フォーム(セクション追加要望)。
+ * 提出内容はアポの備考へ自動追記され、部署責任者(MANAGER)へ確認通知として届く。
+ */
+function ReportSection({ appointmentId }: { appointmentId: string }) {
+  const [activeCheckpoint, setActiveCheckpoint] = useState<string | null>(null);
+  const [text, setText] = useState('');
+  const [justSubmitted, setJustSubmitted] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const reportMutation = useMutation({
+    mutationFn: (body: { appointmentId: string; checkpoint: string; reportText: string }) => api.post('/appointment-reports', body),
+    onSuccess: (_, vars) => {
+      setJustSubmitted(vars.checkpoint);
+      setActiveCheckpoint(null);
+      setText('');
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointment-reports'] });
+    },
+  });
+
+  return (
+    <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+      <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 6 }}>実施報告</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeCheckpoint ? 8 : 0 }}>
+        {REPORT_CHECKPOINTS.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => {
+              setActiveCheckpoint(c.id);
+              setText('');
+              setJustSubmitted(null);
+            }}
+            style={{
+              fontSize: 11,
+              padding: '4px 8px',
+              borderRadius: 999,
+              border: '1px solid var(--color-border)',
+              background: activeCheckpoint === c.id ? 'var(--color-primary)' : justSubmitted === c.id ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+              color: activeCheckpoint === c.id ? '#fff' : 'inherit',
+            }}
+          >
+            {justSubmitted === c.id ? '✓ ' : ''}
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {activeCheckpoint && (
+        <div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={
+              activeCheckpoint === 'RESCHEDULE' ? '再訪日または次回商談日を含めて記載してください' : `${REPORT_CHECKPOINTS.find((c) => c.id === activeCheckpoint)?.label}の内容を入力`
+            }
+            style={{ width: '100%', minHeight: 50, marginBottom: 6 }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            <button onClick={() => setActiveCheckpoint(null)}>閉じる</button>
+            <button
+              className="btn-primary"
+              disabled={!text.trim() || reportMutation.isPending}
+              onClick={() => reportMutation.mutate({ appointmentId, checkpoint: activeCheckpoint, reportText: text.trim() })}
+            >
+              報告する
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -325,6 +325,10 @@ model Appointment {
   memo                   String? // 備考
   idempotencyKey         String     @unique
   calendarColor          String? // CLカレンダーでの表示色(セクション追加要望)
+  reminderEnabled        Boolean    @default(false) // CLカレンダーのリマインドON/OFF(セクション追加要望)
+  reminderMinutesBefore  Int? // 何分前に通知するか(例: 30)
+
+  reportEvents           AppointmentReportEvent[]
 
   // アポ実績一覧(セクション追加要望)向け項目
   apStaffName                  String? // AP: アポ担当者名
@@ -380,6 +384,25 @@ model Appointment {
   @@index([meetingStartAt])
   @@index([snapshotDepartmentId])
   @@index([snapshotTeamId])
+}
+
+// CLカレンダーの商談(訪問/オンライン)ごとの実施報告(セクション追加要望)。
+// 前連結果・訪問状況・商談結果・リスケ等をテキストで報告し、報告内容は
+// Appointment.memoへも自動追記する。部署責任者(MANAGERロール)が
+// 確認完了するまで通知として残り続ける。
+model AppointmentReportEvent {
+  id                   String    @id @default(uuid())
+  appointmentId        String
+  appointment          Appointment @relation(fields: [appointmentId], references: [id])
+  checkpoint           String // PRE_CONTACT_RESULT/DEPARTED/ARRIVED/ARRIVED_WAITING/VISIT_RESULT/ONLINE_WAITING/ONLINE_RESULT/RESCHEDULE
+  reportText           String
+  reportedByUserId     String?
+  reportedAt           DateTime  @default(now())
+  acknowledgedByUserId String?
+  acknowledgedAt       DateTime?
+
+  @@index([appointmentId])
+  @@index([acknowledgedAt])
 }
 
 model Visit {

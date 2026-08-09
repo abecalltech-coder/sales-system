@@ -153,6 +153,8 @@ export interface AppointmentListItem {
   deliveredAt: string | null;
   specialNotes: string | null;
   calendarColor: string | null;
+  reminderEnabled: boolean;
+  reminderMinutesBefore: number | null;
 }
 
 export function useAppointments(params: {
@@ -182,6 +184,39 @@ export function useAppointments(params: {
     queryFn: () => api.get<{ items: AppointmentListItem[]; total: number; page: number; pageSize: number }>(
       `/appointments?${query.toString()}`,
     ),
+  });
+}
+
+// ============================================================
+// CLカレンダー: 実施報告
+// ============================================================
+export const REPORT_CHECKPOINTS = [
+  { id: 'PRE_CONTACT_RESULT', label: '前連結果' },
+  { id: 'DEPARTED', label: '訪問に出ました' },
+  { id: 'ARRIVED', label: '訪問先到着しました' },
+  { id: 'ARRIVED_WAITING', label: '到着しましたが待機中です' },
+  { id: 'VISIT_RESULT', label: '訪問商談結果' },
+  { id: 'ONLINE_WAITING', label: 'オンライン入室待ちです' },
+  { id: 'ONLINE_RESULT', label: 'オンライン商談結果' },
+  { id: 'RESCHEDULE', label: 'リスケ' },
+] as const;
+
+export interface PendingReportItem {
+  id: string;
+  appointmentId: string;
+  checkpoint: string;
+  reportText: string;
+  reportedByUserId: string | null;
+  reportedAt: string;
+  acknowledgedAt: string | null;
+  appointment: { id: string; caseNumber: string; customer: { corporateName: string | null } | null };
+}
+
+export function usePendingReports() {
+  return useQuery({
+    queryKey: ['appointment-reports', 'pending'],
+    queryFn: () => api.get<PendingReportItem[]>('/appointment-reports/pending'),
+    refetchInterval: 30_000,
   });
 }
 

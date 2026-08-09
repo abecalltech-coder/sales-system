@@ -175,6 +175,8 @@ export class AppointmentsService {
         meetingType: dto.meetingType,
         visitAddress: dto.visitAddress,
         calendarColor: dto.calendarColor,
+        reminderEnabled: dto.reminderEnabled,
+        reminderMinutesBefore: dto.reminderMinutesBefore,
         memo: dto.memo,
         meetingStatusId,
         idempotencyKey: randomUUID(),

@@ -11,6 +11,7 @@ import { HealthController } from './health.controller';
 import { CustomersModule } from './customers/customers.module';
 import { TossCasesModule } from './toss-cases/toss-cases.module';
 import { AppointmentsModule } from './appointments/appointments.module';
+import { AppointmentReportsModule } from './appointment-reports/appointment-reports.module';
 import { VisitsModule } from './visits/visits.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { MastersModule } from './masters/masters.module';
@@ -44,6 +45,7 @@ import { CommentsModule } from './comments/comments.module';
     CustomersModule,
     TossCasesModule,
     AppointmentsModule,
+    AppointmentReportsModule,
     VisitsModule,
     ContractsModule,
     MastersModule,

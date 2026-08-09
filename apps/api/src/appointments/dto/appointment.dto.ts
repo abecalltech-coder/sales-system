@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 
 enum MeetingTypeDto {
   VISIT = 'VISIT',
@@ -20,6 +20,8 @@ export class CreateAppointmentDto {
   @IsOptional() @IsString() visitAddress?: string;
   @IsOptional() @IsString() calendarColor?: string;
   @IsOptional() @IsString() memo?: string;
+  @IsOptional() @IsBoolean() reminderEnabled?: boolean;
+  @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;
 }
 
 export class UpdateAppointmentDto {
@@ -85,4 +87,6 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsDateString() deliveredAt?: string;
   @IsOptional() @IsString() specialNotes?: string;
   @IsOptional() @IsString() calendarColor?: string; // CLカレンダー表示色
+  @IsOptional() @IsBoolean() reminderEnabled?: boolean;
+  @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;
 }

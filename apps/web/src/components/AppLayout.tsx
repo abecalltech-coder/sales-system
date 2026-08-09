@@ -1,6 +1,10 @@
 import { ReactNode, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useRealtimeSync } from '../lib/useRealtimeSync';
+import { useMe } from '../hooks/useApi';
+import { NotificationBell } from './NotificationBell';
+
+const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 
 const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string }[] }[] = [
   {
@@ -40,6 +44,8 @@ const COLLAPSE_STORAGE_KEY = 'nav.collapsed';
 export function AppLayout({ children }: { children: ReactNode }) {
   useRealtimeSync();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
+  const { data: me } = useMe();
+  const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
 
   const toggle = () => {
     setCollapsed((v) => {
@@ -168,6 +174,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </div>
         ))}
+
+        {isManager && (
+          <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+            <NotificationBell collapsed={collapsed} />
+          </div>
+        )}
       </nav>
       <main style={{ flex: 1, minWidth: 0 }}>{children}</main>
     </div>
