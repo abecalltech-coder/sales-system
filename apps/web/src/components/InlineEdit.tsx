@@ -59,6 +59,7 @@ export function InlineSelect({
   style,
   disabled,
   placeholder,
+  hideBlankOption,
 }: {
   value: string | null | undefined;
   options: { id: string; label: string }[];
@@ -66,6 +67,8 @@ export function InlineSelect({
   style?: CSSProperties;
   disabled?: boolean;
   placeholder?: string;
+  /** 「未選択」の空欄オプションを一覧に出したくない場合(常にいずれかの値を選ばせたい列向け) */
+  hideBlankOption?: boolean;
 }) {
   return (
     <select
@@ -75,7 +78,7 @@ export function InlineSelect({
       onChange={(e) => onSave(e.target.value)}
       style={{ ...baseStyle, appearance: 'none', cursor: disabled ? 'default' : 'pointer', ...style }}
     >
-      <option value="">{placeholder ?? '未選択'}</option>
+      {!hideBlankOption && <option value="">{placeholder ?? '未選択'}</option>}
       {options.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}

@@ -5,6 +5,8 @@ export interface Column<T> {
   label: string;
   render: (row: T) => ReactNode;
   width?: number;
+  /** 見出しセルの表示をカスタムしたい場合(列フィルターアイコンなど)。省略時はlabelをそのまま表示する */
+  renderHeader?: () => ReactNode;
 }
 
 interface DataTableProps<T> {
@@ -81,11 +83,11 @@ export function DataTable<T>({
                     fontWeight: 600,
                     fontSize: Math.max(fontSize - 1, 10),
                     whiteSpace: 'nowrap',
-                    overflow: 'hidden',
+                    overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {col.label}
+                  {col.renderHeader ? col.renderHeader() : col.label}
                 </th>
               ))}
             </tr>

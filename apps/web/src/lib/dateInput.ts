@@ -19,19 +19,53 @@ export function isoToTimeInput(iso: string | null) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-/** "2026-8-10"のような手入力表記も許容し、YYYY-MM-DDへ正規化する(不正な場合はnull) */
-export function parseDateText(val: string): string | null {
-  const m = val.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (!m) return null;
-  const [, y, mo, d] = m;
-  const mon = Number(mo);
-  const day = Number(d);
-  if (mon < 1 || mon > 12 || day < 1 || day > 31) return null;
-  return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+function isValidMonthDay(mon: number, day: number): boolean {
+  return mon >= 1 && mon <= 12 && day >= 1 && day <= 31;
 }
-/** "9:5"のような手入力表記も許容し、HH:mmへ正規化する(不正な場合はnull) */
+
+/**
+ * 手入力の日付表記を幅広く許容し、YYYY-MM-DDへ正規化する(不正な場合はnull)。
+ * 対応形式: "2026-8-10" "2026/8/10"(年あり、-または/区切り)
+ *          "8-10" "8/10"(年省略、今年として扱う)
+ *          "0810"(区切りなし4桁、月日のみとして扱う)
+ */
+export function parseDateText(val: string): string | null {
+  const trimmed = val.trim();
+  const currentYear = new Date().getFullYear();
+
+  let m = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    const mon = Number(mo);
+    const day = Number(d);
+    if (!isValidMonthDay(mon, day)) return null;
+    return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  m = trimmed.match(/^(\d{1,2})[-/](\d{1,2})$/);
+  if (m) {
+    const [, mo, d] = m;
+    const mon = Number(mo);
+    const day = Number(d);
+    if (!isValidMonthDay(mon, day)) return null;
+    return `${currentYear}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  m = trimmed.match(/^(\d{2})(\d{2})$/);
+  if (m) {
+    const [, mo, d] = m;
+    const mon = Number(mo);
+    const day = Number(d);
+    if (!isValidMonthDay(mon, day)) return null;
+    return `${currentYear}-${mo}-${d}`;
+  }
+
+  return null;
+}
+/** "9:5" "9：5"(全角コロン)のような手入力表記も許容し、HH:mmへ正規化する(不正な場合はnull) */
 export function parseTimeText(val: string): string | null {
-  const m = val.trim().match(/^(\d{1,2}):(\d{1,2})$/);
+  const normalized = val.trim().replace(/：/g, ':');
+  const m = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
   if (!m) return null;
   const hh = Number(m[1]);
   const mm = Number(m[2]);

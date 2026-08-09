@@ -73,19 +73,22 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
   { code: 'VIEWER', name: '閲覧専用', permissions: RESOURCES.map((r) => ({ resource: r, action: 'view', scope: 'ALL' })) },
 ];
 
-const STATUS_DEFS: { category: string; internalCode: string; displayName: string; color?: string }[] = [
-  // トス
-  { category: 'TOSS', internalCode: 'TOSS_NEW', displayName: '新規', color: '#3b82f6' },
-  { category: 'TOSS', internalCode: 'TOSS_UNHANDLED', displayName: '未対応', color: '#f97316' },
-  { category: 'TOSS', internalCode: 'TOSS_IN_PROGRESS', displayName: '対応中', color: '#eab308' },
-  { category: 'TOSS', internalCode: 'TOSS_ABSENT', displayName: '不在', color: '#a3a3a3' },
-  { category: 'TOSS', internalCode: 'TOSS_RECALL', displayName: '再架電', color: '#a3a3a3' },
-  { category: 'TOSS', internalCode: 'TOSS_PROSPECT', displayName: '見込み', color: '#22c55e' },
-  { category: 'TOSS', internalCode: 'TOSS_APPOINTMENT', displayName: 'アポイント', color: '#16a34a' },
-  { category: 'TOSS', internalCode: 'TOSS_CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
-  { category: 'TOSS', internalCode: 'TOSS_EXCLUDED', displayName: '対象外', color: '#737373' },
-  { category: 'TOSS', internalCode: 'TOSS_DUPLICATE', displayName: '重複', color: '#737373' },
-  { category: 'TOSS', internalCode: 'TOSS_CLOSED', displayName: 'クローズ', color: '#737373' },
+const STATUS_DEFS: { category: string; internalCode: string; displayName: string; color?: string; order?: number; active?: boolean }[] = [
+  // トス(セクション追加要望: グループ順は 新規/不在/見込み → アポイント → NG → メール対応中。
+  // 行の塗りつぶし色として使うため、可読性を保つため薄いパステル系にしている)
+  { category: 'TOSS', internalCode: 'TOSS_NEW', displayName: '新規', color: '#ffffff', order: 10 },
+  { category: 'TOSS', internalCode: 'TOSS_UNHANDLED', displayName: '未対応', color: '#f97316', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_IN_PROGRESS', displayName: '対応中', color: '#eab308', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_ABSENT', displayName: '不在', color: '#dbeafe', order: 10 },
+  { category: 'TOSS', internalCode: 'TOSS_RECALL', displayName: '再架電', color: '#a3a3a3', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_PROSPECT', displayName: '見込み', color: '#fef9c3', order: 10 },
+  { category: 'TOSS', internalCode: 'TOSS_APPOINTMENT', displayName: 'アポイント', color: '#fecaca', order: 20 },
+  { category: 'TOSS', internalCode: 'TOSS_CANCELLED', displayName: 'キャンセル', color: '#ef4444', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_EXCLUDED', displayName: '対象外', color: '#737373', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_DUPLICATE', displayName: '重複', color: '#737373', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_CLOSED', displayName: 'クローズ', color: '#737373', active: false },
+  { category: 'TOSS', internalCode: 'TOSS_NG', displayName: 'NG', color: '#e5e7eb', order: 30 },
+  { category: 'TOSS', internalCode: 'TOSS_EMAIL_IN_PROGRESS', displayName: 'メール対応中', color: '#dcfce7', order: 40 },
   // アポ(商談ステータス)
   { category: 'APPOINTMENT', internalCode: 'APO_CONFIRMED', displayName: 'アポ確定', color: '#3b82f6' },
   { category: 'APPOINTMENT', internalCode: 'APO_BEFORE_MEETING', displayName: '商談前', color: '#eab308' },
@@ -166,10 +169,12 @@ async function main() {
   console.log('シード投入を開始します...');
 
   for (const [i, def] of STATUS_DEFS.entries()) {
+    const order = def.order ?? i;
+    const active = def.active ?? true;
     await prisma.statusMaster.upsert({
       where: { category_internalCode: { category: def.category, internalCode: def.internalCode } },
-      update: { displayName: def.displayName, color: def.color },
-      create: { ...def, order: i },
+      update: { displayName: def.displayName, color: def.color, order, active },
+      create: { ...def, order, active },
     });
   }
   console.log(`ステータスマスタ${STATUS_DEFS.length}件を投入しました`);

@@ -1,10 +1,9 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
+import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect } from '../../components/InlineEdit';
-import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -19,12 +18,15 @@ const CALL_DIRECTION_OPTIONS = [
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
 
+type FilterValueFn = (r: TossCaseListItem) => string;
+
 export function TossCasesListPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [statusId, setStatusId] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const pageSize = 20;
+  // 列フィルター(Googleスプレッドシート風)。自分の画面だけのローカルstateで、他ユーザーには共有しない。
+  const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
+  const pageSize = 200;
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined, statusId: statusId || undefined });
@@ -68,21 +70,84 @@ export function TossCasesListPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
-  const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
-  const statusColor = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#9ca3af';
+  const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? '';
+  const statusBg = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#ffffff';
+  const statusGroupOrder = (id: string) => statuses?.find((s) => s.id === id)?.order ?? 999;
+
+  const filterValueFns: Record<string, FilterValueFn> = {
+    tossDate: (r) => formatDate(r.receivedAt),
+    tossTime: (r) => formatTime(r.receivedAt),
+    nextActionDate: (r) => isoToDateInput(r.nextActionAt),
+    nextActionTime: (r) => isoToTimeInput(r.nextActionAt),
+    apStaffName: (r) => r.apStaffName ?? '',
+    preConfirm: (r) => preConfirmOptions?.find((s) => s.id === r.preConfirmStatusId)?.displayName ?? '',
+    department: (r) => r.department ?? '',
+    calling: (r) => (r.isCallingInProgress ? '架電中' : ''),
+    corporateName: (r) => r.customer?.corporateName ?? '',
+    memo: (r) => r.memo ?? '',
+    status: (r) => statusLabel(r.statusId),
+    contactName: (r) => r.customer?.contactName ?? '',
+    phone: (r) => r.customer?.phone ?? '',
+    prefecture: (r) => r.prefecture ?? '',
+    address: (r) => r.customer?.address ?? '',
+    proposal: (r) => r.proposal ?? '',
+    progress: (r) => progressOptions?.find((s) => s.id === r.progressStatusId)?.displayName ?? '',
+    ngReason: (r) => ngReasonOptions?.find((s) => s.id === r.ngReasonStatusId)?.displayName ?? '',
+    listName: (r) => r.listName ?? '',
+    callDirection: (r) => r.callDirection ?? '',
+    industry: (r) => r.industry ?? '',
+    hook: (r) => r.hook ?? '',
+    existingContract: (r) => r.existingContract ?? '',
+  };
+
+  const rawRows = useMemo(() => data?.items ?? [], [data]);
+
+  const optionsFor = (key: string) => {
+    const fn = filterValueFns[key];
+    const set = new Set<string>();
+    for (const r of rawRows) set.add(fn(r));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'));
+  };
+
+  const filterHeader = (key: string, label: string) => () => (
+    <ColumnFilterHeader
+      label={label}
+      options={optionsFor(key)}
+      selected={filters[key] ?? null}
+      onChange={(sel) => setFilters((f) => ({ ...f, [key]: sel }))}
+    />
+  );
+
+  const rows = useMemo(() => {
+    const filtered = rawRows.filter((r) =>
+      Object.entries(filters).every(([key, sel]) => {
+        if (!sel) return true;
+        return sel.has(filterValueFns[key](r));
+      }),
+    );
+    return [...filtered].sort((a, b) => {
+      const groupDiff = statusGroupOrder(a.statusId) - statusGroupOrder(b.statusId);
+      if (groupDiff !== 0) return groupDiff;
+      const at = a.nextActionAt ? new Date(a.nextActionAt).getTime() : Infinity;
+      const bt = b.nextActionAt ? new Date(b.nextActionAt).getTime() : Infinity;
+      return at - bt;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, filters, statuses]);
 
   const columns: Column<TossCaseListItem>[] = [
-    { key: 'tossDate', label: 'トス日', render: (r) => formatDate(r.receivedAt), width: 86 },
-    { key: 'tossTime', label: 'トス時間', render: (r) => formatTime(r.receivedAt), width: 68 },
+    { key: 'tossDate', label: 'トス日', render: (r) => formatDate(r.receivedAt), width: 86, renderHeader: filterHeader('tossDate', 'トス日') },
+    { key: 'tossTime', label: 'トス時間', render: (r) => formatTime(r.receivedAt), width: 68, renderHeader: filterHeader('tossTime', 'トス時間') },
     {
       key: 'nextActionDate',
       label: '次回対応日',
       width: 92,
+      renderHeader: filterHeader('nextActionDate', '次回対応日'),
       render: (r) => (
         <input
           type="text"
           inputMode="numeric"
-          placeholder="YYYY-MM-DD"
+          placeholder="8/10, 0810"
           defaultValue={isoToDateInput(r.nextActionAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -95,7 +160,7 @@ export function TossCasesListPage() {
             }
             const parsed = parseDateText(raw);
             if (!parsed) {
-              setError('次回対応日はYYYY-MM-DD形式で入力してください(例: 2026-08-10)');
+              setError('次回対応日は 8/10・8-10・0810 のような形式で入力してください');
               e.target.value = current;
               return;
             }
@@ -110,11 +175,12 @@ export function TossCasesListPage() {
       key: 'nextActionTime',
       label: '対応時間',
       width: 74,
+      renderHeader: filterHeader('nextActionTime', '対応時間'),
       render: (r) => (
         <input
           type="text"
           inputMode="numeric"
-          placeholder="HH:MM"
+          placeholder="9:05, 9：05"
           defaultValue={isoToTimeInput(r.nextActionAt)}
           onClick={stop}
           onBlur={(e) => {
@@ -127,7 +193,7 @@ export function TossCasesListPage() {
             }
             const parsed = parseTimeText(raw);
             if (!parsed) {
-              setError('対応時間はHH:MM形式で入力してください(例: 14:30)');
+              setError('対応時間は 9:05 のような形式で入力してください(全角：も可)');
               e.target.value = current;
               return;
             }
@@ -142,12 +208,14 @@ export function TossCasesListPage() {
       key: 'apStaffName',
       label: 'AP',
       width: 80,
+      renderHeader: filterHeader('apStaffName', 'AP'),
       render: (r) => <InlineText value={r.apStaffName} onSave={(v) => save(r, { apStaffName: v })} />,
     },
     {
       key: 'preConfirm',
       label: '前確',
       width: 90,
+      renderHeader: filterHeader('preConfirm', '前確'),
       render: (r) => (
         <InlineSelect
           value={r.preConfirmStatusId}
@@ -160,12 +228,14 @@ export function TossCasesListPage() {
       key: 'department',
       label: '部署',
       width: 84,
+      renderHeader: filterHeader('department', '部署'),
       render: (r) => <InlineText value={r.department} onSave={(v) => save(r, { department: v })} />,
     },
     {
       key: 'calling',
       label: '対応中',
       width: 74,
+      renderHeader: filterHeader('calling', '対応中'),
       render: (r) => (
         <button
           onClick={(e) => {
@@ -187,44 +257,66 @@ export function TossCasesListPage() {
     {
       key: 'corporateName',
       label: '店舗名',
-      width: 120,
+      width: 170,
+      renderHeader: filterHeader('corporateName', '店舗名'),
       render: (r) => <InlineText value={r.customer?.corporateName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
     },
     {
       key: 'memo',
       label: '備考',
-      width: 130,
+      width: 320,
+      renderHeader: filterHeader('memo', '備考'),
       render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} />,
+    },
+    {
+      key: 'status',
+      label: 'ステータス',
+      width: 100,
+      renderHeader: filterHeader('status', 'ステータス'),
+      render: (r) => (
+        <InlineSelect
+          value={r.statusId}
+          options={statuses?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
+          onSave={(v) => save(r, { statusId: v })}
+          hideBlankOption
+          style={{ fontWeight: 600 }}
+        />
+      ),
     },
     {
       key: 'contactName',
       label: '担当者名',
       width: 96,
+      renderHeader: filterHeader('contactName', '担当者名'),
       render: (r) => <InlineText value={r.customer?.contactName} onSave={(v) => save(r, { contactName: v })} />,
     },
     {
       key: 'phone',
       label: '店舗連絡先',
       width: 108,
+      renderHeader: filterHeader('phone', '店舗連絡先'),
       render: (r) => <InlineText value={r.customer?.phone} onSave={(v) => save(r, { phone: v })} />,
     },
-    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72 },
+    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72, renderHeader: filterHeader('prefecture', '地域') },
     {
       key: 'address',
       label: '住所(都道府県から)',
       width: 170,
+      renderHeader: filterHeader('address', '住所'),
       render: (r) => <InlineText value={r.customer?.address} onSave={(v) => save(r, { address: v })} />,
     },
     {
       key: 'proposal',
       label: '提案',
       width: 110,
+      renderHeader: filterHeader('proposal', '提案'),
       render: (r) => <InlineText value={r.proposal} onSave={(v) => save(r, { proposal: v })} />,
     },
     {
       key: 'progress',
       label: '進捗',
       width: 90,
+      renderHeader: filterHeader('progress', '進捗'),
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
@@ -237,6 +329,7 @@ export function TossCasesListPage() {
       key: 'ngReason',
       label: 'NG理由',
       width: 140,
+      renderHeader: filterHeader('ngReason', 'NG理由'),
       render: (r) => (
         <InlineSelect
           value={r.ngReasonStatusId}
@@ -249,52 +342,36 @@ export function TossCasesListPage() {
       key: 'listName',
       label: 'リスト',
       width: 96,
+      renderHeader: filterHeader('listName', 'リスト'),
       render: (r) => <InlineText value={r.listName} onSave={(v) => save(r, { listName: v })} />,
     },
     {
       key: 'callDirection',
       label: '架電or入電',
       width: 90,
+      renderHeader: filterHeader('callDirection', '架電or入電'),
       render: (r) => <InlineSelect value={r.callDirection} options={CALL_DIRECTION_OPTIONS} onSave={(v) => save(r, { callDirection: v })} />,
     },
     {
       key: 'industry',
       label: '業種',
       width: 84,
+      renderHeader: filterHeader('industry', '業種'),
       render: (r) => <InlineText value={r.industry} onSave={(v) => save(r, { industry: v })} />,
     },
     {
       key: 'hook',
       label: 'フック',
       width: 110,
+      renderHeader: filterHeader('hook', 'フック'),
       render: (r) => <InlineText value={r.hook} onSave={(v) => save(r, { hook: v })} />,
     },
     {
       key: 'existingContract',
       label: '既契約',
       width: 100,
+      renderHeader: filterHeader('existingContract', '既契約'),
       render: (r) => <InlineText value={r.existingContract} onSave={(v) => save(r, { existingContract: v })} />,
-    },
-    {
-      key: 'status',
-      label: 'ステータス',
-      width: 110,
-      render: (r) => (
-        <InlineSelect
-          value={r.statusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
-          onSave={(v) => save(r, { statusId: v })}
-          style={{
-            background: statusColor(r.statusId),
-            color: '#fff',
-            borderRadius: 999,
-            padding: '2px 6px',
-            fontSize: 11,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}
-        />
-      ),
     },
   ];
 
@@ -386,30 +463,18 @@ export function TossCasesListPage() {
 
         <DataTable
           columns={columns}
-          rows={data?.items ?? []}
+          rows={rows}
           total={data?.total ?? 0}
           page={page}
           pageSize={pageSize}
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
-          rowStyle={(r) => (r.isCallingInProgress ? { background: 'var(--color-danger-soft)' } : undefined)}
+          rowStyle={(r) => ({ background: r.isCallingInProgress ? 'var(--color-danger-soft)' : statusBg(r.statusId) })}
           fontSize={12}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
-          expandedRowId={expandedId}
-          renderExpanded={(r) => (
-            <div>
-              {r.appointment && (
-                <p style={{ fontSize: 13, marginBottom: 12 }}>
-                  ✅ アポ案件が作成済みです。 <Link to="/appointments">アポ実績一覧を見る →</Link>
-                </p>
-              )}
-              <CommentsPanel entityType="TOSS_CASE" entityId={r.id} />
-            </div>
-          )}
         />
       </div>
     </AppLayout>
