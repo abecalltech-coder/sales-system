@@ -328,7 +328,6 @@ model Appointment {
   // アポ実績一覧(セクション追加要望)向け項目
   apStaffName                  String? // AP: アポ担当者名
   preConfirmStatusId           String? // 前確(StatusMaster category=TOSS_PRE_CONFIRM、トスと共有)
-  rePreConfirmStatusId         String? // 再前確担当(StatusMaster category=APPOINTMENT_RE_PRE_CONFIRM)
   preContactStatusId           String? // 前連担当(StatusMaster category=APPOINTMENT_PRE_CONTACT)
   closerStatusId                String? // CL: クロージング担当者(StatusMaster category=APPOINTMENT_CLOSER)
   hook                          String? // フック
@@ -474,6 +473,8 @@ model Contract {
   matchingAt             DateTime?
   switchingScheduledAt   DateTime?
   switchingAt            DateTime?
+  cancelledAt            DateTime? // キャンセル日時(ET管理・セクション追加要望)
+  terminatedAt           DateTime? // 解約日時(ET管理・セクション追加要望)
   entryStatusId          String?
   entryAt                DateTime?
   deficiencyNote         String?

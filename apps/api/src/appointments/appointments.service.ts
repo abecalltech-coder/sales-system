@@ -99,6 +99,8 @@ export class AppointmentsService {
 
     const tossCase = await this.prisma.tossCase.findUniqueOrThrow({ where: { id: tossCaseId } });
     const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
+    // トスから入ってきたアポ案件の進捗初期値は新規訪問で統一する(要望)
+    const progressStatusId = await this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT');
     // 案件番号・案件名はトス案件からそのまま引き継ぐ(要望: トス/アポ/成約で番号・名称を統一する)
 
     try {
@@ -117,6 +119,7 @@ export class AppointmentsService {
           meetingEndAt: tossCase.confirmedEndAt,
           visitAddress: undefined,
           meetingStatusId,
+          progressStatusId,
           idempotencyKey: tossCaseId,
           createdBy: actorUserId,
           updatedBy: actorUserId,
@@ -228,10 +231,10 @@ export class AppointmentsService {
       },
     );
 
-    // ステータスが成約(APO_CONTRACTED)に変わった場合、成約管理へ自動移行(セクション25)
-    if (dto.meetingStatusId && dto.meetingStatusId !== existing.meetingStatusId) {
-      const internalCode = await this.statusResolver.internalCodeOf(dto.meetingStatusId);
-      if (internalCode === 'APO_CONTRACTED') {
+    // 進捗がET(PROG_ET)に変わった場合、ET管理へ自動移行(セクション追加要望)
+    if (dto.progressStatusId && dto.progressStatusId !== existing.progressStatusId) {
+      const internalCode = await this.statusResolver.internalCodeOf(dto.progressStatusId);
+      if (internalCode === 'PROG_ET') {
         await this.contracts.createFromAppointmentAutomation(id, userId);
       }
     }

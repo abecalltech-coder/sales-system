@@ -17,6 +17,8 @@ export class UpdateContractDto {
   @IsOptional() @IsDateString() matchingAt?: string;
   @IsOptional() @IsDateString() switchingScheduledAt?: string;
   @IsOptional() @IsDateString() switchingAt?: string;
+  @IsOptional() @IsDateString() cancelledAt?: string;
+  @IsOptional() @IsDateString() terminatedAt?: string;
   @IsOptional() @IsString() deficiencyNote?: string;
   @IsOptional() @IsDateString() nextActionAt?: string;
   @IsOptional() @IsString() memo?: string;

@@ -34,7 +34,6 @@ export class UpdateAppointmentDto {
   // アポ実績項目
   @IsOptional() @IsString() apStaffName?: string;
   @IsOptional() @IsString() preConfirmStatusId?: string;
-  @IsOptional() @IsString() rePreConfirmStatusId?: string;
   @IsOptional() @IsString() preContactStatusId?: string;
   @IsOptional() @IsString() closerStatusId?: string;
   @IsOptional() @IsString() hook?: string;

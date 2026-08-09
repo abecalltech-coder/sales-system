@@ -16,7 +16,6 @@ const CSV_COLUMNS = [
   'meetingStartTime',
   'apStaffName',
   'preConfirmStatusId',
-  'rePreConfirmStatusId',
   'preContactStatusId',
   'closerStatusId',
   'hook',
@@ -60,7 +59,6 @@ const CSV_COLUMNS = [
 
 const APPOINTMENT_STATUS_CATEGORIES = [
   'TOSS_PRE_CONFIRM',
-  'APPOINTMENT_RE_PRE_CONFIRM',
   'APPOINTMENT_PRE_CONTACT',
   'APPOINTMENT_CLOSER',
   'APPOINTMENT_HP_PROGRESS',
@@ -119,7 +117,6 @@ export class AppointmentsController {
           meetingStartTime: row.meetingStartAt ? row.meetingStartAt.toISOString().slice(11, 16) : '',
           apStaffName: row.apStaffName ?? '',
           preConfirmStatusId: statusLabel(row.preConfirmStatusId),
-          rePreConfirmStatusId: statusLabel(row.rePreConfirmStatusId),
           preContactStatusId: statusLabel(row.preContactStatusId),
           closerStatusId: statusLabel(row.closerStatusId),
           hook: row.hook ?? '',

@@ -25,6 +25,9 @@ export class ContractsController {
   @RequirePermissions({ resource: 'contract', action: 'export' })
   @Get('export')
   async export(@Res() res: Response, @Query('statusId') statusId?: string) {
+    const statusMasters = await this.prisma.statusMaster.findMany({ where: { category: 'MATCHING' } });
+    const statusLabel = (id: string | null) => (id ? statusMasters.find((s) => s.id === id)?.displayName ?? id : '');
+
     await streamCsvExport(
       (cursor, batchSize) =>
         this.prisma.contract.findMany({
@@ -36,15 +39,28 @@ export class ContractsController {
       {
         res,
         filenamePrefix: 'contracts',
-        columns: ['caseNumber', 'contractedAt', 'contractAmount', 'matchingStatusId', 'matchingAt', 'switchingAt'],
+        columns: [
+          'caseNumber',
+          'contractedAt',
+          'contractAmount',
+          'matchingStatusId',
+          'matchingAt',
+          'switchingScheduledAt',
+          'switchingAt',
+          'cancelledAt',
+          'terminatedAt',
+        ],
         getId: (row) => row.id,
         mapRow: (row) => ({
           caseNumber: row.caseNumber,
           contractedAt: row.contractedAt?.toISOString() ?? '',
           contractAmount: row.contractAmount?.toString() ?? '',
-          matchingStatusId: row.matchingStatusId,
+          matchingStatusId: statusLabel(row.matchingStatusId),
           matchingAt: row.matchingAt?.toISOString() ?? '',
+          switchingScheduledAt: row.switchingScheduledAt?.toISOString() ?? '',
           switchingAt: row.switchingAt?.toISOString() ?? '',
+          cancelledAt: row.cancelledAt?.toISOString() ?? '',
+          terminatedAt: row.terminatedAt?.toISOString() ?? '',
         }),
       },
     );

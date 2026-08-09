@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
+import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate } from '../../lib/dateInput';
+import { formatDate, isoToDateInput } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -17,11 +18,15 @@ function toOptions(list: StatusMasterItem[] | undefined) {
   return list?.map((s) => ({ id: s.id, label: s.displayName })) ?? [];
 }
 
+type FilterValueFn = (r: AppointmentListItem) => string;
+
 export function AppointmentsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const pageSize = 20;
+  // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
+  const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
+  const pageSize = 100;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +35,6 @@ export function AppointmentsListPage() {
   const presence = usePresence('APPOINTMENT', me?.id);
   const { data: statuses } = useStatuses('APPOINTMENT');
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
-  const { data: rePreConfirmOptions } = useStatuses('APPOINTMENT_RE_PRE_CONFIRM');
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
@@ -49,6 +53,9 @@ export function AppointmentsListPage() {
 
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
   const statusColor = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#9ca3af';
+  // 進捗の並び順(ET→成約→保留→失注→リスケ→新規訪問等)はStatusMaster.orderで表現している
+  const progressGroupOrder = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.order ?? 999 : 999);
+  const progressBg = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.color ?? '#ffffff' : '#ffffff');
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
@@ -67,63 +74,99 @@ export function AppointmentsListPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
   });
 
-  // 日付だけを手入力で編集する列を作る共通ヘルパー(カレンダーピッカーは使わない)
-  const dateColumn = (key: keyof AppointmentListItem, label: string, width = 100): Column<AppointmentListItem> => ({
-    key,
-    label,
-    width,
-    render: (r) => {
-      const value = r[key] as string | null;
-      return (
-        <InlineFlexDate
-          iso={value}
-          label={label}
-          onSave={(iso) => save(r, { [key]: iso })}
-          onInvalid={setError}
-        />
-      );
-    },
-  });
+  // 列ごとの絞り込み用の値抽出関数。各列ヘルパーが自身の列を作る際に登録する。
+  const filterValueFns: Record<string, FilterValueFn> = {};
+  const rawRows = useMemo(() => data?.items ?? [], [data]);
+  const optionsFor = (key: string) => {
+    const fn = filterValueFns[key];
+    if (!fn) return [];
+    const set = new Set<string>();
+    for (const r of rawRows) set.add(fn(r));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'));
+  };
+  const filterHeader = (key: string, label: string) => () => (
+    <ColumnFilterHeader
+      label={label}
+      options={optionsFor(key)}
+      selected={filters[key] ?? null}
+      onChange={(sel) => setFilters((f) => ({ ...f, [key]: sel }))}
+    />
+  );
 
-  const checkboxColumn = (key: keyof AppointmentListItem, label: string, width = 90): Column<AppointmentListItem> => ({
-    key,
-    label,
-    width,
-    render: (r) => (
-      <input
-        type="checkbox"
-        checked={Boolean(r[key])}
-        onClick={stop}
-        onChange={(e) => save(r, { [key]: e.target.checked })}
-      />
-    ),
-  });
+  // 日付だけを手入力で編集する列を作る共通ヘルパー(カレンダーピッカーは使わない)
+  const dateColumn = (key: keyof AppointmentListItem, label: string, width = 100): Column<AppointmentListItem> => {
+    filterValueFns[key as string] = (r) => isoToDateInput(r[key] as string | null);
+    return {
+      key: key as string,
+      label,
+      width,
+      renderHeader: filterHeader(key as string, label),
+      render: (r) => {
+        const value = r[key] as string | null;
+        return <InlineFlexDate iso={value} label={label} onSave={(iso) => save(r, { [key]: iso })} onInvalid={setError} />;
+      },
+    };
+  };
+
+  const checkboxColumn = (key: keyof AppointmentListItem, label: string, width = 90): Column<AppointmentListItem> => {
+    filterValueFns[key as string] = (r) => (r[key] ? '済' : '未');
+    return {
+      key: key as string,
+      label,
+      width,
+      renderHeader: filterHeader(key as string, label),
+      render: (r) => (
+        <input type="checkbox" checked={Boolean(r[key])} onClick={stop} onChange={(e) => save(r, { [key]: e.target.checked })} />
+      ),
+    };
+  };
 
   const selectColumn = (
     key: keyof AppointmentListItem,
     label: string,
     options: StatusMasterItem[] | undefined,
     width = 100,
-  ): Column<AppointmentListItem> => ({
-    key,
-    label,
-    width,
-    render: (r) => <InlineSelect value={r[key] as string | null} options={toOptions(options)} onSave={(v) => save(r, { [key]: v })} />,
-  });
+  ): Column<AppointmentListItem> => {
+    filterValueFns[key as string] = (r) => options?.find((s) => s.id === r[key])?.displayName ?? '';
+    return {
+      key: key as string,
+      label,
+      width,
+      renderHeader: filterHeader(key as string, label),
+      render: (r) => <InlineSelect value={r[key] as string | null} options={toOptions(options)} onSave={(v) => save(r, { [key]: v })} />,
+    };
+  };
 
-  const textColumn = (key: keyof AppointmentListItem, label: string, width = 100): Column<AppointmentListItem> => ({
-    key,
-    label,
-    width,
-    render: (r) => <InlineText value={r[key] as string | null} onSave={(v) => save(r, { [key]: v })} />,
-  });
+  const textColumn = (key: keyof AppointmentListItem, label: string, width = 100): Column<AppointmentListItem> => {
+    filterValueFns[key as string] = (r) => (r[key] as string | null) ?? '';
+    return {
+      key: key as string,
+      label,
+      width,
+      renderHeader: filterHeader(key as string, label),
+      render: (r) => <InlineText value={r[key] as string | null} onSave={(v) => save(r, { [key]: v })} />,
+    };
+  };
+
+  filterValueFns.apoDate = (r) => formatDate(r.createdAt);
+  filterValueFns.meetingDate = (r) => isoToDateInput(r.meetingStartAt);
+  filterValueFns.meetingTime = (r) => (r.meetingStartAt ? new Date(r.meetingStartAt).toTimeString().slice(0, 5) : '');
+  filterValueFns.storeName = (r) => r.storeName ?? '';
+  filterValueFns.contactName = (r) => r.customer?.contactName ?? '';
+  filterValueFns.phone = (r) => r.customer?.phone ?? '';
+  filterValueFns.prefecture = (r) => r.prefecture ?? '';
+  filterValueFns.address = (r) => r.customer?.address ?? '';
+  filterValueFns.anshinBizPoints = (r) => (r.anshinBizPoints != null ? String(r.anshinBizPoints) : '');
+  filterValueFns.email = (r) => r.customer?.email ?? '';
+  filterValueFns.status = (r) => statusLabel(r.meetingStatusId);
 
   const columns: Column<AppointmentListItem>[] = [
-    { key: 'apoDate', label: 'アポ日', render: (r) => formatDate(r.createdAt), width: 90 },
+    { key: 'apoDate', label: 'アポ日', render: (r) => formatDate(r.createdAt), width: 90, renderHeader: filterHeader('apoDate', 'アポ日') },
     {
       key: 'meetingDate',
       label: '商談日',
       width: 92,
+      renderHeader: filterHeader('meetingDate', '商談日'),
       render: (r) => (
         <InlineFlexDate iso={r.meetingStartAt} label="商談日" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
@@ -132,13 +175,13 @@ export function AppointmentsListPage() {
       key: 'meetingTime',
       label: '商談時間',
       width: 74,
+      renderHeader: filterHeader('meetingTime', '商談時間'),
       render: (r) => (
         <InlineFlexTime iso={r.meetingStartAt} label="商談時間" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
     },
     textColumn('apStaffName', 'AP', 80),
     selectColumn('preConfirmStatusId', '前確', preConfirmOptions, 90),
-    selectColumn('rePreConfirmStatusId', '再前確担当', rePreConfirmOptions, 100),
     selectColumn('preContactStatusId', '前連担当', preContactOptions, 100),
     selectColumn('closerStatusId', 'CL', closerOptions, 90),
     textColumn('hook', 'フック', 100),
@@ -147,6 +190,7 @@ export function AppointmentsListPage() {
       key: 'storeName',
       label: '店舗名',
       width: 120,
+      renderHeader: filterHeader('storeName', '店舗名'),
       render: (r) => <InlineText value={r.storeName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
     },
     textColumn('memo', '備考', 120),
@@ -158,24 +202,27 @@ export function AppointmentsListPage() {
       key: 'contactName',
       label: '担当者名',
       width: 96,
+      renderHeader: filterHeader('contactName', '担当者名'),
       render: (r) => <InlineText value={r.customer?.contactName ?? null} onSave={(v) => save(r, { contactName: v })} />,
     },
     {
       key: 'phone',
       label: '店舗連絡先',
       width: 108,
+      renderHeader: filterHeader('phone', '店舗連絡先'),
       render: (r) => <InlineText value={r.customer?.phone ?? null} onSave={(v) => save(r, { phone: v })} />,
     },
-    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72 },
+    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72, renderHeader: filterHeader('prefecture', '地域') },
     {
       key: 'address',
       label: '住所',
       width: 160,
+      renderHeader: filterHeader('address', '住所'),
       render: (r) => <InlineText value={r.customer?.address ?? null} onSave={(v) => save(r, { address: v })} />,
     },
     selectColumn('hpProgressStatusId', 'HP進捗', hpProgressOptions, 100),
     selectColumn('typeStatusId', '種別', typeOptions, 90),
-    selectColumn('progressStatusId', '進捗', progressOptions, 90),
+    selectColumn('progressStatusId', '進捗', progressOptions, 110),
     textColumn('listName', 'リスト', 96),
     selectColumn('acquisitionMethodStatusId', '獲得方法', acquisitionMethodOptions, 100),
     textColumn('proposalLocation', '提案場所', 100),
@@ -187,6 +234,7 @@ export function AppointmentsListPage() {
       key: 'anshinBizPoints',
       label: 'あんしんBiz Pt',
       width: 90,
+      renderHeader: filterHeader('anshinBizPoints', 'あんしんBiz Pt'),
       render: (r) => (
         <input
           type="text"
@@ -229,12 +277,14 @@ export function AppointmentsListPage() {
       key: 'email',
       label: 'メールアドレス',
       width: 150,
+      renderHeader: filterHeader('email', 'メールアドレス'),
       render: (r) => <InlineText value={r.customer?.email ?? null} onSave={(v) => save(r, { email: v })} />,
     },
     textColumn('specialNotes', 'メモ・特記事項', 150),
     {
       key: 'status',
       label: '商談ステータス',
+      renderHeader: filterHeader('status', '商談ステータス'),
       render: (r) => (
         <InlineSelect
           value={r.meetingStatusId}
@@ -254,6 +304,25 @@ export function AppointmentsListPage() {
       width: 120,
     },
   ];
+
+  // 進捗のグループ(ET→成約→保留→失注→リスケ→新規訪問等)順に並べ、グループ内は商談日時昇順(要望)
+  const rows = useMemo(() => {
+    const filtered = rawRows.filter((r) =>
+      Object.entries(filters).every(([key, sel]) => {
+        if (!sel) return true;
+        const fn = filterValueFns[key];
+        return fn ? sel.has(fn(r)) : true;
+      }),
+    );
+    return [...filtered].sort((a, b) => {
+      const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
+      if (groupDiff !== 0) return groupDiff;
+      const at = a.meetingStartAt ? new Date(a.meetingStartAt).getTime() : Infinity;
+      const bt = b.meetingStartAt ? new Date(b.meetingStartAt).getTime() : Infinity;
+      return at - bt;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawRows, filters, progressOptions]);
 
   return (
     <AppLayout>
@@ -289,7 +358,7 @@ export function AppointmentsListPage() {
 
         <DataTable
           columns={columns}
-          rows={data?.items ?? []}
+          rows={rows}
           total={data?.total ?? 0}
           page={page}
           pageSize={pageSize}
@@ -297,6 +366,7 @@ export function AppointmentsListPage() {
           onPageChange={setPage}
           getRowId={(r) => r.id}
           onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
+          rowStyle={(r) => ({ background: progressBg(r.progressStatusId) })}
           fontSize={12}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
@@ -306,16 +376,13 @@ export function AppointmentsListPage() {
             <div>
               {r.contract && (
                 <p style={{ fontSize: 13, marginBottom: 8 }}>
-                  ✅ 成約案件が作成済みです。 <a href="/contracts">成約管理一覧を見る →</a>
+                  ✅ ET案件が作成済みです。 <a href="/contracts">ET管理一覧を見る →</a>
                 </p>
               )}
               <div style={{ display: 'flex', gap: 24, marginBottom: 12, fontSize: 13 }}>
                 <div>
                   <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>商談形式</label>
-                  <select
-                    value={r.meetingType}
-                    onChange={(e) => save(r, { meetingType: e.target.value })}
-                  >
+                  <select value={r.meetingType} onChange={(e) => save(r, { meetingType: e.target.value })}>
                     <option value="VISIT">訪問</option>
                     <option value="GOOGLE_MEET">Google Meet</option>
                     <option value="PHONE">電話</option>

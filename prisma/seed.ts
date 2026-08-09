@@ -102,6 +102,26 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'APPOINTMENT', internalCode: 'APO_NO_CONTACT', displayName: '不通', color: '#737373' },
   { category: 'APPOINTMENT', internalCode: 'APO_LOST', displayName: '失注', color: '#ef4444' },
   { category: 'APPOINTMENT', internalCode: 'APO_EXCLUDED', displayName: '対象外', color: '#737373' },
+  // アポ(進捗)。並び順の要望: ET→成約→保留→失注→リスケ→新規訪問(その他は新規訪問と同グループ)。
+  // 色はグループ単位で統一(保留A/Bは同色、失注系は全て同色)。internalCode PROG_ETは
+  // 自動化トリガー(ET管理への自動移行)で判定に使うため変更不可。
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_ET', displayName: 'ET', color: '#e0e7ff', order: 10 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_CONTRACTED', displayName: '成約', color: '#dcfce7', order: 20 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_HOLD_A', displayName: '保留A', color: '#fef9c3', order: 30 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_HOLD_B', displayName: '保留B', color: '#fef9c3', order: 30 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_SHINDENRYOKU', displayName: '失注（新電力NG・不信）', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_TSUKIAI', displayName: '失注（付き合いNG）', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_DAISANSHA', displayName: '失注（第三者NG）', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_RYOKIN', displayName: '失注（料金差差額・切り替えたばかり）', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_ZENREN', displayName: '前連失注', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_MONTHLY', displayName: '月内失注', color: '#fecaca', order: 40 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_RESCHEDULE', displayName: 'リスケ', color: '#fed7aa', order: 50 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NEW_VISIT', displayName: '新規訪問', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NO_TRANSFER', displayName: '取次不可', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NEXT_MONTH_APPO', displayName: '来月アポ', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_BACK_TO_AP', displayName: 'AP戻し', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_CANCELLED', displayName: 'キャンセル', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_HP_PAID_APPO', displayName: 'HP有料アポ', color: '#ffffff', order: 60 },
   // 訪問
   { category: 'VISIT', internalCode: 'VISIT_SCHEDULED', displayName: '訪問予定', color: '#3b82f6' },
   { category: 'VISIT', internalCode: 'VISIT_DEPARTED', displayName: '出発', color: '#eab308' },

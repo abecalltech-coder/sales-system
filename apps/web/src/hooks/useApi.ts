@@ -121,7 +121,6 @@ export interface AppointmentListItem {
 
   apStaffName: string | null;
   preConfirmStatusId: string | null;
-  rePreConfirmStatusId: string | null;
   preContactStatusId: string | null;
   closerStatusId: string | null;
   hook: string | null;
@@ -210,8 +209,17 @@ export interface ContractListItem {
   matchingStatusId: string;
   contractedAt: string | null;
   contractAmount: string | null;
+  revenueForecast: string | null;
+  feeForecast: string | null;
+  contractNumber: string | null;
+  applicationNumber: string | null;
   matchingAt: string | null;
+  switchingScheduledAt: string | null;
   switchingAt: string | null;
+  cancelledAt: string | null;
+  terminatedAt: string | null;
+  deficiencyNote: string | null;
+  nextActionAt: string | null;
   memo: string | null;
   version: number;
 }

@@ -6,6 +6,7 @@ import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { toDateOrUndefined } from '../common/utils/date.util';
 
 @Injectable()
 export class ContractsService {
@@ -105,7 +106,8 @@ export class ContractsService {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
 
-    const { version, contractedAt, matchingAt, switchingScheduledAt, switchingAt, nextActionAt, corporateName, ...rest } = dto;
+    const { version, contractedAt, matchingAt, switchingScheduledAt, switchingAt, cancelledAt, terminatedAt, nextActionAt, corporateName, ...rest } =
+      dto;
 
     // マッチング完了/スイッチング完了へ変更した際、日付が空欄なら現在日を自動入力する(セクション26)
     let resolvedMatchingAt = matchingAt ? new Date(matchingAt) : existing.matchingAt ?? undefined;
@@ -139,11 +141,13 @@ export class ContractsService {
         where: { id, version },
         data: {
           ...rest,
-          contractedAt: contractedAt ? new Date(contractedAt) : undefined,
+          contractedAt: toDateOrUndefined(contractedAt),
           matchingAt: resolvedMatchingAt,
-          switchingScheduledAt: switchingScheduledAt ? new Date(switchingScheduledAt) : undefined,
+          switchingScheduledAt: toDateOrUndefined(switchingScheduledAt),
           switchingAt: resolvedSwitchingAt,
-          nextActionAt: nextActionAt ? new Date(nextActionAt) : undefined,
+          cancelledAt: toDateOrUndefined(cancelledAt),
+          terminatedAt: toDateOrUndefined(terminatedAt),
+          nextActionAt: toDateOrUndefined(nextActionAt),
           updatedBy: userId,
           version: { increment: 1 },
         },
