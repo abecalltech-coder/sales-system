@@ -3,20 +3,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
-import { InlineText, InlineSelect } from '../../components/InlineEdit';
+import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, formatTime, isoToDateInput, isoToDateKey, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { formatDate, formatTime, isoToDateInput, isoToTimeInput } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 
 const CALL_DIRECTION_OPTIONS = [
   { id: '架電', label: '架電' },
   { id: '入電', label: '入電' },
 ];
-
-const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
-const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
 
 type FilterValueFn = (r: TossCaseListItem) => string;
 
@@ -146,30 +143,7 @@ export function TossCasesListPage() {
       width: 92,
       renderHeader: filterHeader('nextActionDate', '次回対応日'),
       render: (r) => (
-        <input
-          type="text"
-          inputMode="numeric"
-          defaultValue={isoToDateInput(r.nextActionAt)}
-          onClick={stop}
-          onBlur={(e) => {
-            const raw = e.target.value.trim();
-            const current = isoToDateInput(r.nextActionAt);
-            if (raw === current) return;
-            if (raw === '') {
-              save(r, { nextActionAt: null });
-              return;
-            }
-            const parsed = parseDateText(raw);
-            if (!parsed) {
-              setError('次回対応日は 8/10・8-10・0810 のような形式で入力してください');
-              e.target.value = current;
-              return;
-            }
-            const time = isoToTimeInput(r.nextActionAt) || '00:00';
-            save(r, { nextActionAt: new Date(`${parsed}T${time}`).toISOString() });
-          }}
-          style={inlineInputStyle}
-        />
+        <InlineFlexDate iso={r.nextActionAt} label="次回対応日" onSave={(iso) => save(r, { nextActionAt: iso })} onInvalid={setError} />
       ),
     },
     {
@@ -178,30 +152,7 @@ export function TossCasesListPage() {
       width: 74,
       renderHeader: filterHeader('nextActionTime', '対応時間'),
       render: (r) => (
-        <input
-          type="text"
-          inputMode="numeric"
-          defaultValue={isoToTimeInput(r.nextActionAt)}
-          onClick={stop}
-          onBlur={(e) => {
-            const raw = e.target.value.trim();
-            const current = isoToTimeInput(r.nextActionAt);
-            if (raw === current) return;
-            if (raw === '') {
-              save(r, { nextActionAt: null });
-              return;
-            }
-            const parsed = parseTimeText(raw);
-            if (!parsed) {
-              setError('対応時間は 9:05・9：05・0905 のような形式で入力してください');
-              e.target.value = current;
-              return;
-            }
-            const date = isoToDateKey(r.nextActionAt) || isoToDateKey(new Date().toISOString());
-            save(r, { nextActionAt: new Date(`${date}T${parsed}`).toISOString() });
-          }}
-          style={inlineInputStyle}
-        />
+        <InlineFlexTime iso={r.nextActionAt} label="対応時間" onSave={(iso) => save(r, { nextActionAt: iso })} onInvalid={setError} />
       ),
     },
     {

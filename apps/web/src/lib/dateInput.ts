@@ -30,14 +30,20 @@ function isValidMonthDay(mon: number, day: number): boolean {
   return mon >= 1 && mon <= 12 && day >= 1 && day <= 31;
 }
 
+/** 全角数字(０-９)を半角に正規化する(IME入力等でどちらで打たれても受け付けるため) */
+function toHalfWidthDigits(s: string): string {
+  return s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+}
+
 /**
  * 手入力の日付表記を幅広く許容し、YYYY-MM-DDへ正規化する(不正な場合はnull)。
  * 対応形式: "2026-8-10" "2026/8/10"(年あり、-または/区切り)
  *          "8-10" "8/10"(年省略、今年として扱う)
  *          "0810"(区切りなし4桁、月日のみとして扱う)
+ * 数字は全角で入力されても半角として扱う。
  */
 export function parseDateText(val: string): string | null {
-  const trimmed = val.trim();
+  const trimmed = toHalfWidthDigits(val.trim());
   const currentYear = new Date().getFullYear();
 
   let m = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
@@ -72,9 +78,10 @@ export function parseDateText(val: string): string | null {
 /**
  * 手入力の時刻表記を幅広く許容し、半角HH:mmへ正規化する(不正な場合はnull)。
  * 対応形式: "9:5" "9：5"(全角コロン) "0905"(区切りなし4桁)
+ * 数字は全角で入力されても半角として扱う。
  */
 export function parseTimeText(val: string): string | null {
-  const normalized = val.trim().replace(/：/g, ':');
+  const normalized = toHalfWidthDigits(val.trim()).replace(/：/g, ':');
   let m = normalized.match(/^(\d{1,2}):(\d{1,2})$/);
   if (!m) m = normalized.match(/^(\d{2})(\d{2})$/);
   if (!m) return null;

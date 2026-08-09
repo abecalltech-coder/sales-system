@@ -1,4 +1,11 @@
 import { CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  isoToDateInput,
+  isoToDateKey,
+  isoToTimeInput,
+  parseDateText as parseFlexDateText,
+  parseTimeText as parseFlexTimeText,
+} from '../lib/dateInput';
 
 const baseStyle: CSSProperties = {
   border: 'none',
@@ -170,6 +177,99 @@ export function InlineSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * 「次回対応日」等、日付だけを柔軟な書式(8/10・8-10・0810等)で手入力するセル。
+ * 値をuseStateで持たずdefaultValueのuncontrolled inputにすると、保存成功後にDOM上の
+ * 表示が更新されず入力した生の文字列のまま(例: 0909と打っても9/9に変わらない)に
+ * なってしまうため、valueをpropに同期するcontrolled inputにしている。
+ */
+export function InlineFlexDate({
+  iso,
+  onSave,
+  onInvalid,
+  label = '日付',
+}: {
+  iso: string | null;
+  onSave: (nextIso: string | null) => void;
+  onInvalid: (message: string) => void;
+  label?: string;
+}) {
+  const [draft, setDraft] = useState(isoToDateInput(iso));
+  useEffect(() => setDraft(isoToDateInput(iso)), [iso]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={draft}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const raw = draft.trim();
+        const current = isoToDateInput(iso);
+        if (raw === current) return;
+        if (raw === '') {
+          onSave(null);
+          return;
+        }
+        const parsed = parseFlexDateText(raw);
+        if (!parsed) {
+          onInvalid(`${label}は 8/10・8-10・0810 のような形式で入力してください`);
+          setDraft(current);
+          return;
+        }
+        const time = isoToTimeInput(iso) || '00:00';
+        onSave(new Date(`${parsed}T${time}`).toISOString());
+      }}
+      style={baseStyle}
+    />
+  );
+}
+
+/** 「対応時間」等、時刻だけを柔軟な書式(9:05・9：05・0905等)で手入力するセル。InlineFlexDateと同じ理由でcontrolledにしている */
+export function InlineFlexTime({
+  iso,
+  onSave,
+  onInvalid,
+  label = '時間',
+}: {
+  iso: string | null;
+  onSave: (nextIso: string | null) => void;
+  onInvalid: (message: string) => void;
+  label?: string;
+}) {
+  const [draft, setDraft] = useState(isoToTimeInput(iso));
+  useEffect(() => setDraft(isoToTimeInput(iso)), [iso]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={draft}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const raw = draft.trim();
+        const current = isoToTimeInput(iso);
+        if (raw === current) return;
+        if (raw === '') {
+          onSave(null);
+          return;
+        }
+        const parsed = parseFlexTimeText(raw);
+        if (!parsed) {
+          onInvalid(`${label}は 9:05・9：05・0905 のような形式で入力してください`);
+          setDraft(current);
+          return;
+        }
+        const date = isoToDateKey(iso) || isoToDateKey(new Date().toISOString());
+        onSave(new Date(`${date}T${parsed}`).toISOString());
+      }}
+      style={baseStyle}
+    />
   );
 }
 

@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
-import { InlineText, InlineSelect } from '../../components/InlineEdit';
+import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, isoToDateInput, isoToDateKey, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { formatDate } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -75,28 +75,11 @@ export function AppointmentsListPage() {
     render: (r) => {
       const value = r[key] as string | null;
       return (
-        <input
-          type="text"
-          inputMode="numeric"
-          defaultValue={isoToDateInput(value)}
-          onClick={stop}
-          onBlur={(e) => {
-            const raw = e.target.value.trim();
-            const current = isoToDateInput(value);
-            if (raw === current) return;
-            if (raw === '') {
-              save(r, { [key]: null });
-              return;
-            }
-            const parsed = parseDateText(raw);
-            if (!parsed) {
-              setError(`${label}は 8/10・8-10・0810 のような形式で入力してください`);
-              e.target.value = current;
-              return;
-            }
-            save(r, { [key]: new Date(`${parsed}T00:00:00`).toISOString() });
-          }}
-          style={inlineInputStyle}
+        <InlineFlexDate
+          iso={value}
+          label={label}
+          onSave={(iso) => save(r, { [key]: iso })}
+          onInvalid={setError}
         />
       );
     },
@@ -142,30 +125,7 @@ export function AppointmentsListPage() {
       label: '商談日',
       width: 92,
       render: (r) => (
-        <input
-          type="text"
-          inputMode="numeric"
-          defaultValue={isoToDateInput(r.meetingStartAt)}
-          onClick={stop}
-          onBlur={(e) => {
-            const raw = e.target.value.trim();
-            const current = isoToDateInput(r.meetingStartAt);
-            if (raw === current) return;
-            if (raw === '') {
-              save(r, { meetingStartAt: null });
-              return;
-            }
-            const parsed = parseDateText(raw);
-            if (!parsed) {
-              setError('商談日は 8/10・8-10・0810 のような形式で入力してください');
-              e.target.value = current;
-              return;
-            }
-            const time = isoToTimeInput(r.meetingStartAt) || '00:00';
-            save(r, { meetingStartAt: new Date(`${parsed}T${time}`).toISOString() });
-          }}
-          style={inlineInputStyle}
-        />
+        <InlineFlexDate iso={r.meetingStartAt} label="商談日" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
     },
     {
@@ -173,30 +133,7 @@ export function AppointmentsListPage() {
       label: '商談時間',
       width: 74,
       render: (r) => (
-        <input
-          type="text"
-          inputMode="numeric"
-          defaultValue={isoToTimeInput(r.meetingStartAt)}
-          onClick={stop}
-          onBlur={(e) => {
-            const raw = e.target.value.trim();
-            const current = isoToTimeInput(r.meetingStartAt);
-            if (raw === current) return;
-            if (raw === '') {
-              save(r, { meetingStartAt: null });
-              return;
-            }
-            const parsed = parseTimeText(raw);
-            if (!parsed) {
-              setError('商談時間は 14:30・14：30・1430 のような形式で入力してください');
-              e.target.value = current;
-              return;
-            }
-            const date = isoToDateKey(r.meetingStartAt) || isoToDateKey(new Date().toISOString());
-            save(r, { meetingStartAt: new Date(`${date}T${parsed}`).toISOString() });
-          }}
-          style={inlineInputStyle}
-        />
+        <InlineFlexTime iso={r.meetingStartAt} label="商談時間" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
     },
     textColumn('apStaffName', 'AP', 80),
