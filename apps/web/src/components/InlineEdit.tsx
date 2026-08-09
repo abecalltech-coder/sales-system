@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const baseStyle: CSSProperties = {
   border: 'none',
@@ -11,8 +11,11 @@ const baseStyle: CSSProperties = {
 
 /**
  * 一覧セルをその場で書き換えられるようにする最小限の部品。
- * 見た目は元のテキスト表示にできるだけ近づけ(枠線なし・透明背景)、
- * クリックで行のアコーディオン展開が発火しないようstopPropagationする。
+ * 非フォーカス時は他の列と同じ1行の高さに収まる省略表示(行の高さを常に統一するため)、
+ * フォーカス時のみGoogleスプレッドシートのように実サイズのtextareaを画面固定位置で
+ * セルの上に浮かせて全文を表示する(position:fixedで祖先のoverflow:hiddenによる
+ * クリッピングを回避している。単純なabsoluteだと表の列幅で切れてしまうため)。
+ * Enterで確定、Shift+EnterまたはCtrl+Enterで改行を挿入できる。
  */
 export function InlineText({
   value,
@@ -28,27 +31,109 @@ export function InlineText({
   disabled?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? '');
+  const [focused, setFocused] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => setDraft(value ?? ''), [value]);
 
+  const updateRect = () => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect({ top: r.top, left: r.left, width: r.width });
+  };
+
+  useLayoutEffect(() => {
+    if (!focused) return;
+    updateRect();
+    const onScrollOrResize = () => updateRect();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused]);
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!focused || !el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [focused, draft]);
+
+  const commit = () => {
+    setFocused(false);
+    if (draft !== (value ?? '')) onSave(draft);
+  };
+
+  const previewText = (value ?? '').replace(/\n/g, ' ');
+
   return (
-    <input
-      value={draft}
-      placeholder={placeholder}
-      disabled={disabled}
-      onChange={(e) => setDraft(e.target.value)}
-      onClick={(e) => e.stopPropagation()}
-      onBlur={() => {
-        if (draft !== (value ?? '')) onSave(draft);
+    <div
+      ref={anchorRef}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) setFocused(true);
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-        if (e.key === 'Escape') {
-          setDraft(value ?? '');
-          (e.target as HTMLInputElement).blur();
-        }
+      style={{
+        ...baseStyle,
+        ...style,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        cursor: disabled ? 'default' : 'text',
+        minHeight: '1.2em',
       }}
-      style={{ ...baseStyle, ...style }}
-    />
+    >
+      {previewText || (placeholder && <span style={{ color: 'var(--color-text-faint)' }}>{placeholder}</span>)}
+      {focused && rect && (
+        <textarea
+          ref={textareaRef}
+          autoFocus
+          value={draft}
+          disabled={disabled}
+          placeholder={placeholder}
+          rows={1}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+              e.preventDefault();
+              (e.target as HTMLTextAreaElement).blur();
+            } else if (e.key === 'Escape') {
+              setDraft(value ?? '');
+              (e.target as HTMLTextAreaElement).blur();
+            }
+            // Shift+EnterとCtrl+Enterはデフォルト動作(改行挿入)に任せる
+          }}
+          style={{
+            position: 'fixed',
+            top: rect.top - 1,
+            left: rect.left - 1,
+            width: Math.min(Math.max(rect.width + 40, 200), 420),
+            zIndex: 1000,
+            resize: 'none',
+            overflow: 'hidden',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            font: 'inherit',
+            fontWeight: style?.fontWeight,
+            color: 'inherit',
+            lineHeight: 1.4,
+            padding: '5px 7px',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-primary)',
+            borderRadius: 4,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+          }}
+        />
+      )}
+    </div>
   );
 }
 
