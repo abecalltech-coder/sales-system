@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationBell } from './NotificationBell';
+import { PushNotificationToggle } from './PushNotificationToggle';
 
 const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 
@@ -175,11 +176,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         ))}
 
-        {isManager && (
-          <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
-            <NotificationBell collapsed={collapsed} />
-          </div>
-        )}
+        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+          <PushNotificationToggle collapsed={collapsed} />
+          {isManager && <NotificationBell collapsed={collapsed} />}
+        </div>
       </nav>
       <main style={{ flex: 1, minWidth: 0 }}>{children}</main>
     </div>

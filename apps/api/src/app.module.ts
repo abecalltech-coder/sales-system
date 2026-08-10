@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -23,10 +24,13 @@ import { SummaryModule } from './summary/summary.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { CommentsModule } from './comments/comments.module';
+import { PushNotificationsModule } from './push-notifications/push-notifications.module';
+import { RemindersModule } from './reminders/reminders.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([
       { name: 'default', ttl: 60_000, limit: 120 },
       { name: 'auth', ttl: 60_000, limit: 10 },
@@ -56,6 +60,8 @@ import { CommentsModule } from './comments/comments.module';
     AuditLogsModule,
     SystemSettingsModule,
     CommentsModule,
+    PushNotificationsModule,
+    RemindersModule,
   ],
   controllers: [HealthController],
 })

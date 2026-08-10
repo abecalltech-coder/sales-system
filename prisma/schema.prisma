@@ -89,9 +89,23 @@ model User {
   roles             UserRole[]
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
+  pushSubscriptions  PushSubscription[]
 
   @@index([departmentId])
   @@index([teamId])
+}
+
+// ブラウザ/PWAのWeb Push購読情報(セクション追加要望: リマインドのデスクトップ/スマホ通知)
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Role {
@@ -327,6 +341,7 @@ model Appointment {
   calendarColor          String? // CLカレンダーでの表示色(セクション追加要望)
   reminderEnabled        Boolean    @default(false) // CLカレンダーのリマインドON/OFF(セクション追加要望)
   reminderMinutesBefore  Int? // 何分前に通知するか(例: 30)
+  reminderSentAt         DateTime? // リマインド送信済み時刻(二重送信防止用)
 
   reportEvents           AppointmentReportEvent[]
 

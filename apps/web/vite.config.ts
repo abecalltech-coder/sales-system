@@ -7,6 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // ビルド後の総容量が既定の上限に近いため、通知用スクリプトを取り込むぶんだけ余裕を持たせる
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+      },
       manifest: {
         name: '案件・営業進捗・訪問営業管理システム',
         short_name: '営業管理',

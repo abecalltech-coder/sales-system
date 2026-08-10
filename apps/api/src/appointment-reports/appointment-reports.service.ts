@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { CreateAppointmentReportDto } from './dto/appointment-report.dto';
 import { AuthenticatedUser } from '../auth/types';
 
@@ -21,6 +22,7 @@ export class AppointmentReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly push: PushNotificationsService,
   ) {}
 
   /**
@@ -66,6 +68,25 @@ export class AppointmentReportsService {
         changedFields: ['memo'],
       },
     );
+
+    if (appointment.snapshotDepartmentId) {
+      const managers = await this.prisma.user.findMany({
+        where: {
+          departmentId: appointment.snapshotDepartmentId,
+          deletedAt: null,
+          roles: { some: { role: { code: 'MANAGER' } } },
+        },
+        select: { id: true },
+      });
+      await this.push.sendToUsers(
+        managers.map((m) => m.id),
+        {
+          title: `実施報告: ${label}`,
+          body: `${appointment.caseName ?? ''} ${dto.reportText}`.trim(),
+          url: '/cl-calendar',
+        },
+      );
+    }
 
     return reportEvent;
   }
