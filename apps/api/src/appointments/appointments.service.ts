@@ -126,6 +126,15 @@ export class AppointmentsService {
           meetingStatusId,
           progressStatusId,
           idempotencyKey: tossCaseId,
+          // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)
+          apStaffName: tossCase.apStaffName,
+          department: tossCase.department,
+          listName: tossCase.listName,
+          industry: tossCase.industry,
+          hook: tossCase.hook,
+          existingContract: tossCase.existingContract,
+          preConfirmStatusId: tossCase.preConfirmStatusId,
+          memo: tossCase.memo,
           createdBy: actorUserId,
           updatedBy: actorUserId,
         },
@@ -138,6 +147,25 @@ export class AppointmentsService {
         after: { fromTossCaseId: tossCaseId },
         changedBy: actorUserId,
       });
+
+      // 作成しただけではリアルタイム同期が発火せず、アポ一覧を開いていても
+      // 手動リロードしないと表示されなかったため、他の作成/更新系と同様にemitする(要望)
+      this.realtime.emitCaseUpdated(
+        [
+          'company:default',
+          ...(appointment.snapshotDepartmentId ? [`department:${appointment.snapshotDepartmentId}`] : []),
+          `appointment:${appointment.id}`,
+        ],
+        {
+          entityType: 'APPOINTMENT',
+          id: appointment.id,
+          version: appointment.version,
+          updatedAt: appointment.updatedAt.toISOString(),
+          updatedBy: actorUserId,
+          action: 'created',
+        },
+      );
+
       return appointment;
     } catch (err) {
       // 一意制約違反(並行実行での二重作成)は既存レコードを返して冪等性を保つ

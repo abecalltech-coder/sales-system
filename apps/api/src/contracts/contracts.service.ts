@@ -90,6 +90,17 @@ export class ContractsService {
         after: { fromAppointmentId: appointmentId },
         changedBy: actorUserId,
       });
+
+      // 作成しただけではリアルタイム同期が発火しないため、他の作成/更新系と同様にemitする
+      this.realtime.emitCaseUpdated(['company:default', `contract:${contract.id}`], {
+        entityType: 'CONTRACT',
+        id: contract.id,
+        version: contract.version,
+        updatedAt: contract.updatedAt.toISOString(),
+        updatedBy: actorUserId,
+        action: 'created',
+      });
+
       return contract;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
