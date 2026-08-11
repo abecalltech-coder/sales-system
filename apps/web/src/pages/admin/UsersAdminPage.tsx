@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
@@ -27,6 +27,9 @@ function SetPasswordControl({
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLSpanElement>(null);
 
   const mutation = useMutation({
     mutationFn: () => api.post(`/users/${userId}/set-password`, { newPassword: value }),
@@ -38,29 +41,71 @@ function SetPasswordControl({
     onError: (err) => onError(err instanceof ApiError ? err.message : 'パスワード変更に失敗しました'),
   });
 
-  if (!editing) {
-    return <button onClick={() => setEditing(true)}>パスワード変更</button>;
-  }
+  // テーブルのtdはoverflow:hiddenのため、position:absoluteだとポップオーバーが
+  // セル内で切れてしまう。position:fixedで実座標を計算し、祖先のクリッピングを回避する。
+  useLayoutEffect(() => {
+    if (!editing || !anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setEditing(false);
+        setValue('');
+      }
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [editing]);
 
   return (
-    <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="新しいパスワード"
-        style={{ width: 130, fontSize: 12, padding: 3 }}
-      />
-      <button onClick={() => mutation.mutate()} disabled={!value || mutation.isPending}>
-        設定
+    <span ref={containerRef} style={{ display: 'inline-block' }}>
+      <button ref={anchorRef} style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setEditing((v) => !v)}>
+        パスワード変更
       </button>
-      <button
-        onClick={() => {
-          setEditing(false);
-          setValue('');
-        }}
-      >
-        ×
-      </button>
+      {editing && pos && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            right: pos.right,
+            zIndex: 1000,
+            display: 'flex',
+            gap: 4,
+            alignItems: 'center',
+            padding: 8,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <input
+            autoFocus
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="新しいパスワード"
+            style={{ width: 140, fontSize: 12, padding: 4 }}
+          />
+          <button style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => mutation.mutate()} disabled={!value || mutation.isPending}>
+            設定
+          </button>
+          <button
+            style={{ fontSize: 12, padding: '3px 8px' }}
+            onClick={() => {
+              setEditing(false);
+              setValue('');
+            }}
+          >
+            キャンセル
+          </button>
+        </div>
+      )}
     </span>
   );
 }
@@ -187,11 +232,12 @@ export function UsersAdminPage() {
     {
       key: 'actions',
       label: '操作',
-      width: 180,
+      width: 210,
       render: (r) => (
-        <div style={{ display: 'flex', gap: 8 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
           <SetPasswordControl userId={r.id} onDone={() => setMessage(`「${r.name}」のパスワードを変更しました`)} onError={setError} />
           <button
+            style={{ fontSize: 12, padding: '3px 8px' }}
             onClick={() => {
               if (window.confirm(`「${r.name}」を削除しますか？この操作は取り消せません。`)) deleteMutation.mutate(r.id);
             }}
