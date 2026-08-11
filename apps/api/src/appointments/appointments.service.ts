@@ -126,7 +126,8 @@ export class AppointmentsService {
           meetingStatusId,
           progressStatusId,
           idempotencyKey: tossCaseId,
-          // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)
+          // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
+          // ただし備考はトス側の通話メモとアポ側のメモが別用途のため引き継がない(要望)
           apStaffName: tossCase.apStaffName,
           department: tossCase.department,
           listName: tossCase.listName,
@@ -134,7 +135,6 @@ export class AppointmentsService {
           hook: tossCase.hook,
           existingContract: tossCase.existingContract,
           preConfirmStatusId: tossCase.preConfirmStatusId,
-          memo: tossCase.memo,
           createdBy: actorUserId,
           updatedBy: actorUserId,
         },
