@@ -194,6 +194,28 @@ export function AppointmentsListPage() {
       render: (r) => <InlineText value={r.storeName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
     },
     textColumn('memo', '備考', 120),
+    {
+      key: 'status',
+      label: '商談ステータス',
+      renderHeader: filterHeader('status', '商談ステータス'),
+      render: (r) => (
+        <InlineSelect
+          value={r.meetingStatusId}
+          options={toOptions(statuses)}
+          onSave={(v) => save(r, { meetingStatusId: v })}
+          style={{
+            background: statusColor(r.meetingStatusId),
+            color: '#fff',
+            borderRadius: 999,
+            padding: '2px 6px',
+            fontSize: 11,
+            fontWeight: 600,
+            textAlign: 'center',
+          }}
+        />
+      ),
+      width: 120,
+    },
     textColumn('industry', '業種', 84),
     dateColumn('importantMattersOkAt', '重説OK日'),
     dateColumn('electronicContractAt', 'ET日'),
@@ -281,28 +303,6 @@ export function AppointmentsListPage() {
       render: (r) => <InlineText value={r.customer?.email ?? null} onSave={(v) => save(r, { email: v })} />,
     },
     textColumn('specialNotes', 'メモ・特記事項', 150),
-    {
-      key: 'status',
-      label: '商談ステータス',
-      renderHeader: filterHeader('status', '商談ステータス'),
-      render: (r) => (
-        <InlineSelect
-          value={r.meetingStatusId}
-          options={toOptions(statuses)}
-          onSave={(v) => save(r, { meetingStatusId: v })}
-          style={{
-            background: statusColor(r.meetingStatusId),
-            color: '#fff',
-            borderRadius: 999,
-            padding: '2px 6px',
-            fontSize: 11,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}
-        />
-      ),
-      width: 120,
-    },
   ];
 
   // 進捗のグループ(ET→成約→保留→失注→リスケ→新規訪問等)順に並べ、グループ内は商談日時昇順(要望)
