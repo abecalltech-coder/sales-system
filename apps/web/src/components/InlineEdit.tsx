@@ -109,20 +109,20 @@ export function InlineText({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
               e.preventDefault();
               (e.target as HTMLTextAreaElement).blur();
             } else if (e.key === 'Escape') {
               setDraft(value ?? '');
               (e.target as HTMLTextAreaElement).blur();
             }
-            // Shift+EnterとCtrl+Enterはデフォルト動作(改行挿入)に任せる
+            // Shift+Enter・Ctrl+Enter・Alt+Enterはデフォルト動作(改行挿入)に任せる
           }}
           style={{
             position: 'fixed',
-            top: rect.top - 1,
-            left: rect.left - 1,
-            width: Math.min(Math.max(rect.width + 40, 200), 420),
+            top: rect.top - 6,
+            left: rect.left - 9,
+            width: Math.min(Math.max(rect.width + 48, 220), 440),
             zIndex: 1000,
             resize: 'none',
             overflow: 'hidden',
@@ -131,12 +131,13 @@ export function InlineText({
             font: 'inherit',
             fontWeight: style?.fontWeight,
             color: 'inherit',
-            lineHeight: 1.4,
-            padding: '5px 7px',
+            lineHeight: 1.5,
+            padding: '7px 10px',
             background: 'var(--color-surface)',
             border: '1px solid var(--color-primary)',
-            borderRadius: 4,
-            boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+            borderRadius: 10,
+            boxShadow: '0 12px 28px rgba(16, 24, 40, 0.16), 0 2px 8px rgba(16, 24, 40, 0.08)',
+            animation: 'inline-edit-pop 0.1s ease-out',
           }}
         />
       )}
@@ -164,11 +165,19 @@ export function InlineSelect({
 }) {
   return (
     <select
+      className="inline-select"
       value={value ?? ''}
       disabled={disabled}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => onSave(e.target.value)}
-      style={{ ...baseStyle, appearance: 'none', cursor: disabled ? 'default' : 'pointer', ...style }}
+      style={{
+        font: 'inherit',
+        color: 'inherit',
+        width: '100%',
+        backgroundColor: 'transparent',
+        cursor: disabled ? 'default' : 'pointer',
+        ...style,
+      }}
     >
       {!hideBlankOption && <option value="">{placeholder ?? '未選択'}</option>}
       {options.map((o) => (

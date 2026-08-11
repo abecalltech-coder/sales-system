@@ -213,7 +213,7 @@ export function TossCasesListPage() {
     {
       key: 'calling',
       label: '対応中',
-      width: 74,
+      width: 96,
       renderHeader: filterHeader('calling', '対応中'),
       render: (r) => (
         <button
@@ -223,13 +223,18 @@ export function TossCasesListPage() {
           }}
           style={{
             fontSize: 11,
-            padding: '3px 6px',
+            fontWeight: 700,
+            padding: '5px 10px',
+            borderRadius: 999,
+            border: r.isCallingInProgress ? '1px solid var(--color-danger)' : '1px solid var(--color-border-strong)',
             background: r.isCallingInProgress ? 'var(--color-danger)' : 'var(--color-surface)',
-            color: r.isCallingInProgress ? '#fff' : 'inherit',
-            border: '1px solid var(--color-border)',
+            color: r.isCallingInProgress ? '#fff' : 'var(--color-text)',
+            boxShadow: r.isCallingInProgress ? '0 0 0 3px var(--color-danger-soft)' : 'none',
+            whiteSpace: 'nowrap',
+            transition: 'background-color 0.12s ease, box-shadow 0.12s ease',
           }}
         >
-          {r.isCallingInProgress ? '架電中' : '架電開始'}
+          {r.isCallingInProgress ? '● 架電中' : '架電開始'}
         </button>
       ),
     },

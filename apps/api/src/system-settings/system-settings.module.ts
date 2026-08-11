@@ -35,6 +35,20 @@ HP：
 GoogleMeetURL：{{meetingUrl}}
 備考：`;
 
+// Googleフォーム経由でトス案件が作成された際の備考欄テンプレート(要望: 下記の項目名で改行されるように)。
+const DEFAULT_GOOGLE_FORM_TOSS_MEMO_TEMPLATE = `店舗番号：{{storePhone}}
+店舗名：{{storeName}}
+住所：{{address}}
+業種：{{industry}}
+オーナー名：{{ownerName}}
+SMS送付番号(オーナー番号)：{{smsNumber}}
+リスト名：{{listName}}
+HP有無：{{hpStatus}}
+時節：{{season}}
+備考：{{memo}}
+前確架電先番号：{{preConfirmPhone}}
+デモサイト：{{demoSite}}`;
+
 // セクション40等で参照される既定のシステム設定キー一覧(値は管理画面から変更可能)
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   arrivalWarningDistanceMeters: 500,
@@ -43,6 +57,7 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   requireDelayReason: true,
   duplicateCustomerRule: 'ADMIN_REVIEW',
   tossAppointmentMemoTemplate: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE,
+  googleFormTossMemoTemplate: DEFAULT_GOOGLE_FORM_TOSS_MEMO_TEMPLATE,
 };
 
 class SetSettingDto {

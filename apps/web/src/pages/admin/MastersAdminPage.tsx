@@ -131,28 +131,28 @@ export function MastersAdminPage() {
           </div>
         )}
         {tabIndex === TAB_GROUPS.length && <ProductsAndSources />}
-        {tabIndex === TAB_GROUPS.length + 1 && <TemplateEditor />}
+        {tabIndex === TAB_GROUPS.length + 1 && <TemplateEditors />}
       </div>
     </AppLayout>
   );
 }
 
 /**
- * トス→アポイント自動作成時に備考へ流し込むテンプレートを編集する(要望)。
- * system-settingsのtossAppointmentMemoTemplateキーを利用する(値は自由な複数行文字列のため
- * ステータスマスタの表示名欄には収まらず、system-settingsのJSON値ストアを流用している)。
+ * 自動作成される備考欄のテンプレートを編集する共通部品(要望)。system-settingsの指定キーを利用する
+ * (値は自由な複数行文字列のためステータスマスタの表示名欄には収まらず、system-settingsのJSON値
+ * ストアを流用している)。テンプレートが複数あるため、キー・説明文を差し替えて使い回す。
  */
-function TemplateEditor() {
+function TemplateEditor({ settingKey, title, description }: { settingKey: string; title: string; description: string }) {
   const { data: settings, isLoading } = useSystemSettings();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
 
-  const current = settings?.find((s) => s.key === 'tossAppointmentMemoTemplate');
+  const current = settings?.find((s) => s.key === settingKey);
   const value = draft ?? (typeof current?.value === 'string' ? current.value : '');
 
   const saveMutation = useMutation({
-    mutationFn: () => api.put('/system-settings/tossAppointmentMemoTemplate', { value }),
+    mutationFn: () => api.put(`/system-settings/${settingKey}`, { value }),
     onSuccess: () => {
       setMessage('保存しました');
       setDraft(null);
@@ -163,10 +163,10 @@ function TemplateEditor() {
   if (isLoading) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>;
 
   return (
-    <div style={{ maxWidth: 600 }}>
+    <div style={{ maxWidth: 600, marginBottom: 32 }}>
+      <h2 style={{ fontSize: 15, marginBottom: 6 }}>{title}</h2>
       <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 8 }}>
-        トス実績を「アポイント」に変更した際、アポ実績の備考(CLカレンダーの詳細欄と共通)へ自動的に入る文面です。
-        <code>{'{{storeName}}'}</code> のような二重中括弧の項目は実データに置き換わり、それ以外はそのまま残ります。
+        {description} <code>{'{{storeName}}'}</code> のような二重中括弧の項目は実データに置き換わり、それ以外はそのまま残ります。
       </p>
       {message && <p style={{ color: '#16a34a', fontSize: 12, marginBottom: 8 }}>{message}</p>}
       <textarea
@@ -175,13 +175,30 @@ function TemplateEditor() {
           setDraft(e.target.value);
           setMessage(null);
         }}
-        style={{ width: '100%', minHeight: 420, fontSize: 12, fontFamily: 'monospace', padding: 10 }}
+        style={{ width: '100%', minHeight: 300, fontSize: 12, fontFamily: 'monospace', padding: 10 }}
       />
       <div style={{ marginTop: 8 }}>
         <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           保存する
         </button>
       </div>
+    </div>
+  );
+}
+
+function TemplateEditors() {
+  return (
+    <div>
+      <TemplateEditor
+        settingKey="tossAppointmentMemoTemplate"
+        title="トス→アポイント変更時の備考テンプレート"
+        description="トス実績を「アポイント」に変更した際、アポ実績の備考(CLカレンダーの詳細欄と共通)へ自動的に入る文面です。"
+      />
+      <TemplateEditor
+        settingKey="googleFormTossMemoTemplate"
+        title="Googleフォーム取り込み時の備考テンプレート"
+        description="Googleフォームの回答からトス実績が自動作成される際、備考へ自動的に入る文面です。"
+      />
     </div>
   );
 }
