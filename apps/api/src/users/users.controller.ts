@@ -3,6 +3,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApproveUserDto } from './dto/approve-user.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 
 @Controller('users')
@@ -49,6 +50,13 @@ export class UsersController {
   @Post(':id/reset-password')
   resetPassword(@Param('id') id: string) {
     return this.usersService.resetPassword(id);
+  }
+
+  /** 管理者が対象ユーザーのパスワードを直接指定して設定する(要望) */
+  @RequirePermissions({ resource: 'user', action: 'edit' })
+  @Post(':id/set-password')
+  setPassword(@Param('id') id: string, @Body() dto: SetPasswordDto) {
+    return this.usersService.setPassword(id, dto);
   }
 
   /** 自己登録ユーザーの承認(セクション追加要望) */

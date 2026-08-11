@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApproveUserDto } from './dto/approve-user.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
 
 @Injectable()
 export class UsersService {
@@ -139,6 +140,24 @@ export class UsersService {
       data: { revokedAt: new Date() },
     });
     return { tempPassword };
+  }
+
+  /**
+   * 管理者が特定のパスワードを直接指定して設定する(要望: パスワードはハッシュ化して
+   * 保存しており復元表示できないため、代わりに管理者自身が値を決められるようにする)。
+   * 対象ユーザーは次回ログイン時に変更を求めない(管理者が既に把握している値のため)。
+   */
+  async setPassword(id: string, dto: SetPasswordDto) {
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null },
+    });
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return { ok: true };
   }
 
   /** 退職者などは物理削除せず論理削除する(セクション36) */

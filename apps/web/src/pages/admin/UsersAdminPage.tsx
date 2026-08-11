@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
+import { InlineText } from '../../components/InlineEdit';
 import { useUsers, useDepartments, UserListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
@@ -10,6 +11,59 @@ const ROLE_OPTIONS = [
 ];
 
 const STATUS_LABEL: Record<string, string> = { PENDING: '承認待ち', ACTIVE: '在籍中', SUSPENDED: '停止中', RETIRED: '退職済み' };
+
+/**
+ * パスワードはハッシュ化して保存しており復元表示できないため、管理者が直接
+ * 新しいパスワードを入力・設定できるようにしたコントロール(要望)。
+ */
+function SetPasswordControl({
+  userId,
+  onDone,
+  onError,
+}: {
+  userId: string;
+  onDone: () => void;
+  onError: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => api.post(`/users/${userId}/set-password`, { newPassword: value }),
+    onSuccess: () => {
+      setEditing(false);
+      setValue('');
+      onDone();
+    },
+    onError: (err) => onError(err instanceof ApiError ? err.message : 'パスワード変更に失敗しました'),
+  });
+
+  if (!editing) {
+    return <button onClick={() => setEditing(true)}>パスワード変更</button>;
+  }
+
+  return (
+    <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="新しいパスワード"
+        style={{ width: 130, fontSize: 12, padding: 3 }}
+      />
+      <button onClick={() => mutation.mutate()} disabled={!value || mutation.isPending}>
+        設定
+      </button>
+      <button
+        onClick={() => {
+          setEditing(false);
+          setValue('');
+        }}
+      >
+        ×
+      </button>
+    </span>
+  );
+}
 
 function PendingApprovalRow({
   user,
@@ -107,18 +161,26 @@ export function UsersAdminPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
   });
 
-  const resetPasswordMutation = useMutation({
-    mutationFn: (id: string) => api.post<{ tempPassword: string }>(`/users/${id}/reset-password`),
-    onSuccess: (res) => setMessage(`一時パスワードを再発行しました: ${res.tempPassword}`),
+  const updateNameMutation = useMutation({
+    mutationFn: (vars: { id: string; version: number; name: string }) =>
+      api.patch(`/users/${vars.id}`, { version: vars.version, name: vars.name }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
-  const suspendMutation = useMutation({
-    mutationFn: (u: UserListItem) => api.patch(`/users/${u.id}`, { version: u.version, status: 'SUSPENDED' }),
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
   });
 
   const columns: Column<UserListItem>[] = [
-    { key: 'name', label: '氏名', render: (r) => r.name, width: 140 },
+    {
+      key: 'name',
+      label: '氏名',
+      width: 140,
+      render: (r) => <InlineText value={r.name} onSave={(v) => updateNameMutation.mutate({ id: r.id, version: r.version, name: v })} />,
+    },
     { key: 'email', label: 'メールアドレス', render: (r) => r.email },
     { key: 'roles', label: 'ロール', render: (r) => r.roles.map((ur) => ur.role.name).join(', ') },
     { key: 'status', label: '在籍状態', render: (r) => STATUS_LABEL[r.status] ?? r.status, width: 100 },
@@ -128,8 +190,14 @@ export function UsersAdminPage() {
       width: 180,
       render: (r) => (
         <div style={{ display: 'flex', gap: 8 }} onClick={(e) => e.stopPropagation()}>
-          <button onClick={() => resetPasswordMutation.mutate(r.id)}>PW再発行</button>
-          {r.status === 'ACTIVE' && <button onClick={() => suspendMutation.mutate(r)}>停止</button>}
+          <SetPasswordControl userId={r.id} onDone={() => setMessage(`「${r.name}」のパスワードを変更しました`)} onError={setError} />
+          <button
+            onClick={() => {
+              if (window.confirm(`「${r.name}」を削除しますか？この操作は取り消せません。`)) deleteMutation.mutate(r.id);
+            }}
+          >
+            削除
+          </button>
         </div>
       ),
     },
