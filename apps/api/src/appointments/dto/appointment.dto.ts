@@ -87,6 +87,8 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsDateString() deliveredAt?: string;
   @IsOptional() @IsString() specialNotes?: string;
   @IsOptional() @IsString() calendarColor?: string; // CLカレンダー表示色
+  @IsOptional() @IsString() calendarTitle?: string; // CLカレンダー表示タイトル
+  @IsOptional() @IsDateString() preContactAt?: string; // 前連日時
   @IsOptional() @IsBoolean() reminderEnabled?: boolean;
   @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;
 }

@@ -35,10 +35,16 @@ export function TossCasesListPage() {
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
+  const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ corporateName: '', contactName: '', phone: '', memo: '' });
   const [error, setError] = useState<string | null>(null);
+
+  // ステータスを「アポイント」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
+  const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; statusId: string } | null>(null);
+  const [preContactInput, setPreContactInput] = useState('');
+  const [preContactError, setPreContactError] = useState<string | null>(null);
 
   const createMutation = useMutation({
     mutationFn: () => api.post<{ id: string }>('/toss-cases', form),
@@ -63,6 +69,22 @@ export function TossCasesListPage() {
   const save = (row: TossCaseListItem, patch: Record<string, unknown>) =>
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
+  const preContactMutation = useMutation({
+    mutationFn: (vars: { id: string; version: number; statusId: string; initialPreContactAt: string }) =>
+      api.patch(`/toss-cases/${vars.id}`, {
+        version: vars.version,
+        statusId: vars.statusId,
+        initialPreContactAt: vars.initialPreContactAt,
+      }),
+    onSuccess: () => {
+      setPreContactModal(null);
+      setPreContactInput('');
+      setPreContactError(null);
+      queryClient.invalidateQueries({ queryKey: ['toss-cases'] });
+    },
+    onError: (err) => setPreContactError(err instanceof ApiError ? err.message : '更新に失敗しました'),
+  });
+
   const callingFlagMutation = useMutation({
     mutationFn: (vars: { id: string; active: boolean }) => api.patch(`/toss-cases/${vars.id}/calling-flag`, { active: vars.active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['toss-cases'] }),
@@ -80,7 +102,7 @@ export function TossCasesListPage() {
     nextActionTime: (r) => isoToTimeInput(r.nextActionAt),
     apStaffName: (r) => r.apStaffName ?? '',
     preConfirm: (r) => preConfirmOptions?.find((s) => s.id === r.preConfirmStatusId)?.displayName ?? '',
-    department: (r) => r.department ?? '',
+    department: (r) => departmentOptions?.find((s) => s.id === r.department)?.displayName ?? '',
     calling: (r) => (r.isCallingInProgress ? '架電中' : ''),
     corporateName: (r) => r.customer?.corporateName ?? '',
     memo: (r) => r.memo ?? '',
@@ -180,7 +202,13 @@ export function TossCasesListPage() {
       label: '部署',
       width: 84,
       renderHeader: filterHeader('department', '部署'),
-      render: (r) => <InlineText value={r.department} onSave={(v) => save(r, { department: v })} />,
+      render: (r) => (
+        <InlineSelect
+          value={r.department}
+          options={departmentOptions?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
+          onSave={(v) => save(r, { department: v })}
+        />
+      ),
     },
     {
       key: 'calling',
@@ -228,7 +256,16 @@ export function TossCasesListPage() {
         <InlineSelect
           value={r.statusId}
           options={statuses?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
-          onSave={(v) => save(r, { statusId: v })}
+          onSave={(v) => {
+            const internalCode = statuses?.find((s) => s.id === v)?.internalCode;
+            if (internalCode === 'TOSS_APPOINTMENT') {
+              setPreContactModal({ row: r, statusId: v });
+              setPreContactInput('');
+              setPreContactError(null);
+            } else {
+              save(r, { statusId: v });
+            }
+          }}
           hideBlankOption
           style={{ fontWeight: 600 }}
         />
@@ -428,6 +465,61 @@ export function TossCasesListPage() {
           cellCursor={presence.cellCursor}
         />
       </div>
+
+      {preContactModal && (
+        <div
+          onClick={() => setPreContactModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="card"
+            style={{ width: 360, background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
+          >
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>前連日時を入力してください</h2>
+            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 14 }}>
+              「{preContactModal.row.customer?.corporateName ?? '(店舗名未設定)'}」をアポイントへ変更します。
+              前連日時はアポ実績に反映され、CLカレンダーに30分予定として登録されます。
+            </p>
+            <input
+              type="datetime-local"
+              value={preContactInput}
+              onChange={(e) => setPreContactInput(e.target.value)}
+              style={{ display: 'block', width: '100%', marginBottom: 12 }}
+            />
+            {preContactError && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 10 }}>{preContactError}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setPreContactModal(null)}>キャンセル</button>
+              <button
+                className="btn-primary"
+                disabled={!preContactInput || preContactMutation.isPending}
+                onClick={() => {
+                  if (!preContactInput) {
+                    setPreContactError('前連日時を入力してください');
+                    return;
+                  }
+                  preContactMutation.mutate({
+                    id: preContactModal.row.id,
+                    version: preContactModal.row.version,
+                    statusId: preContactModal.statusId,
+                    initialPreContactAt: new Date(preContactInput).toISOString(),
+                  });
+                }}
+              >
+                確定してアポイントへ変更
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

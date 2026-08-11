@@ -171,6 +171,15 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'TOSS_NG_REASON', internalCode: 'NG_RECENTLY_SWITCHED', displayName: '切り替えたばかりNG', color: '#ef4444' },
   { category: 'TOSS_NG_REASON', internalCode: 'NG_TOO_BUSY', displayName: '忙しくて時間取れないNG', color: '#ef4444' },
   { category: 'TOSS_NG_REASON', internalCode: 'NG_HOMEPAGE', displayName: 'ホームページNG', color: '#ef4444' },
+  // 部署(セクション追加要望: CLカレンダーの題名・色分けに使用。colorがそのままカレンダー色になる)
+  { category: 'DEPARTMENT_BRANCH', internalCode: 'DEPT_CT', displayName: 'CT', color: '#3b82f6' },
+  { category: 'DEPARTMENT_BRANCH', internalCode: 'DEPT_CH_EAST', displayName: 'CH東', color: '#22c55e' },
+  { category: 'DEPARTMENT_BRANCH', internalCode: 'DEPT_CH_WEST', displayName: 'CH西', color: '#f97316' },
+  // トス実績のフック(自由入力)から、カレンダー題名の【】内・獲得角度欄へ入れるラベルへの変換表
+  // (セクション追加要望)。internalCodeにフックの原文をそのまま入れ、完全一致で照合する。
+  { category: 'TOSS_HOOK_LABEL_MAP', internalCode: 'HP(シュミ)', displayName: 'HPZOOM' },
+  { category: 'TOSS_HOOK_LABEL_MAP', internalCode: 'インドア', displayName: '撮＆訪' },
+  { category: 'TOSS_HOOK_LABEL_MAP', internalCode: '電気フック', displayName: '電気フック' },
 ];
 
 async function main() {

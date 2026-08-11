@@ -106,6 +106,7 @@ export function CLCalendarPage() {
   const { data: departments } = useDepartments();
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
+  const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
 
   const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
   const { data, isLoading } = useAppointments({
@@ -117,7 +118,8 @@ export function CLCalendarPage() {
     closerStatusId: closerStatusId || undefined,
     userId: accountUserId || undefined,
   });
-  const events = useMemo(() => (data?.items ?? []).filter((e) => e.meetingStartAt), [data]);
+  const events = useMemo(() => (data?.items ?? []).filter((e) => e.meetingStartAt || e.preContactAt), [data]);
+  const displayEvents = useMemo(() => buildDisplayEvents(events, departmentBranchOptions), [events, departmentBranchOptions]);
 
   const closerLabel = (id: string | null) => closerOptions?.find((s) => s.id === id)?.displayName ?? '';
 
@@ -265,7 +267,7 @@ export function CLCalendarPage() {
         {viewMode === 'month' && (
           <MonthGrid
             anchor={anchor}
-            events={events}
+            events={displayEvents}
             closerLabel={closerLabel}
             onSlotClick={(day) => setDraft(slotToDraft(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0)))}
             onEventClick={(ev) => setDraft(eventToDraft(ev))}
@@ -274,7 +276,7 @@ export function CLCalendarPage() {
         {viewMode !== 'month' && (
           <TimeGrid
             days={viewMode === 'week' ? weekGridDays(anchor) : [startOfDay(anchor)]}
-            events={events}
+            events={displayEvents}
             closerLabel={closerLabel}
             onSlotClick={(slot) => setDraft(slotToDraft(slot))}
             onEventClick={(ev) => setDraft(eventToDraft(ev))}
@@ -302,7 +304,58 @@ export function CLCalendarPage() {
 }
 
 function eventLabel(ev: AppointmentListItem): string {
-  return ev.storeName || '(店舗名未設定)';
+  return ev.calendarTitle || ev.storeName || '(店舗名未設定)';
+}
+
+/** 前連予定用のタイトル。例: "CT 東【前連】〇〇商店"(セクション追加要望) */
+function buildPreContactTitle(ev: AppointmentListItem, departmentLabel: string): string {
+  const prefectureInitial = ev.prefecture ? ev.prefecture.slice(0, 1) : '';
+  return `${departmentLabel} ${prefectureInitial}【前連】${ev.storeName ?? ''}`.trim();
+}
+
+interface CalendarEvent {
+  key: string;
+  start: Date;
+  end: Date | null;
+  title: string;
+  color: string;
+  appointment: AppointmentListItem;
+}
+
+/**
+ * Appointmentごとに、商談予定(メイン)に加えて前連日時が入力されている場合は
+ * 30分の前連予定を表示用に合成する(DBには保存しない派生イベント)。
+ */
+function buildDisplayEvents(
+  events: AppointmentListItem[],
+  departmentBranchOptions: { id: string; displayName: string; color: string | null }[] | undefined,
+): CalendarEvent[] {
+  const result: CalendarEvent[] = [];
+  for (const ev of events) {
+    const departmentStatus = departmentBranchOptions?.find((s) => s.id === ev.department);
+    if (ev.meetingStartAt) {
+      result.push({
+        key: ev.id,
+        start: new Date(ev.meetingStartAt),
+        end: ev.meetingEndAt ? new Date(ev.meetingEndAt) : null,
+        title: eventLabel(ev),
+        color: ev.calendarColor ?? departmentStatus?.color ?? DEFAULT_COLOR,
+        appointment: ev,
+      });
+    }
+    if (ev.preContactAt) {
+      const start = new Date(ev.preContactAt);
+      result.push({
+        key: `${ev.id}-precontact`,
+        start,
+        end: new Date(start.getTime() + 30 * 60000),
+        title: buildPreContactTitle(ev, departmentStatus?.displayName ?? ''),
+        color: departmentStatus?.color ?? ev.calendarColor ?? DEFAULT_COLOR,
+        appointment: ev,
+      });
+    }
+  }
+  return result;
 }
 
 function MonthGrid({
@@ -313,23 +366,21 @@ function MonthGrid({
   onEventClick,
 }: {
   anchor: Date;
-  events: AppointmentListItem[];
+  events: CalendarEvent[];
   closerLabel: (id: string | null) => string;
   onSlotClick: (day: Date) => void;
   onEventClick: (ev: AppointmentListItem) => void;
 }) {
   const days = monthGridDays(anchor);
   const eventsByDay = useMemo(() => {
-    const map = new Map<string, AppointmentListItem[]>();
+    const map = new Map<string, CalendarEvent[]>();
     for (const ev of events) {
-      if (!ev.meetingStartAt) continue;
-      const d = new Date(ev.meetingStartAt);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const key = `${ev.start.getFullYear()}-${ev.start.getMonth()}-${ev.start.getDate()}`;
       const list = map.get(key) ?? [];
       list.push(ev);
       map.set(key, list);
     }
-    for (const list of map.values()) list.sort((a, b) => new Date(a.meetingStartAt!).getTime() - new Date(b.meetingStartAt!).getTime());
+    for (const list of map.values()) list.sort((a, b) => a.start.getTime() - b.start.getTime());
     return map;
   }, [events]);
 
@@ -372,25 +423,25 @@ function MonthGrid({
               </div>
               {dayEvents.slice(0, 3).map((ev) => (
                 <div
-                  key={ev.id}
+                  key={ev.key}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEventClick(ev);
+                    onEventClick(ev.appointment);
                   }}
-                  title={`${closerLabel(ev.closerStatusId)} ${eventLabel(ev)}`}
+                  title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                   style={{
                     fontSize: 10,
                     padding: '1px 4px',
                     marginBottom: 2,
                     borderRadius: 3,
-                    background: ev.calendarColor ?? DEFAULT_COLOR,
+                    background: ev.color,
                     color: '#fff',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {new Date(ev.meetingStartAt!).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {eventLabel(ev)}
+                  {ev.start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {ev.title}
                 </div>
               ))}
               {dayEvents.length > 3 && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>+{dayEvents.length - 3}件</div>}
@@ -410,7 +461,7 @@ function TimeGrid({
   onEventClick,
 }: {
   days: Date[];
-  events: AppointmentListItem[];
+  events: CalendarEvent[];
   closerLabel: (id: string | null) => string;
   onSlotClick: (slot: Date) => void;
   onEventClick: (ev: AppointmentListItem) => void;
@@ -419,11 +470,9 @@ function TimeGrid({
   const gridHeight = (DAY_END_HOUR - DAY_START_HOUR) * HOUR_HEIGHT;
 
   const eventsByDay = useMemo(() => {
-    const map = new Map<string, AppointmentListItem[]>();
+    const map = new Map<string, CalendarEvent[]>();
     for (const ev of events) {
-      if (!ev.meetingStartAt) continue;
-      const d = new Date(ev.meetingStartAt);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const key = `${ev.start.getFullYear()}-${ev.start.getMonth()}-${ev.start.getDate()}`;
       const list = map.get(key) ?? [];
       list.push(ev);
       map.set(key, list);
@@ -483,26 +532,26 @@ function TimeGrid({
                   <div key={h} style={{ position: 'absolute', top: hi * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderBottom: '1px solid #f1f1f1' }} />
                 ))}
                 {dayEvents.map((ev) => {
-                  const start = new Date(ev.meetingStartAt!);
+                  const start = ev.start;
                   const startMin = start.getHours() * 60 + start.getMinutes() - DAY_START_HOUR * 60;
-                  const durationMin = ev.meetingEndAt ? (new Date(ev.meetingEndAt).getTime() - start.getTime()) / 60000 : 60;
+                  const durationMin = ev.end ? (ev.end.getTime() - start.getTime()) / 60000 : 60;
                   const top = (Math.max(startMin, 0) / 60) * HOUR_HEIGHT;
                   const height = Math.max((durationMin / 60) * HOUR_HEIGHT, 16);
                   return (
                     <div
-                      key={ev.id}
+                      key={ev.key}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEventClick(ev);
+                        onEventClick(ev.appointment);
                       }}
-                      title={`${closerLabel(ev.closerStatusId)} ${eventLabel(ev)}`}
+                      title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                       style={{
                         position: 'absolute',
                         top,
                         left: 2,
                         right: 2,
                         height,
-                        background: ev.calendarColor ?? DEFAULT_COLOR,
+                        background: ev.color,
                         color: '#fff',
                         borderRadius: 4,
                         padding: '2px 4px',
@@ -511,7 +560,7 @@ function TimeGrid({
                         cursor: 'pointer',
                       }}
                     >
-                      {start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {eventLabel(ev)}
+                      {start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {ev.title}
                     </div>
                   );
                 })}

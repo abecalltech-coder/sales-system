@@ -72,6 +72,10 @@ export class UpdateTossCaseDto {
   @IsOptional() @IsString() progressStatusId?: string;
   @IsOptional() @IsString() ngReasonStatusId?: string;
   @IsOptional() @IsDateString() nextActionAt?: string;
+
+  // ステータスをアポイントへ変更する際に必須で入力する前連日時(セクション追加要望)。
+  // TossCase自体には保存せず、アポ案件自動作成時にAppointment.preContactAtへそのまま渡す。
+  @IsOptional() @IsDateString() initialPreContactAt?: string;
 }
 
 export class BulkUpdateTossCaseDto {

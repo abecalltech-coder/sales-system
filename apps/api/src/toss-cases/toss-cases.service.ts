@@ -186,6 +186,7 @@ export class TossCasesService {
       phone,
       address,
       postalCode,
+      initialPreContactAt,
       ...rest
     } = dto;
 
@@ -262,7 +263,11 @@ export class TossCasesService {
     if (dto.statusId && dto.statusId !== existing.statusId) {
       const internalCode = await this.statusResolver.internalCodeOf(dto.statusId);
       if (internalCode === 'TOSS_APPOINTMENT') {
-        await this.appointments.createFromTossAutomation(id, userId);
+        await this.appointments.createFromTossAutomation(
+          id,
+          userId,
+          initialPreContactAt ? new Date(initialPreContactAt) : undefined,
+        );
       }
     }
 

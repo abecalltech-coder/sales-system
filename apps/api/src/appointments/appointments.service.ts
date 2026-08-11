@@ -8,8 +8,10 @@ import { StatusResolverService } from '../common/services/status-resolver.servic
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { SystemSettingsService } from '../system-settings/system-settings.module';
 import { toDateOrUndefined } from '../common/utils/date.util';
 import { extractPrefecture } from '../common/utils/prefecture.util';
+import { buildCalendarTitle, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
 
 @Injectable()
 export class AppointmentsService {
@@ -22,6 +24,7 @@ export class AppointmentsService {
     private readonly caseHistory: CaseHistoryService,
     private readonly contracts: ContractsService,
     private readonly realtime: RealtimeService,
+    private readonly systemSettings: SystemSettingsService,
   ) {}
 
   async list(params: {
@@ -35,30 +38,35 @@ export class AppointmentsService {
     dateFrom?: string;
     dateTo?: string;
   }) {
+    // 複数条件をAND配列で明示的に結合する(各条件が個別にOR句を持ちうるため、
+    // 同じwhereオブジェクトに複数のORキーを直接spreadすると後勝ちで上書きされてしまう)。
+    const andConditions: Prisma.AppointmentWhereInput[] = [];
+    if (params.statusId) andConditions.push({ meetingStatusId: params.statusId });
+    if (params.departmentId) andConditions.push({ snapshotDepartmentId: params.departmentId });
+    if (params.closerStatusId) andConditions.push({ closerStatusId: params.closerStatusId });
+    if (params.userId) {
+      andConditions.push({ OR: [{ apoUserId: params.userId }, { meetingUserId: params.userId }, { fieldSalesUserId: params.userId }] });
+    }
+    if (params.dateFrom || params.dateTo) {
+      const range = {
+        ...(params.dateFrom ? { gte: new Date(params.dateFrom) } : {}),
+        ...(params.dateTo ? { lte: new Date(params.dateTo) } : {}),
+      };
+      // CLカレンダーは商談予定に加え、前連予定(30分ブロック)も表示するため、
+      // どちらかが表示範囲に入っていればヒットさせる。
+      andConditions.push({ OR: [{ meetingStartAt: range }, { preContactAt: range }] });
+    }
+    if (params.keyword) {
+      andConditions.push({
+        OR: [
+          { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
+          { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } },
+        ],
+      });
+    }
     const where: Prisma.AppointmentWhereInput = {
       deletedAt: null,
-      ...(params.statusId ? { meetingStatusId: params.statusId } : {}),
-      ...(params.departmentId ? { snapshotDepartmentId: params.departmentId } : {}),
-      ...(params.closerStatusId ? { closerStatusId: params.closerStatusId } : {}),
-      ...(params.userId
-        ? { OR: [{ apoUserId: params.userId }, { meetingUserId: params.userId }, { fieldSalesUserId: params.userId }] }
-        : {}),
-      ...(params.dateFrom || params.dateTo
-        ? {
-            meetingStartAt: {
-              ...(params.dateFrom ? { gte: new Date(params.dateFrom) } : {}),
-              ...(params.dateTo ? { lte: new Date(params.dateTo) } : {}),
-            },
-          }
-        : {}),
-      ...(params.keyword
-        ? {
-            OR: [
-              { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
-              { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } },
-            ],
-          }
-        : {}),
+      ...(andConditions.length ? { AND: andConditions } : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.appointment.findMany({
@@ -98,7 +106,7 @@ export class AppointmentsService {
    * Googleカレンダー/Meet連携はPhase5でWorkerジョブとして実装するため、
    * ここではcalendarSyncStatus=NOT_SYNCEDのまま作成する。
    */
-  async createFromTossAutomation(tossCaseId: string, actorUserId?: string) {
+  async createFromTossAutomation(tossCaseId: string, actorUserId?: string, preContactAt?: Date) {
     const existing = await this.prisma.appointment.findUnique({ where: { tossCaseId } });
     if (existing) return existing; // 冪等: 既に作成済みなら何もしない
 
@@ -107,6 +115,53 @@ export class AppointmentsService {
     // トスから入ってきたアポ案件の進捗初期値は新規訪問で統一する(要望)
     const progressStatusId = await this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT');
     // 案件番号・案件名はトス案件からそのまま引き継ぐ(要望: トス/アポ/成約で番号・名称を統一する)
+
+    const [customer, departmentStatus, hookMap, preConfirmStatus, memoTemplate] = await Promise.all([
+      tossCase.customerId ? this.prisma.customer.findUnique({ where: { id: tossCase.customerId } }) : Promise.resolve(null),
+      tossCase.department ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.department } }) : Promise.resolve(null),
+      tossCase.hook
+        ? this.prisma.statusMaster.findUnique({
+            where: { category_internalCode: { category: 'TOSS_HOOK_LABEL_MAP', internalCode: tossCase.hook.trim() } },
+          })
+        : Promise.resolve(null),
+      tossCase.preConfirmStatusId ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.preConfirmStatusId } }) : Promise.resolve(null),
+      this.systemSettings.getOne('tossAppointmentMemoTemplate'),
+    ]);
+
+    const prefecture = extractPrefecture(customer?.address);
+    const isShumi = (tossCase.hook ?? '').includes('シュミ');
+    const hookLabel = hookMap?.displayName ?? '';
+
+    // カレンダー題名・色は部署(CT/CH東/CH西)+都道府県頭文字+フック変換ラベル+店舗名から自動生成する(要望)。
+    // 作成後は自由に編集できる(以降のトス側の変更で自動的に変わることはない)。
+    const calendarTitle = buildCalendarTitle({
+      departmentLabel: departmentStatus?.displayName ?? '',
+      prefecture,
+      hookLabel,
+      isShumi,
+      storeName: customer?.corporateName ?? '(店舗名未設定)',
+    });
+    const calendarColor = departmentStatus?.color ?? undefined;
+
+    const memo =
+      typeof memoTemplate === 'string'
+        ? renderTemplate(memoTemplate, {
+            acquisitionAngle: hookLabel,
+            nextActionAt: formatJaDateTimeWithWeekday(tossCase.nextActionAt),
+            meetingAt: formatJaDateTimeWithWeekday(tossCase.confirmedStartAt),
+            storeName: customer?.corporateName ?? '',
+            address: customer?.address ?? '',
+            industry: tossCase.industry ?? '',
+            storePhone: customer?.phone ?? '',
+            contactName: customer?.contactName ?? '',
+            apStaffName: tossCase.apStaffName ?? '',
+            preConfirmName: preConfirmStatus?.displayName ?? '',
+            listName: tossCase.listName ?? '',
+            preContactAt: formatJaDateTimeWithWeekday(preContactAt),
+            hook: tossCase.hook ?? '',
+            meetingUrl: '',
+          })
+        : undefined;
 
     try {
       const appointment = await this.prisma.appointment.create({
@@ -126,8 +181,12 @@ export class AppointmentsService {
           meetingStatusId,
           progressStatusId,
           idempotencyKey: tossCaseId,
+          preContactAt,
+          calendarTitle,
+          calendarColor,
+          memo,
           // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
-          // ただし備考はトス側の通話メモとアポ側のメモが別用途のため引き継がない(要望)
+          // ただし備考はトス側の通話メモとアポ側のメモが別用途のため引き継がない(上記テンプレートで別途生成する)
           apStaffName: tossCase.apStaffName,
           department: tossCase.department,
           listName: tossCase.listName,
@@ -256,6 +315,7 @@ export class AppointmentsService {
       importantMattersOkAt,
       electronicContractAt,
       deliveredAt,
+      preContactAt,
       corporateName,
       contactName,
       phone,
@@ -302,6 +362,7 @@ export class AppointmentsService {
           importantMattersOkAt: toDateOrUndefined(importantMattersOkAt),
           electronicContractAt: toDateOrUndefined(electronicContractAt),
           deliveredAt: toDateOrUndefined(deliveredAt),
+          preContactAt: toDateOrUndefined(preContactAt),
           updatedBy: userId,
           version: { increment: 1 },
         },

@@ -153,6 +153,8 @@ export interface AppointmentListItem {
   deliveredAt: string | null;
   specialNotes: string | null;
   calendarColor: string | null;
+  calendarTitle: string | null;
+  preContactAt: string | null;
   reminderEnabled: boolean;
   reminderMinutesBefore: number | null;
 }

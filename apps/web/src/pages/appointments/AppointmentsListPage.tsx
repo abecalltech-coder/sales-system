@@ -37,6 +37,7 @@ export function AppointmentsListPage() {
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
+  const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
@@ -185,7 +186,7 @@ export function AppointmentsListPage() {
     selectColumn('preContactStatusId', '前連担当', preContactOptions, 100),
     selectColumn('closerStatusId', 'CL', closerOptions, 90),
     textColumn('hook', 'フック', 100),
-    textColumn('department', '部署', 84),
+    selectColumn('department', '部署', departmentOptions, 84),
     {
       key: 'storeName',
       label: '店舗名',

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
-import { useProducts, useSources } from '../../hooks/useApi';
+import { useProducts, useSources, useSystemSettings } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
 interface CategoryDef {
@@ -63,14 +63,21 @@ const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
       { value: 'MATCHING', label: 'マッチング' },
     ],
   },
+  {
+    title: '自動化設定',
+    categories: [
+      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)' },
+      { value: 'TOSS_HOOK_LABEL_MAP', label: 'フック→ラベル変換(内部コード=フックの原文、表示名=変換後ラベル)' },
+    ],
+  },
 ];
 
-// これらのカテゴリは内部コードの意味を持たず、単純な選択肢名の管理として使うため
-// 追加フォームでは表示名のみ入力させ、内部コードは自動採番する。
+// 内部コードに意味を持たせず単純な選択肢名の管理として使うカテゴリでは、追加フォームで
+// 表示名のみ入力させ内部コードは自動採番する。ただし以下は内部コード自体が判定キーとして
+// 使われるため対象外(部署=自動化コード、フック変換=マッチング元テキストそのもの)。
+const NON_SIMPLE_LABEL_CATEGORIES = new Set(['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING', 'DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP']);
 const SIMPLE_LABEL_CATEGORIES = new Set(
-  TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)).filter(
-    (v) => !['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING'].includes(v),
-  ),
+  TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)).filter((v) => !NON_SIMPLE_LABEL_CATEGORIES.has(v)),
 );
 
 interface StatusRow {
@@ -83,8 +90,12 @@ interface StatusRow {
   active: boolean;
 }
 
+// カテゴリ一覧以外の特殊タブ(商材・流入元の閲覧、自動作成テンプレートの編集)
+const EXTRA_TAB_TITLES = ['商材・流入元', 'テンプレート'];
+
 export function MastersAdminPage() {
   const [tabIndex, setTabIndex] = useState(0);
+  const allTitles = [...TAB_GROUPS.map((g) => g.title), ...EXTRA_TAB_TITLES];
 
   return (
     <AppLayout>
@@ -92,9 +103,9 @@ export function MastersAdminPage() {
         <h1 style={{ fontSize: 20, marginBottom: 16 }}>マスタ管理</h1>
 
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
-          {TAB_GROUPS.map((group, i) => (
+          {allTitles.map((title, i) => (
             <button
-              key={group.title}
+              key={title}
               onClick={() => setTabIndex(i)}
               style={{
                 padding: '8px 14px',
@@ -107,37 +118,71 @@ export function MastersAdminPage() {
                 cursor: 'pointer',
               }}
             >
-              {group.title}
+              {title}
             </button>
           ))}
-          <button
-            onClick={() => setTabIndex(TAB_GROUPS.length)}
-            style={{
-              padding: '8px 14px',
-              fontSize: 13,
-              fontWeight: tabIndex === TAB_GROUPS.length ? 700 : 500,
-              border: 'none',
-              borderBottom: tabIndex === TAB_GROUPS.length ? '2px solid var(--color-primary)' : '2px solid transparent',
-              background: 'transparent',
-              color: tabIndex === TAB_GROUPS.length ? 'var(--color-primary)' : 'var(--color-text)',
-              cursor: 'pointer',
-            }}
-          >
-            商材・流入元
-          </button>
         </div>
 
-        {tabIndex < TAB_GROUPS.length ? (
+        {tabIndex < TAB_GROUPS.length && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {TAB_GROUPS[tabIndex].categories.map((c) => (
               <CategoryCard key={c.value} category={c.value} label={c.label} simpleLabel={SIMPLE_LABEL_CATEGORIES.has(c.value)} />
             ))}
           </div>
-        ) : (
-          <ProductsAndSources />
         )}
+        {tabIndex === TAB_GROUPS.length && <ProductsAndSources />}
+        {tabIndex === TAB_GROUPS.length + 1 && <TemplateEditor />}
       </div>
     </AppLayout>
+  );
+}
+
+/**
+ * トス→アポイント自動作成時に備考へ流し込むテンプレートを編集する(要望)。
+ * system-settingsのtossAppointmentMemoTemplateキーを利用する(値は自由な複数行文字列のため
+ * ステータスマスタの表示名欄には収まらず、system-settingsのJSON値ストアを流用している)。
+ */
+function TemplateEditor() {
+  const { data: settings, isLoading } = useSystemSettings();
+  const queryClient = useQueryClient();
+  const [message, setMessage] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const current = settings?.find((s) => s.key === 'tossAppointmentMemoTemplate');
+  const value = draft ?? (typeof current?.value === 'string' ? current.value : '');
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.put('/system-settings/tossAppointmentMemoTemplate', { value }),
+    onSuccess: () => {
+      setMessage('保存しました');
+      setDraft(null);
+      queryClient.invalidateQueries({ queryKey: ['system-settings'] });
+    },
+  });
+
+  if (isLoading) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>;
+
+  return (
+    <div style={{ maxWidth: 600 }}>
+      <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 8 }}>
+        トス実績を「アポイント」に変更した際、アポ実績の備考(CLカレンダーの詳細欄と共通)へ自動的に入る文面です。
+        <code>{'{{storeName}}'}</code> のような二重中括弧の項目は実データに置き換わり、それ以外はそのまま残ります。
+      </p>
+      {message && <p style={{ color: '#16a34a', fontSize: 12, marginBottom: 8 }}>{message}</p>}
+      <textarea
+        value={value}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setMessage(null);
+        }}
+        style={{ width: '100%', minHeight: 420, fontSize: 12, fontFamily: 'monospace', padding: 10 }}
+      />
+      <div style={{ marginTop: 8 }}>
+        <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          保存する
+        </button>
+      </div>
+    </div>
   );
 }
 
