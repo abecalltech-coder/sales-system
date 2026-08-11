@@ -688,3 +688,18 @@ model OfflineAction {
   @@index([userId])
   @@index([status])
 }
+
+// Googleフォーム連携(セクション追加要望)。Apps Script側からWebhookで送られてくる回答を
+// 受信原文ごと保存する。項目名(質問タイトル)からトス実績の項目名へは固定の対応表で自動変換する。
+model GoogleFormWebhookLog {
+  id           String   @id @default(uuid())
+  responseId   String? // Googleフォーム回答ID(取得できた場合のみ。冪等性チェックに使用)
+  rawPayload   Json
+  status       String // RECEIVED/PROCESSED/DUPLICATE/ERROR
+  tossCaseId   String? // 作成されたトス案件(成功時のみ)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([responseId])
+  @@index([createdAt])
+}

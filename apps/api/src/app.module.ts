@@ -26,6 +26,7 @@ import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { CommentsModule } from './comments/comments.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { GoogleFormsModule } from './integrations/google-forms/google-forms.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { RemindersModule } from './reminders/reminders.module';
     CommentsModule,
     PushNotificationsModule,
     RemindersModule,
+    GoogleFormsModule,
   ],
   controllers: [HealthController],
 })
