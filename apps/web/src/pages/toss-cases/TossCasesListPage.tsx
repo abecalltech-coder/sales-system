@@ -308,26 +308,28 @@ export function TossCasesListPage() {
     {
       key: 'progress',
       label: '進捗',
-      width: 90,
+      width: 100,
       renderHeader: filterHeader('progress', '進捗'),
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { progressStatusId: v })}
+          colored
         />
       ),
     },
     {
       key: 'ngReason',
       label: 'NG理由',
-      width: 140,
+      width: 150,
       renderHeader: filterHeader('ngReason', 'NG理由'),
       render: (r) => (
         <InlineSelect
           value={r.ngReasonStatusId}
-          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
+          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { ngReasonStatusId: v })}
+          colored
         />
       ),
     },

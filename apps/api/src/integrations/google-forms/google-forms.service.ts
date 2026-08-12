@@ -6,13 +6,11 @@ import { SequenceService } from '../../common/services/sequence.service';
 import { StatusResolverService } from '../../common/services/status-resolver.service';
 import { RealtimeService } from '../../realtime/realtime.service';
 import { SystemSettingsService } from '../../system-settings/system-settings.module';
-import { GOOGLE_FORM_FIELD_MAP, matchGoogleFormField } from './google-forms-field-map';
+import { GOOGLE_FORM_FIELD_MAP, matchGoogleFormField, reformatMemoBlob } from './google-forms-field-map';
 import { GoogleFormWebhookDto } from './dto/google-form-webhook.dto';
-import { renderTemplate } from '../../appointments/toss-appointment-automation.util';
 
 const FORM_URL_KEY = 'googleFormUrl';
 const WEBHOOK_SECRET_KEY = 'googleFormWebhookSecret';
-const MEMO_TEMPLATE_KEY = 'googleFormTossMemoTemplate';
 
 @Injectable()
 export class GoogleFormsService {
@@ -103,7 +101,7 @@ export class GoogleFormsService {
     const customerFields: Record<string, string> = {};
     const tossTextFields: Record<string, string> = {};
     const statusLookups: { field: string; category: string; label: string }[] = [];
-    const memoTokens: Record<string, string> = {};
+    let memo: string | undefined;
     let nextActionAt: Date | undefined;
 
     for (const [rawLabel, rawValue] of Object.entries(answers)) {
@@ -121,8 +119,8 @@ export class GoogleFormsService {
       } else if (entry.kind === 'DATE') {
         const parsed = new Date(value);
         if (!Number.isNaN(parsed.getTime())) nextActionAt = parsed;
-      } else if (entry.kind === 'MEMO_TOKEN') {
-        memoTokens[entry.field] = value;
+      } else if (entry.kind === 'MEMO_BLOB') {
+        memo = reformatMemoBlob(value);
       }
     }
 
@@ -137,7 +135,6 @@ export class GoogleFormsService {
     const customerId = await this.resolveCustomerId(customerFields);
     const statusId = await this.statusResolver.resolveId('TOSS', 'TOSS_NEW');
     const caseNumber = await this.sequence.nextCaseNumber('TOSS');
-    const memo = await this.buildMemo(customerFields, tossTextFields, memoTokens);
 
     const tossCase = await this.prisma.tossCase.create({
       data: {
@@ -168,31 +165,6 @@ export class GoogleFormsService {
     });
 
     return tossCase;
-  }
-
-  /** 備考欄はマスタ管理で編集可能なテンプレートへ、構造化済みの項目とフォーム専用項目(オーナー名等)を差し込んで組み立てる。 */
-  private async buildMemo(
-    customerFields: Record<string, string>,
-    tossTextFields: Record<string, string>,
-    memoTokens: Record<string, string>,
-  ): Promise<string | undefined> {
-    const template = await this.systemSettings.getOne(MEMO_TEMPLATE_KEY);
-    if (typeof template !== 'string' || !template) return undefined;
-
-    return renderTemplate(template, {
-      storePhone: customerFields.phone ?? '',
-      storeName: customerFields.corporateName ?? '',
-      address: customerFields.address ?? '',
-      industry: tossTextFields.industry ?? '',
-      listName: tossTextFields.listName ?? '',
-      ownerName: memoTokens.ownerName ?? '',
-      smsNumber: memoTokens.smsNumber ?? '',
-      hpStatus: memoTokens.hpStatus ?? '',
-      season: memoTokens.season ?? '',
-      memo: memoTokens.memo ?? '',
-      preConfirmPhone: memoTokens.preConfirmPhone ?? '',
-      demoSite: memoTokens.demoSite ?? '',
-    });
   }
 
   /** 電話番号(数字のみ比較)→店舗名の順で既存顧客を検索し、見つかれば紐付ける。無ければ新規作成する。 */

@@ -153,33 +153,42 @@ export function InlineSelect({
   disabled,
   placeholder,
   hideBlankOption,
+  colored,
 }: {
   value: string | null | undefined;
-  options: { id: string; label: string }[];
+  options: { id: string; label: string; color?: string | null }[];
   onSave: (next: string) => void;
   style?: CSSProperties;
   disabled?: boolean;
   placeholder?: string;
   /** 「未選択」の空欄オプションを一覧に出したくない場合(常にいずれかの値を選ばせたい列向け) */
   hideBlankOption?: boolean;
+  /** 進捗・NG理由等、選択肢ごとに色を持つ項目向け。選択中の値の色をボタン風の枠・背景に反映する(要望) */
+  colored?: boolean;
 }) {
+  const selectedColor = colored ? options.find((o) => o.id === value)?.color : undefined;
+  // 既知の選択肢に一致しない値(例: Googleフォーム等の外部連携で選択肢外の文言が入った場合)でも
+  // 空欄表示にせず、そのままの文言を選べる状態として表示する。
+  const hasUnknownValue = !!value && !options.some((o) => o.id === value);
+
   return (
     <select
-      className="inline-select"
+      className={colored ? 'inline-select inline-select-colored' : 'inline-select'}
       value={value ?? ''}
       disabled={disabled}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => onSave(e.target.value)}
       style={{
         font: 'inherit',
-        color: 'inherit',
+        color: colored ? (selectedColor ? '#fff' : 'var(--color-text-muted)') : 'inherit',
         width: '100%',
-        backgroundColor: 'transparent',
+        backgroundColor: colored ? (selectedColor ?? 'var(--color-border)') : 'transparent',
         cursor: disabled ? 'default' : 'pointer',
         ...style,
       }}
     >
       {!hideBlankOption && <option value="">{placeholder ?? '未選択'}</option>}
+      {hasUnknownValue && <option value={value as string}>{value}</option>}
       {options.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}

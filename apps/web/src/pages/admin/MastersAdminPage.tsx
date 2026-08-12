@@ -194,11 +194,6 @@ function TemplateEditors() {
         title="トス→アポイント変更時の備考テンプレート"
         description="トス実績を「アポイント」に変更した際、アポ実績の備考(CLカレンダーの詳細欄と共通)へ自動的に入る文面です。"
       />
-      <TemplateEditor
-        settingKey="googleFormTossMemoTemplate"
-        title="Googleフォーム取り込み時の備考テンプレート"
-        description="Googleフォームの回答からトス実績が自動作成される際、備考へ自動的に入る文面です。"
-      />
     </div>
   );
 }
