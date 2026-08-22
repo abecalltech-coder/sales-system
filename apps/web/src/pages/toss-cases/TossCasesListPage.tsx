@@ -44,6 +44,7 @@ export function TossCasesListPage() {
   // ステータスを「アポイント」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
   const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; statusId: string } | null>(null);
   const [preContactInput, setPreContactInput] = useState('');
+  const [meetingAtInput, setMeetingAtInput] = useState('');
   const [preContactError, setPreContactError] = useState<string | null>(null);
 
   const createMutation = useMutation({
@@ -70,15 +71,17 @@ export function TossCasesListPage() {
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
   const preContactMutation = useMutation({
-    mutationFn: (vars: { id: string; version: number; statusId: string; initialPreContactAt: string }) =>
+    mutationFn: (vars: { id: string; version: number; statusId: string; initialPreContactAt: string; confirmedStartAt: string }) =>
       api.patch(`/toss-cases/${vars.id}`, {
         version: vars.version,
         statusId: vars.statusId,
         initialPreContactAt: vars.initialPreContactAt,
+        confirmedStartAt: vars.confirmedStartAt,
       }),
     onSuccess: () => {
       setPreContactModal(null);
       setPreContactInput('');
+      setMeetingAtInput('');
       setPreContactError(null);
       queryClient.invalidateQueries({ queryKey: ['toss-cases'] });
     },
@@ -266,6 +269,7 @@ export function TossCasesListPage() {
             if (internalCode === 'TOSS_APPOINTMENT') {
               setPreContactModal({ row: r, statusId: v });
               setPreContactInput('');
+              setMeetingAtInput('');
               setPreContactError(null);
             } else {
               save(r, { statusId: v });
@@ -491,15 +495,24 @@ export function TossCasesListPage() {
             className="card"
             style={{ width: 360, background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
           >
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>前連日時を入力してください</h2>
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>前連日時・商談日時を入力してください</h2>
             <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 14 }}>
               「{preContactModal.row.customer?.corporateName ?? '(店舗名未設定)'}」をアポイントへ変更します。
               前連日時はアポ実績に反映され、CLカレンダーに30分予定として登録されます。
+              商談日時はアポ実績の商談日/商談時間・カレンダーの予定日時・備考欄に反映されます。
             </p>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>前連日時</label>
             <input
               type="datetime-local"
               value={preContactInput}
               onChange={(e) => setPreContactInput(e.target.value)}
+              style={{ display: 'block', width: '100%', marginBottom: 12 }}
+            />
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>商談日時</label>
+            <input
+              type="datetime-local"
+              value={meetingAtInput}
+              onChange={(e) => setMeetingAtInput(e.target.value)}
               style={{ display: 'block', width: '100%', marginBottom: 12 }}
             />
             {preContactError && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 10 }}>{preContactError}</p>}
@@ -507,10 +520,10 @@ export function TossCasesListPage() {
               <button onClick={() => setPreContactModal(null)}>キャンセル</button>
               <button
                 className="btn-primary"
-                disabled={!preContactInput || preContactMutation.isPending}
+                disabled={!preContactInput || !meetingAtInput || preContactMutation.isPending}
                 onClick={() => {
-                  if (!preContactInput) {
-                    setPreContactError('前連日時を入力してください');
+                  if (!preContactInput || !meetingAtInput) {
+                    setPreContactError('前連日時・商談日時を入力してください');
                     return;
                   }
                   preContactMutation.mutate({
@@ -518,6 +531,7 @@ export function TossCasesListPage() {
                     version: preContactModal.row.version,
                     statusId: preContactModal.statusId,
                     initialPreContactAt: new Date(preContactInput).toISOString(),
+                    confirmedStartAt: new Date(meetingAtInput).toISOString(),
                   });
                 }}
               >
