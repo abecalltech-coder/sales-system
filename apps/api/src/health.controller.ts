@@ -11,6 +11,12 @@ export class HealthController {
   @Get()
   async check() {
     await this.prisma.$queryRaw`SELECT 1`;
-    return { status: 'ok', time: new Date().toISOString() };
+    return {
+      status: 'ok',
+      time: new Date().toISOString(),
+      // RailwayがGitHub連携デプロイ時に注入する。デプロイ後のヘルスチェックで
+      // 「新しいコミットが実際に稼働しているか」を判定するために公開する。
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
+    };
   }
 }

@@ -1,24 +1,43 @@
-name: Deploy to Railway
+name: Post-deploy health check
+
+# 本番デプロイはRailwayのGitHub連携(Deploy from GitHub repo)が
+# mainへのpushで自動的に実行する。ビルド方法はrailway.json/Dockerfile.apiに従い、
+# コンテナ起動時に scripts/release.sh が prisma migrate deploy を適用する。
+#
+# このworkflowはデプロイそのものは行わず、Railway側のデプロイ完了を待って
+# 公開URLの /health が正常応答することだけを確認する。
+# (以前はここで `railway up` を叩いていたが、CLIの非対話実行が安定せず
+#  常時failしていたため廃止した)
 
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  healthcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli@5.34.3
-
-      - name: Deploy (api service)
-        run: railway up --service api --detach --yes
+      - name: Wait for Railway deploy and verify /health
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-
-      - name: Health check
+          HEALTHCHECK_URL: ${{ secrets.API_HEALTHCHECK_URL }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          sleep 20
-          curl -f "${{ secrets.API_HEALTHCHECK_URL }}" || exit 1
+          if [ -z "$HEALTHCHECK_URL" ]; then
+            echo "API_HEALTHCHECK_URL secret が未設定のためスキップします"
+            exit 0
+          fi
+          # Railwayのビルド+デプロイは数分かかる。最大15分待つ。
+          # /health が返す commit が push した SHA と一致して初めて
+          # 「新しいコミットが本番で稼働した」と判定する(応答しているだけの旧版を弾く)。
+          deadline=$(( $(date +%s) + 900 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            body=$(curl -fsS --max-time 10 "$HEALTHCHECK_URL" 2>/dev/null || true)
+            if echo "$body" | grep -q "\"commit\":\"$EXPECTED_SHA\""; then
+              echo "デプロイ確認 OK: $body"
+              exit 0
+            fi
+            echo "デプロイ待機中... (残り $(( (deadline - $(date +%s)) / 60 )) 分) 応答: ${body:-なし}"
+            sleep 20
+          done
+          echo "::error::15分以内に $EXPECTED_SHA が本番へ反映されませんでした。RailwayのDeploymentログを確認してください"
+          exit 1
