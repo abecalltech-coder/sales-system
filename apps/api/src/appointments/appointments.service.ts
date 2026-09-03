@@ -129,16 +129,14 @@ export class AppointmentsService {
     ]);
 
     const prefecture = extractPrefecture(customer?.address);
-    const isShumi = (tossCase.hook ?? '').includes('シュミ');
-    const hookLabel = hookMap?.displayName ?? '';
+    // 【】の既定ラベルはフック→ラベル変換の変換後ラベル。以降はアポ実績/カレンダーの
+    // プルダウンで変更でき、題名は部署・ラベル・店舗名から都度組み立て直される(要望)。
+    const calendarBracketLabel = hookMap?.displayName ?? '';
 
-    // カレンダー題名・色は部署(CT/CH東/CH西)+都道府県頭文字+フック変換ラベル+店舗名から自動生成する(要望)。
-    // 作成後は自由に編集できる(以降のトス側の変更で自動的に変わることはない)。
     const calendarTitle = buildCalendarTitle({
       departmentLabel: departmentStatus?.displayName ?? '',
       prefecture,
-      hookLabel,
-      isShumi,
+      bracketLabel: calendarBracketLabel,
       storeName: customer?.corporateName ?? '(店舗名未設定)',
     });
     const calendarColor = departmentStatus?.color ?? undefined;
@@ -146,7 +144,7 @@ export class AppointmentsService {
     const memo =
       typeof memoTemplate === 'string'
         ? renderTemplate(memoTemplate, {
-            acquisitionAngle: hookLabel,
+            acquisitionAngle: calendarBracketLabel,
             nextActionAt: formatJaDateTimeWithWeekday(tossCase.nextActionAt),
             meetingAt: formatJaDateTimeWithWeekday(tossCase.confirmedStartAt),
             storeName: customer?.corporateName ?? '',
@@ -183,6 +181,7 @@ export class AppointmentsService {
           idempotencyKey: tossCaseId,
           preContactAt,
           calendarTitle,
+          calendarBracketLabel,
           calendarColor,
           memo,
           // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
@@ -301,11 +300,38 @@ export class AppointmentsService {
     return { ...appointment, storeName: appointment.customer?.corporateName ?? null, prefecture: extractPrefecture(appointment.customer?.address) };
   }
 
+  /** 部署ラベル・【】ラベル・都道府県・店舗名からカレンダー題名を組み立てる(表示側と規則を揃える) */
+  private async composeCalendarTitle(params: {
+    departmentBranchId: string | null;
+    bracketLabel: string | null;
+    prefecture: string | null;
+    storeName: string | null;
+  }): Promise<string> {
+    const branch = params.departmentBranchId
+      ? await this.prisma.statusMaster.findUnique({ where: { id: params.departmentBranchId } })
+      : null;
+    return buildCalendarTitle({
+      departmentLabel: branch?.displayName ?? '',
+      prefecture: params.prefecture,
+      bracketLabel: params.bracketLabel ?? '',
+      storeName: params.storeName ?? '(店舗名未設定)',
+    });
+  }
+
   async update(id: string, dto: UpdateAppointmentDto, userId: string) {
     const existing = await this.findOne(id);
     if (existing.version !== dto.version) {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
+
+    // 題名に影響する項目(部署ブランチ・【】ラベル・店舗名・住所)が変わりうるので毎回組み立て直す。
+    const nextCalendarTitle = await this.composeCalendarTitle({
+      departmentBranchId: dto.department !== undefined ? dto.department : existing.department,
+      bracketLabel: dto.calendarBracketLabel !== undefined ? dto.calendarBracketLabel : existing.calendarBracketLabel,
+      prefecture:
+        dto.address !== undefined ? extractPrefecture(dto.address) : extractPrefecture(existing.customer?.address ?? undefined),
+      storeName: dto.corporateName !== undefined ? dto.corporateName : existing.customer?.corporateName ?? existing.storeName,
+    });
 
     const {
       version,
@@ -356,6 +382,7 @@ export class AppointmentsService {
         data: {
           ...rest,
           ...(hasCustomerChanges && !existing.customerId ? { customerId } : {}),
+          calendarTitle: nextCalendarTitle,
           meetingStartAt: toDateOrUndefined(meetingStartAt),
           meetingEndAt: toDateOrUndefined(meetingEndAt),
           nextActionAt: toDateOrUndefined(nextActionAt),

@@ -357,7 +357,12 @@ model Appointment {
   reminderMinutesBefore  Int? // 何分前に通知するか(例: 30)
   reminderSentAt         DateTime? // リマインド送信済み時刻(二重送信防止用)
   preContactAt           DateTime? // 前連日時(セクション追加要望: トス→アポイント変更時に入力必須、CLカレンダーへ30分予定を表示)
-  calendarTitle          String? // CLカレンダーの予定タイトル(セクション追加要望: 部署+都道府県頭文字+フック変換ラベル+店舗名から自動生成、以降は自由編集可)
+  // CLカレンダーの予定タイトルは「部署ラベル 都道府県頭文字【獲得角度ラベル】店舗名」で
+  // 常に自動組み立てする(要望)。calendarTitleはその組み立て結果のキャッシュ(将来のGoogle
+  // カレンダー連携用に保存しておくだけで、表示側は都度組み立てる)。
+  calendarTitle          String?
+  // 題名の【】に入るラベル。既定はトスのフック→ラベル変換の変換後ラベル、以降はプルダウンで変更可
+  calendarBracketLabel   String?
 
   reportEvents           AppointmentReportEvent[]
 

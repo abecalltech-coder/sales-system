@@ -6,6 +6,7 @@ import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
+import { MemoModal } from '../../components/MemoModal';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput } from '../../lib/dateInput';
@@ -24,6 +25,7 @@ export function AppointmentsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [memoModalRow, setMemoModalRow] = useState<AppointmentListItem | null>(null);
   // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const pageSize = 100;
@@ -38,6 +40,7 @@ export function AppointmentsListPage() {
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
+  const { data: bracketLabelOptions } = useStatuses('TOSS_HOOK_LABEL_MAP');
   const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
@@ -160,6 +163,8 @@ export function AppointmentsListPage() {
   filterValueFns.anshinBizPoints = (r) => (r.anshinBizPoints != null ? String(r.anshinBizPoints) : '');
   filterValueFns.email = (r) => r.customer?.email ?? '';
   filterValueFns.status = (r) => statusLabel(r.meetingStatusId);
+  filterValueFns.memo = (r) => r.memo ?? '';
+  filterValueFns.calendarBracketLabel = (r) => r.calendarBracketLabel ?? '';
 
   const columns: Column<AppointmentListItem>[] = [
     { key: 'apoDate', label: 'アポ日', render: (r) => formatDate(r.createdAt), width: 90, renderHeader: filterHeader('apoDate', 'アポ日') },
@@ -188,13 +193,51 @@ export function AppointmentsListPage() {
     textColumn('hook', 'フック', 100),
     selectColumn('department', '部署', departmentOptions, 84),
     {
+      key: 'calendarBracketLabel',
+      label: '獲得角度【】',
+      width: 96,
+      renderHeader: filterHeader('calendarBracketLabel', '獲得角度【】'),
+      // カレンダー題名の【】に入るラベル。値は表示名の文字列そのものを保存する。
+      render: (r) => (
+        <InlineSelect
+          value={r.calendarBracketLabel}
+          options={(bracketLabelOptions ?? []).map((o) => ({ id: o.displayName, label: o.displayName }))}
+          onSave={(v) => save(r, { calendarBracketLabel: v })}
+        />
+      ),
+    },
+    {
       key: 'storeName',
       label: '店舗名',
       width: 120,
       renderHeader: filterHeader('storeName', '店舗名'),
       render: (r) => <InlineText value={r.storeName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
     },
-    textColumn('memo', '備考', 120),
+    {
+      key: 'memo',
+      label: '備考(アポ詳細)',
+      width: 150,
+      renderHeader: filterHeader('memo', '備考'),
+      render: (r) => (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setMemoModalRow(r);
+          }}
+          title="クリックで全文表示"
+          style={{
+            cursor: 'pointer',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            textDecoration: 'underline dotted',
+            textUnderlineOffset: 2,
+          }}
+        >
+          {(r.memo ?? '').replace(/\n/g, ' ') || <span style={{ color: 'var(--color-text-faint)' }}>(なし)</span>}
+        </div>
+      ),
+    },
     {
       key: 'status',
       label: '商談ステータス',
@@ -410,6 +453,15 @@ export function AppointmentsListPage() {
           )}
         />
       </div>
+
+      {memoModalRow && (
+        <MemoModal
+          title={`備考(アポ詳細) - ${memoModalRow.storeName ?? memoModalRow.caseNumber}`}
+          value={memoModalRow.memo ?? ''}
+          onSave={(next) => save(memoModalRow, { memo: next })}
+          onClose={() => setMemoModalRow(null)}
+        />
+      )}
     </AppLayout>
   );
 }

@@ -51,6 +51,25 @@ NOT_ENTERED -> PREPARING -> DEFICIENCY_CHECKING -> ENTERED
 ENTRY_CANCELLED(任意時点)
 ```
 
+## トス → アポ詳細(アポイント遷移時に自動生成されるもの)
+
+トス実績のステータスを「アポイント」(`TOSS_APPOINTMENT`)にすると、確認モーダルで
+**前連日時・商談日時**(両方必須)を入力し、`Appointment`(= 以後「アポ詳細」と呼ぶ)を1件自動生成する。
+`tossCaseId` 一意で冪等(作成済みなら何もしない)。訪問レコード・実Googleカレンダー予定・
+リマインダーは作られない。
+
+- 引き継ぎ: 案件番号/案件名・顧客・部署/チーム・各担当・商談日時(= 入力値)・AP担当者名・
+  部署(DEPARTMENT_BRANCH)・リスト名・業種・フック・既契約・前確ステータス
+- 初期値: 商談ステータス=`APO_CONFIRMED` / 進捗=`PROG_NEW_VISIT` / 前連日時=入力値
+- カレンダー題名は **「部署ラベル 都道府県頭文字【獲得角度ラベル】店舗名」で常に自動組み立て**
+  (`calendarTitle` は組み立て結果のキャッシュ)。【】ラベル(`calendarBracketLabel`)の既定は
+  フック→ラベル変換の変換後ラベル。以降アポ実績/CLカレンダーのプルダウンで変更でき、
+  部署・ラベル・店舗名を変えると題名も追従する
+- カレンダー色は部署(DEPARTMENT_BRANCH)の色
+- 備考(= アポ詳細本文)は `systemSettings.tossAppointmentMemoTemplate` に実データを差し込んだもの。
+  アポ実績の備考セルをクリックで全文モーダル表示・編集、CLカレンダーの予定モーダルでも確認できる
+- CLカレンダーには商談予定に加え、前連日時から **30分の「前連」予定** も表示される
+
 ## 自動処理マトリクス(StatusAutomationRule.action)
 
 | internalCode遷移 | アクション |

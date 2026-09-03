@@ -5,6 +5,7 @@ import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentList
 import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
+import { buildCalendarTitle, buildPreContactTitle } from '../lib/calendarTitle';
 
 const COLOR_PALETTE = [
   '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
@@ -51,6 +52,11 @@ interface DraftEvent {
   memo: string;
   reminderEnabled: boolean;
   reminderMinutesBefore: number;
+  // トス由来のアポ詳細向け。題名の「部署」と「【】ラベル」はここから組み立てる。
+  departmentBranchId: string;
+  calendarBracketLabel: string;
+  prefecture: string | null;
+  isTossOrigin: boolean;
 }
 
 function eventToDraft(ev: AppointmentListItem): DraftEvent {
@@ -69,6 +75,10 @@ function eventToDraft(ev: AppointmentListItem): DraftEvent {
     memo: ev.memo ?? '',
     reminderEnabled: ev.reminderEnabled,
     reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
+    departmentBranchId: ev.department ?? '',
+    calendarBracketLabel: ev.calendarBracketLabel ?? '',
+    prefecture: ev.prefecture,
+    isTossOrigin: Boolean(ev.calendarBracketLabel !== null || ev.department),
   };
 }
 
@@ -90,6 +100,10 @@ function slotToDraft(slot: Date): DraftEvent {
     memo: '',
     reminderEnabled: false,
     reminderMinutesBefore: 30,
+    departmentBranchId: '',
+    calendarBracketLabel: '',
+    prefecture: null,
+    isTossOrigin: false,
   };
 }
 
@@ -106,6 +120,7 @@ export function CLCalendarPage() {
   const { data: departments } = useDepartments();
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
+  const { data: bracketLabelOptions } = useStatuses('TOSS_HOOK_LABEL_MAP');
   const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
 
   const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
@@ -178,6 +193,11 @@ export function CLCalendarPage() {
       reminderEnabled: d.reminderEnabled,
       reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
     };
+    // 既存アポの更新時のみ、題名に関わる部署ブランチ・【】ラベルを送る(新規作成DTOにはこの項目がない)
+    if (d.id) {
+      body.department = d.departmentBranchId || undefined;
+      body.calendarBracketLabel = d.calendarBracketLabel;
+    }
 
     if (d.id && d.version != null) {
       updateMutation.mutate({ id: d.id, version: d.version, patch: body });
@@ -290,6 +310,8 @@ export function CLCalendarPage() {
           departments={departments}
           closerOptions={closerOptions}
           users={usersData?.items}
+          branchOptions={departmentBranchOptions}
+          bracketLabelOptions={bracketLabelOptions}
           saving={createMutation.isPending || updateMutation.isPending}
           onChange={setDraft}
           onSave={() => saveDraft(draft)}
@@ -303,14 +325,18 @@ export function CLCalendarPage() {
   );
 }
 
-function eventLabel(ev: AppointmentListItem): string {
-  return ev.calendarTitle || ev.storeName || '(店舗名未設定)';
-}
-
-/** 前連予定用のタイトル。例: "CT 東【前連】〇〇商店"(セクション追加要望) */
-function buildPreContactTitle(ev: AppointmentListItem, departmentLabel: string): string {
-  const prefectureInitial = ev.prefecture ? ev.prefecture.slice(0, 1) : '';
-  return `${departmentLabel} ${prefectureInitial}【前連】${ev.storeName ?? ''}`.trim();
+/**
+ * 商談予定のタイトルは「部署ラベル 都道府県【獲得角度ラベル】店舗名」で都度組み立てる(要望)。
+ * 部署(DEPARTMENT_BRANCH)・【】ラベル・店舗名を変えると即座に題名へ反映される。
+ */
+function eventLabel(ev: AppointmentListItem, departmentBranchLabel: string): string {
+  const composed = buildCalendarTitle({
+    departmentLabel: departmentBranchLabel,
+    prefecture: ev.prefecture,
+    bracketLabel: ev.calendarBracketLabel ?? '',
+    storeName: ev.storeName ?? '(店舗名未設定)',
+  });
+  return composed || ev.storeName || '(店舗名未設定)';
 }
 
 interface CalendarEvent {
@@ -333,12 +359,13 @@ function buildDisplayEvents(
   const result: CalendarEvent[] = [];
   for (const ev of events) {
     const departmentStatus = departmentBranchOptions?.find((s) => s.id === ev.department);
+    const branchLabel = departmentStatus?.displayName ?? '';
     if (ev.meetingStartAt) {
       result.push({
         key: ev.id,
         start: new Date(ev.meetingStartAt),
         end: ev.meetingEndAt ? new Date(ev.meetingEndAt) : null,
-        title: eventLabel(ev),
+        title: eventLabel(ev, branchLabel),
         color: ev.calendarColor ?? departmentStatus?.color ?? DEFAULT_COLOR,
         appointment: ev,
       });
@@ -349,7 +376,7 @@ function buildDisplayEvents(
         key: `${ev.id}-precontact`,
         start,
         end: new Date(start.getTime() + 30 * 60000),
-        title: buildPreContactTitle(ev, departmentStatus?.displayName ?? ''),
+        title: buildPreContactTitle({ departmentLabel: branchLabel, prefecture: ev.prefecture, storeName: ev.storeName ?? '' }),
         color: departmentStatus?.color ?? ev.calendarColor ?? DEFAULT_COLOR,
         appointment: ev,
       });
@@ -578,6 +605,8 @@ function EventFormModal({
   departments,
   closerOptions,
   users,
+  branchOptions,
+  bracketLabelOptions,
   saving,
   onChange,
   onSave,
@@ -587,12 +616,21 @@ function EventFormModal({
   departments: { id: string; name: string }[] | undefined;
   closerOptions: { id: string; displayName: string }[] | undefined;
   users: { id: string; name: string }[] | undefined;
+  branchOptions: { id: string; displayName: string; color: string | null }[] | undefined;
+  bracketLabelOptions: { id: string; displayName: string }[] | undefined;
   saving: boolean;
   onChange: (d: DraftEvent) => void;
   onSave: () => void;
   onClose: () => void;
 }) {
   const set = (patch: Partial<DraftEvent>) => onChange({ ...draft, ...patch });
+  const branchLabel = branchOptions?.find((b) => b.id === draft.departmentBranchId)?.displayName ?? '';
+  const composedTitle = buildCalendarTitle({
+    departmentLabel: branchLabel,
+    prefecture: draft.prefecture,
+    bracketLabel: draft.calendarBracketLabel,
+    storeName: draft.corporateName || '(店舗名未設定)',
+  });
   return (
     <div
       onClick={onClose}
@@ -609,9 +647,60 @@ function EventFormModal({
       <div
         onClick={(e) => e.stopPropagation()}
         className="card"
-        style={{ width: 380, maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
+        style={{ width: 460, maxWidth: '94vw', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
       >
         <h2 style={{ fontSize: 16, marginBottom: 14 }}>{draft.id ? '予定を編集' : '予定を追加'}</h2>
+
+        {draft.id && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '8px 10px',
+              background: 'var(--color-bg)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+            }}
+          >
+            <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginBottom: 4 }}>カレンダー題名(自動)</div>
+            <div style={{ fontSize: 12, fontWeight: 700, wordBreak: 'break-word' }}>{composedTitle}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 10, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>部署</label>
+                <select
+                  value={draft.departmentBranchId}
+                  onChange={(e) => set({ departmentBranchId: e.target.value })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">未選択</option>
+                  {branchOptions?.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 10, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>【】(獲得角度)</label>
+                <select
+                  value={draft.calendarBracketLabel}
+                  onChange={(e) => set({ calendarBracketLabel: e.target.value })}
+                  style={{ width: '100%' }}
+                >
+                  <option value="">未選択</option>
+                  {bracketLabelOptions?.map((o) => (
+                    <option key={o.id} value={o.displayName}>
+                      {o.displayName}
+                    </option>
+                  ))}
+                  {draft.calendarBracketLabel &&
+                    !bracketLabelOptions?.some((o) => o.displayName === draft.calendarBracketLabel) && (
+                      <option value={draft.calendarBracketLabel}>{draft.calendarBracketLabel}</option>
+                    )}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
 
         <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>店舗名</label>
         <input value={draft.corporateName} onChange={(e) => set({ corporateName: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
@@ -650,7 +739,7 @@ function EventFormModal({
           ))}
         </select>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>部署</label>
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>所属部署(組織)</label>
         <select value={draft.snapshotDepartmentId} onChange={(e) => set({ snapshotDepartmentId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
           <option value="">未選択</option>
           {departments?.map((d) => (
@@ -670,8 +759,12 @@ function EventFormModal({
           ))}
         </select>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>備考</label>
-        <textarea value={draft.memo} onChange={(e) => set({ memo: e.target.value })} style={{ width: '100%', minHeight: 50, marginBottom: 10 }} />
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>備考(アポ詳細)</label>
+        <textarea
+          value={draft.memo}
+          onChange={(e) => set({ memo: e.target.value })}
+          style={{ width: '100%', minHeight: 200, marginBottom: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
+        />
 
         <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>色</label>
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>

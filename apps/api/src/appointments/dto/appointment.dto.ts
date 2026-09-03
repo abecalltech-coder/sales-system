@@ -87,7 +87,9 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsDateString() deliveredAt?: string;
   @IsOptional() @IsString() specialNotes?: string;
   @IsOptional() @IsString() calendarColor?: string; // CLカレンダー表示色
-  @IsOptional() @IsString() calendarTitle?: string; // CLカレンダー表示タイトル
+  // calendarTitleは「部署ラベル 都道府県【ラベル】店舗名」で常に自動組み立てるため手編集不可。
+  // 【】に入れるラベルだけ選択できる。
+  @IsOptional() @IsString() calendarBracketLabel?: string;
   @IsOptional() @IsDateString() preContactAt?: string; // 前連日時
   @IsOptional() @IsBoolean() reminderEnabled?: boolean;
   @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;

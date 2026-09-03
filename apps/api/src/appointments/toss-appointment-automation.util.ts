@@ -17,25 +17,26 @@ export function formatJaDateTimeWithWeekday(date: Date | null | undefined): stri
 }
 
 /**
- * カレンダー予定のタイトルを組み立てる。
- * 例: "CT 東【HPZOOM】〇〇商店" / フックに"シュミ"を含む場合は "CT シュミ東【HPZOOM】〇〇商店"
+ * カレンダー予定のタイトルを組み立てる。表示側(CLカレンダー)でも同じ規則で
+ * 都度組み立てるため、規則を変えるときはフロントの buildCalendarTitle も揃える。
+ * 例: "CT 東【HPZOOM】〇〇商店"
+ * - departmentLabel: アポ実績の部署(DEPARTMENT_BRANCH)の表示名
+ * - bracketLabel: 【】に入れるラベル(既定はフック変換ラベル、以降プルダウンで変更可)
  */
 export function buildCalendarTitle(params: {
   departmentLabel: string;
   prefecture: string | null;
-  hookLabel: string;
-  isShumi: boolean;
+  bracketLabel: string;
   storeName: string;
 }): string {
   const prefectureInitial = params.prefecture ? params.prefecture.slice(0, 1) : '';
-  const shumiPrefix = params.isShumi ? 'シュミ' : '';
-  return `${params.departmentLabel} ${shumiPrefix}${prefectureInitial}【${params.hookLabel}】${params.storeName}`.trim();
+  return `${params.departmentLabel} ${prefectureInitial}【${params.bracketLabel}】${params.storeName}`.replace(/\s+/g, ' ').trim();
 }
 
 /** 前連予定用のタイトル。例: "CT 東【前連】〇〇商店" */
 export function buildPreContactCalendarTitle(params: { departmentLabel: string; prefecture: string | null; storeName: string }): string {
   const prefectureInitial = params.prefecture ? params.prefecture.slice(0, 1) : '';
-  return `${params.departmentLabel} ${prefectureInitial}【前連】${params.storeName}`.trim();
+  return `${params.departmentLabel} ${prefectureInitial}【前連】${params.storeName}`.replace(/\s+/g, ' ').trim();
 }
 
 /** テンプレート文字列中の{{token}}をtokensの値に置換する(未指定のtokenは空文字扱い) */
