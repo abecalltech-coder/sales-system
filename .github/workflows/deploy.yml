@@ -5,7 +5,7 @@ name: Post-deploy health check
 # コンテナ起動時に scripts/release.sh が prisma migrate deploy を適用する。
 #
 # このworkflowはデプロイそのものは行わず、Railway側のデプロイ完了を待って
-# 公開URLの /health が正常応答することだけを確認する。
+# 公開URLの /health が返す commit が push した SHA と一致することを確認する。
 # (以前はここで `railway up` を叩いていたが、CLIの非対話実行が安定せず
 #  常時failしていたため廃止した)
 
@@ -19,13 +19,10 @@ jobs:
     steps:
       - name: Wait for Railway deploy and verify /health
         env:
-          HEALTHCHECK_URL: ${{ secrets.API_HEALTHCHECK_URL }}
+          # 既定は本番の公開URL。別環境を見たい場合のみ secrets.API_HEALTHCHECK_URL で上書きする。
+          HEALTHCHECK_URL: ${{ secrets.API_HEALTHCHECK_URL || 'https://sales-systemapi-production.up.railway.app/health' }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
-          if [ -z "$HEALTHCHECK_URL" ]; then
-            echo "API_HEALTHCHECK_URL secret が未設定のためスキップします"
-            exit 0
-          fi
           # Railwayのビルド+デプロイは数分かかる。最大15分待つ。
           # /health が返す commit が push した SHA と一致して初めて
           # 「新しいコミットが本番で稼働した」と判定する(応答しているだけの旧版を弾く)。
