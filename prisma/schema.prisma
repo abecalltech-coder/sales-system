@@ -89,9 +89,24 @@ model User {
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
   pushSubscriptions  PushSubscription[]
+  preferences        UserPreference[]
 
   @@index([departmentId])
   @@index([teamId])
+}
+
+// ユーザーごとのUI設定(一覧の列幅など)。全アカウント共通ではなく本人だけに紐づく。
+// key例: "tableWidths:toss-cases"、value: { "<列key>": <px幅> }
+model UserPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
 }
 
 // ブラウザ/PWAのWeb Push購読情報(セクション追加要望: リマインドのデスクトップ/スマホ通知)

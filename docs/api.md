@@ -32,6 +32,11 @@ GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日�
 GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /
 PUT :id/cells(セル1件upsert) / POST,DELETE :id/rows(/:row) / POST,DELETE :id/columns(/:col)
 
+## ユーザー個人設定 `/me/preferences`
+GET :key / PUT :key(body `{ value }`) — ログインユーザー本人のUI設定を保存(userIdはJWTから)。
+権限不要(認証のみ)。keyは `[A-Za-z0-9_:-]{1,64}`。
+一覧の列幅は `tableWidths:<画面key>`(例 `tableWidths:toss-cases`)、valueは `{ "<列key>": <px> }`。
+
 ## Google連携
 POST /integrations/google-forms/webhook (署名検証必須、認証はSecretベース)
 GET /integrations/google-calendar/auth-url, GET .../callback,

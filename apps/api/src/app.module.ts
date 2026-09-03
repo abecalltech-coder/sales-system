@@ -26,6 +26,7 @@ import { CommentsModule } from './comments/comments.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { GoogleFormsModule } from './integrations/google-forms/google-forms.module';
+import { PreferencesModule } from './preferences/preferences.module';
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { GoogleFormsModule } from './integrations/google-forms/google-forms.modu
     CustomFieldsModule,
     AutomationRulesModule,
     SummarySheetsModule,
+    PreferencesModule,
     AuditLogsModule,
     SystemSettingsModule,
     CommentsModule,

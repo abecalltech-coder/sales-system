@@ -358,6 +358,7 @@ export function AppointmentsListPage() {
         </div>
 
         <DataTable
+          tableKey="appointments"
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

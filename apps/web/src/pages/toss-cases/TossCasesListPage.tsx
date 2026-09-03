@@ -461,6 +461,7 @@ export function TossCasesListPage() {
         </div>
 
         <DataTable
+          tableKey="toss-cases"
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

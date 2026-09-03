@@ -322,6 +322,7 @@ export function ContractsListPage() {
         </div>
 
         <DataTable
+          tableKey="contracts"
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

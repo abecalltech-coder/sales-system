@@ -1,4 +1,5 @@
-import { CSSProperties, Fragment, ReactNode } from 'react';
+import { CSSProperties, Fragment, MouseEvent as ReactMouseEvent, ReactNode, useCallback, useRef, useState } from 'react';
+import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
 
 export interface Column<T> {
   key: string;
@@ -33,11 +34,20 @@ interface DataTableProps<T> {
   onCellBlur?: (rowId: string, columnKey: string) => void;
   /** 他ユーザーが今フォーカスしているセルの表示情報を返す(未フォーカスならundefined) */
   cellCursor?: (rowId: string, columnKey: string) => { userName: string; color: string } | undefined;
+  /**
+   * 指定すると列幅をドラッグで変更でき、その幅をログインユーザー本人の設定として
+   * サーバーに保存する(端末をまたいで復元、他アカウントには影響しない)。
+   * 画面ごとに一意な文字列を渡す(例: "toss-cases")。
+   */
+  tableKey?: string;
 }
+
+const DEFAULT_COLUMN_WIDTH = 120;
+const MIN_COLUMN_WIDTH = 56;
 
 /**
  * 一覧画面共通コンポーネント(セクション31)。検索・フィルターは呼び出し側のQueryパラメータで実装し、
- * このコンポーネントは表示・ページネーション・行クリックのみを担当する。
+ * このコンポーネントは表示・ページネーション・行クリック・列幅調整を担当する。
  */
 export function DataTable<T>({
   columns,
@@ -56,8 +66,64 @@ export function DataTable<T>({
   onCellFocus,
   onCellBlur,
   cellCursor,
+  tableKey,
 }: DataTableProps<T>) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const resizable = Boolean(tableKey);
+  const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
+  // ドラッグ中の見た目を即時反映するための一時的な上書き(保存はドラッグ完了時)。
+  const [draftWidths, setDraftWidths] = useState<ColumnWidths>({});
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  const widthOf = (col: Column<T>): number =>
+    draftWidths[col.key] ?? savedWidths[col.key] ?? col.width ?? DEFAULT_COLUMN_WIDTH;
+
+  const onResizeMove = useCallback((e: MouseEvent) => {
+    const st = resizingRef.current;
+    if (!st) return;
+    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(st.startWidth + (e.clientX - st.startX)));
+    setDraftWidths((d) => ({ ...d, [st.key]: next }));
+  }, []);
+
+  const onResizeEnd = useCallback(() => {
+    window.removeEventListener('mousemove', onResizeMove);
+    window.removeEventListener('mouseup', onResizeEnd);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    const st = resizingRef.current;
+    resizingRef.current = null;
+    if (!st) return;
+    setDraftWidths((d) => {
+      const finalWidth = d[st.key];
+      if (finalWidth != null) saveWidths({ ...savedWidths, ...d, [st.key]: finalWidth });
+      return d;
+    });
+  }, [onResizeMove, saveWidths, savedWidths]);
+
+  const onResizeStart = (e: ReactMouseEvent, col: Column<T>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { key: col.key, startX: e.clientX, startWidth: widthOf(col) };
+    window.addEventListener('mousemove', onResizeMove);
+    window.addEventListener('mouseup', onResizeEnd);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  // ハンドルのダブルクリックでその列の幅設定をクリアし、初期幅に戻す。
+  const resetColumn = (col: Column<T>) => {
+    const nextSaved = { ...savedWidths };
+    delete nextSaved[col.key];
+    setDraftWidths((d) => {
+      const n = { ...d };
+      delete n[col.key];
+      return n;
+    });
+    saveWidths(nextSaved);
+  };
+
+  const tableWidth = resizable ? columns.reduce((sum, col) => sum + widthOf(col), 0) : undefined;
 
   return (
     <div
@@ -70,15 +136,20 @@ export function DataTable<T>({
       }}
     >
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ fontSize, tableLayout: 'fixed' }}>
+        <table style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
+          <colgroup>
+            {columns.map((col) => (
+              <col key={col.key} style={{ width: widthOf(col) }} />
+            ))}
+          </colgroup>
           <thead>
             <tr style={{ background: '#fafafa', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
               {columns.map((col, colIdx) => (
                 <th
                   key={col.key}
                   style={{
+                    position: 'relative',
                     padding: '10px 12px',
-                    width: col.width,
                     color: 'var(--color-text-muted)',
                     fontWeight: 600,
                     fontSize: Math.max(fontSize - 1, 10),
@@ -89,6 +160,28 @@ export function DataTable<T>({
                   }}
                 >
                   {col.renderHeader ? col.renderHeader() : col.label}
+                  {resizable && (
+                    <span
+                      role="separator"
+                      aria-label={`${col.label}の列幅を変更`}
+                      title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
+                      onMouseDown={(e) => onResizeStart(e, col)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        resetColumn(col);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: 9,
+                        height: '100%',
+                        cursor: 'col-resize',
+                        zIndex: 1,
+                      }}
+                    />
+                  )}
                 </th>
               ))}
             </tr>
@@ -135,7 +228,6 @@ export function DataTable<T>({
                       style={{
                         position: 'relative',
                         padding: '9px 12px',
-                        width: col.width,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
