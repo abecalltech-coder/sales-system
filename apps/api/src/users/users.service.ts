@@ -4,7 +4,6 @@ import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApproveUserDto } from './dto/approve-user.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 
 @Injectable()
@@ -60,9 +59,9 @@ export class UsersService {
     return user;
   }
 
-  /** 管理者によるユーザー作成。初回パスワードはランダム発行し、初回ログイン時変更必須にする。 */
+  /** 管理者によるユーザー作成。初期パスワードはランダム発行し、そのまま本パスワードとして使える(本人による変更は不可)。 */
   async create(dto: CreateUserDto) {
-    const tempPassword = randomBytes(9).toString('base64url'); // 招待用の一時パスワード
+    const tempPassword = randomBytes(9).toString('base64url'); // 招待用の初期パスワード
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     const roles = await this.prisma.role.findMany({ where: { code: { in: dto.roleCodes } } });
@@ -78,12 +77,11 @@ export class UsersService {
         departmentId: dto.departmentId,
         teamId: dto.teamId,
         passwordHash,
-        mustChangePassword: true,
         roles: { create: roles.map((r) => ({ roleId: r.id })) },
       },
     });
 
-    // 一時パスワードは呼び出し元(管理画面)にのみ返す。ログや監査ログには残さない。
+    // 初期パスワードは呼び出し元(管理画面)にのみ返す。ログや監査ログには残さない。
     return { user, tempPassword };
   }
 
@@ -127,13 +125,13 @@ export class UsersService {
     return result;
   }
 
-  /** 管理者によるパスワード再設定。次回ログイン時の変更を必須にする。 */
+  /** 管理者によるパスワード再発行。新しい初期パスワードがそのまま本パスワードになる。 */
   async resetPassword(id: string) {
     const tempPassword = randomBytes(9).toString('base64url');
     const passwordHash = await bcrypt.hash(tempPassword, 12);
     await this.prisma.user.update({
       where: { id },
-      data: { passwordHash, mustChangePassword: true },
+      data: { passwordHash },
     });
     await this.prisma.refreshToken.updateMany({
       where: { userId: id, revokedAt: null },
@@ -145,13 +143,12 @@ export class UsersService {
   /**
    * 管理者が特定のパスワードを直接指定して設定する(要望: パスワードはハッシュ化して
    * 保存しており復元表示できないため、代わりに管理者自身が値を決められるようにする)。
-   * 対象ユーザーは次回ログイン時に変更を求めない(管理者が既に把握している値のため)。
    */
   async setPassword(id: string, dto: SetPasswordDto) {
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     await this.prisma.user.update({
       where: { id },
-      data: { passwordHash, mustChangePassword: false, failedLoginCount: 0, lockedUntil: null },
+      data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
     });
     await this.prisma.refreshToken.updateMany({
       where: { userId: id, revokedAt: null },
@@ -162,41 +159,6 @@ export class UsersService {
 
   /** 退職者などは物理削除せず論理削除する(セクション36) */
   async softDelete(id: string) {
-    await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: 'RETIRED' } });
-    return { ok: true };
-  }
-
-  /** 自己登録ユーザーの承認(セクション追加要望)。所属・ロールを設定してACTIVE化する。 */
-  async approve(id: string, dto: ApproveUserDto) {
-    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null, status: 'PENDING' } });
-    if (!user) throw new NotFoundException('承認待ちのユーザーが見つかりません');
-
-    const roles = await this.prisma.role.findMany({ where: { code: { in: dto.roleCodes } } });
-    if (roles.length !== dto.roleCodes.length) {
-      throw new NotFoundException('指定されたロールの一部が存在しません');
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          status: 'ACTIVE',
-          departmentId: dto.departmentId,
-          teamId: dto.teamId,
-          version: { increment: 1 },
-        },
-      });
-      await tx.userRole.deleteMany({ where: { userId: id } });
-      await tx.userRole.createMany({ data: roles.map((r) => ({ userId: id, roleId: r.id })) });
-      return tx.user.findUniqueOrThrow({ where: { id }, include: { roles: { include: { role: true } } } });
-    });
-  }
-
-  /** 自己登録ユーザーの却下(セクション追加要望)。在籍者の停止とは区別し、承認待ちのみ対象にする。 */
-  async reject(id: string) {
-    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null, status: 'PENDING' } });
-    if (!user) throw new NotFoundException('承認待ちのユーザーが見つかりません');
-
     await this.prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: 'RETIRED' } });
     return { ok: true };
   }

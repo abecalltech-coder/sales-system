@@ -2,7 +2,6 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApproveUserDto } from './dto/approve-user.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 
@@ -57,20 +56,6 @@ export class UsersController {
   @Post(':id/set-password')
   setPassword(@Param('id') id: string, @Body() dto: SetPasswordDto) {
     return this.usersService.setPassword(id, dto);
-  }
-
-  /** 自己登録ユーザーの承認(セクション追加要望) */
-  @RequirePermissions({ resource: 'user', action: 'edit' })
-  @Post(':id/approve')
-  approve(@Param('id') id: string, @Body() dto: ApproveUserDto) {
-    return this.usersService.approve(id, dto);
-  }
-
-  /** 自己登録ユーザーの却下(セクション追加要望) */
-  @RequirePermissions({ resource: 'user', action: 'edit' })
-  @Post(':id/reject')
-  reject(@Param('id') id: string) {
-    return this.usersService.reject(id);
   }
 
   @RequirePermissions({ resource: 'user', action: 'delete' })

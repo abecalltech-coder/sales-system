@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -70,30 +70,7 @@ export class AuthService {
 
     await this.recordAudit(user.id, 'LOGIN_SUCCESS', ip, true);
 
-    return { accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
-  }
-
-  /** 自己登録(セクション追加要望)。承認待ち状態で作成し、ログイン・権限は管理者の承認後に有効化される。 */
-  async register(dto: { email: string; password: string; name: string; employeeCode?: string }, ip: string | undefined) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) {
-      throw new ConflictException('このメールアドレスは既に登録されています');
-    }
-
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        name: dto.name,
-        employeeCode: dto.employeeCode,
-        passwordHash,
-        status: 'PENDING',
-        mustChangePassword: false,
-      },
-    });
-
-    await this.recordAudit(user.id, 'USER_REGISTERED', ip, true);
-    return { ok: true };
+    return { accessToken, refreshToken };
   }
 
   signAccessToken(userId: string, email: string): string {
@@ -159,24 +136,6 @@ export class AuthService {
       });
     }
     if (userId) await this.recordAudit(userId, 'LOGOUT', undefined, true);
-  }
-
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) throw new BadRequestException('現在のパスワードが正しくありません');
-
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash, mustChangePassword: false },
-    });
-    // パスワード変更時は既存の全セッションを失効させる
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await this.recordAudit(userId, 'PASSWORD_CHANGED', undefined, true);
   }
 
   private async recordAudit(

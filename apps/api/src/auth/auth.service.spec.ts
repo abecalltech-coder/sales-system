@@ -21,7 +21,6 @@ describe('AuthService', () => {
     deletedAt: null,
     failedLoginCount: 0,
     lockedUntil: null,
-    mustChangePassword: false,
   };
 
   beforeEach(async () => {

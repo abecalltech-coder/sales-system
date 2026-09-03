@@ -388,36 +388,34 @@ export function useMobileVisit(id: string) {
 }
 
 // ============================================================
-// 顧客管理
+// サマリー(表)
 // ============================================================
-export interface CustomerListItem {
+export interface SummarySheetListItem {
   id: string;
-  corporateName: string | null;
-  contactName: string | null;
-  phone: string | null;
-  email: string | null;
-  address: string | null;
-  version: number;
+  name: string;
+  order: number;
+  rowCount: number;
+  colCount: number;
 }
 
-export function useCustomers(params: { page: number; pageSize: number; keyword?: string }) {
-  const query = new URLSearchParams({
-    page: String(params.page),
-    pageSize: String(params.pageSize),
-    ...(params.keyword ? { keyword: params.keyword } : {}),
-  });
-  return useQuery({
-    queryKey: ['customers', params],
-    queryFn: () => api.get<{ items: CustomerListItem[]; total: number; page: number; pageSize: number }>(
-      `/customers?${query.toString()}`,
-    ),
-  });
+export interface SummarySheetCell {
+  row: number;
+  col: number;
+  value: string | null;
 }
 
-export function useCustomer(id: string) {
+export interface SummarySheetDetail extends SummarySheetListItem {
+  cells: SummarySheetCell[];
+}
+
+export function useSummarySheets() {
+  return useQuery({ queryKey: ['summary-sheets'], queryFn: () => api.get<SummarySheetListItem[]>('/summary-sheets') });
+}
+
+export function useSummarySheet(id: string | undefined) {
   return useQuery({
-    queryKey: ['customers', id],
-    queryFn: () => api.get<CustomerListItem & { postalCode: string | null; building: string | null; memo: string | null }>(`/customers/${id}`),
+    queryKey: ['summary-sheets', id],
+    queryFn: () => api.get<SummarySheetDetail>(`/summary-sheets/${id}`),
     enabled: !!id,
   });
 }

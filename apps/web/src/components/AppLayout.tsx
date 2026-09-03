@@ -6,8 +6,14 @@ import { NotificationBell } from './NotificationBell';
 import { PushNotificationToggle } from './PushNotificationToggle';
 
 const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
 
-const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: string }[] }[] = [
+type NavItem = { to: string; label: string; icon: string };
+type NavGroup = { title?: string; items: NavItem[] };
+
+const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: '📈' }];
+
+const NAV_GROUPS: NavGroup[] = [
   {
     title: '営業',
     items: [
@@ -18,35 +24,58 @@ const NAV_GROUPS: { title: string; items: { to: string; label: string; icon: str
       { to: '/contracts', label: 'エントリー管理', icon: '📄' },
     ],
   },
-  {
-    title: '分析',
-    items: [
-      { to: '/summary', label: 'サマリー', icon: '📈' },
-      { to: '/calendar', label: 'カレンダー', icon: '🗓' },
-      { to: '/customers', label: '顧客管理', icon: '🏢' },
-    ],
-  },
-  {
-    title: '管理',
-    items: [
-      { to: '/admin/users', label: 'ユーザー管理', icon: '👤' },
-      { to: '/admin/organizations', label: '組織管理', icon: '🏗' },
-      { to: '/admin/masters', label: 'マスタ管理', icon: '⚙️' },
-      { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: '🧩' },
-      { to: '/admin/integrations', label: '連携設定', icon: '🔗' },
-      { to: '/admin/audit-logs', label: '操作ログ', icon: '🧾' },
-      { to: '/admin/system-settings', label: 'システム設定', icon: '🛠' },
-    ],
-  },
 ];
 
+const ADMIN_NAV_GROUP: NavGroup = {
+  title: '管理',
+  items: [
+    { to: '/admin/users', label: 'ユーザー管理', icon: '👤' },
+    { to: '/admin/organizations', label: '組織管理', icon: '🏗' },
+    { to: '/admin/masters', label: 'マスタ管理', icon: '⚙️' },
+    { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: '🧩' },
+    { to: '/admin/integrations', label: '連携設定', icon: '🔗' },
+    { to: '/admin/audit-logs', label: '操作ログ', icon: '🧾' },
+    { to: '/admin/system-settings', label: 'システム設定', icon: '🛠' },
+  ],
+};
+
 const COLLAPSE_STORAGE_KEY = 'nav.collapsed';
+
+function renderNavItem(item: NavItem, collapsed: boolean) {
+  return (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      title={collapsed ? item.label : undefined}
+      style={({ isActive }) => ({
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'flex-start',
+        gap: 10,
+        padding: collapsed ? '8px 0' : '8px 10px',
+        borderRadius: 8,
+        fontSize: 13,
+        textDecoration: 'none',
+        color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+        background: isActive ? 'var(--color-primary-soft)' : 'transparent',
+        fontWeight: isActive ? 700 : 500,
+        marginBottom: 2,
+        whiteSpace: 'nowrap',
+      })}
+    >
+      <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
+      {!collapsed && item.label}
+    </NavLink>
+  );
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useRealtimeSync();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
+  const isAdmin = me ? me.roles.some((r) => ADMIN_ROLES.includes(r)) : false;
+  const navGroups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
 
   const toggle = () => {
     setCollapsed((v) => {
@@ -130,9 +159,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        {NAV_GROUPS.map((group) => (
+        <div style={{ marginBottom: 18 }}>
+          {TOP_NAV.map((item) => renderNavItem(item, collapsed))}
+        </div>
+
+        {navGroups.map((group) => (
           <div key={group.title} style={{ marginBottom: 18 }}>
-            {!collapsed && (
+            {!collapsed && group.title && (
               <div
                 style={{
                   fontSize: 11,
@@ -148,31 +181,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 {group.title}
               </div>
             )}
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                title={collapsed ? item.label : undefined}
-                style={({ isActive }) => ({
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  gap: 10,
-                  padding: collapsed ? '8px 0' : '8px 10px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  textDecoration: 'none',
-                  color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                  background: isActive ? 'var(--color-primary-soft)' : 'transparent',
-                  fontWeight: isActive ? 700 : 500,
-                  marginBottom: 2,
-                  whiteSpace: 'nowrap',
-                })}
-              >
-                <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
-                {!collapsed && item.label}
-              </NavLink>
-            ))}
+            {group.items.map((item) => renderNavItem(item, collapsed))}
           </div>
         ))}
 

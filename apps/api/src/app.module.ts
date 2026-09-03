@@ -9,7 +9,6 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { HealthController } from './health.controller';
-import { CustomersModule } from './customers/customers.module';
 import { TossCasesModule } from './toss-cases/toss-cases.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AppointmentReportsModule } from './appointment-reports/appointment-reports.module';
@@ -21,6 +20,7 @@ import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { AutomationRulesModule } from './automation-rules/automation-rules.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SummaryModule } from './summary/summary.module';
+import { SummarySheetsModule } from './summary-sheets/summary-sheets.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
 import { CommentsModule } from './comments/comments.module';
@@ -47,7 +47,6 @@ import { GoogleFormsModule } from './integrations/google-forms/google-forms.modu
     AuthModule,
     UsersModule,
     OrganizationsModule,
-    CustomersModule,
     TossCasesModule,
     AppointmentsModule,
     AppointmentReportsModule,
@@ -58,6 +57,7 @@ import { GoogleFormsModule } from './integrations/google-forms/google-forms.modu
     CustomFieldsModule,
     AutomationRulesModule,
     SummaryModule,
+    SummarySheetsModule,
     AuditLogsModule,
     SystemSettingsModule,
     CommentsModule,

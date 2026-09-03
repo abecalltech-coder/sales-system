@@ -10,7 +10,8 @@ Base: `/api`。認証はHttpOnly CookieのAccess Token(JWT)。Swagger UIを`/api
 | POST | /auth/logout | Refresh Token失効 |
 | POST | /auth/refresh | Refresh Tokenローテーション |
 | GET | /auth/me | ログインユーザー情報+権限一覧 |
-| POST | /auth/change-password | 初回ログイン時強制含む |
+
+アカウント作成・パスワード変更は管理者のみ(`/users`配下)が行う。自己登録・本人によるパスワード変更エンドポイントは提供しない。
 
 ## トス `/toss-cases`
 GET(一覧,検索/フィルター/ページング) / POST(作成) / GET :id / PATCH :id(version必須,楽観ロック) /
@@ -27,9 +28,13 @@ GET /visits/:id/history, POST /offline-actions/sync(冪等性キーで重複無�
 ## 成約 `/contracts`, エントリー `/entries`
 GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日付処理をサーバー側で実施)
 
-## サマリー `/summary`
+## サマリー(KPI集計) `/summary`
 GET kpi / by-department / by-team / by-user / timeseries / funnel / visits
 (すべてクエリで期間・部署・チーム・担当者・商材・流入元を指定可能)
+
+## サマリー(自由編集表) `/summary-sheets`
+GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /
+PUT :id/cells(セル1件upsert) / POST,DELETE :id/rows(/:row) / POST,DELETE :id/columns(/:col)
 
 ## Google連携
 POST /integrations/google-forms/webhook (署名検証必須、認証はSecretベース)

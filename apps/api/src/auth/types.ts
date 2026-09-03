@@ -6,7 +6,6 @@ export interface AuthenticatedUser {
   teamId: string | null;
   roles: string[]; // Role.code の配列
   permissions: { resource: string; action: string; scope: string }[];
-  mustChangePassword: boolean;
 }
 
 export interface JwtPayload {

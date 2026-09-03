@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 
 export function LoginPage() {
@@ -14,8 +14,8 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await api.post<{ mustChangePassword: boolean }>('/auth/login', { email, password });
-      navigate(result.mustChangePassword ? '/change-password' : '/dashboard');
+      await api.post('/auth/login', { email, password });
+      navigate('/dashboard');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '通信エラーが発生しました');
     } finally {
@@ -51,9 +51,6 @@ export function LoginPage() {
         <button type="submit" disabled={loading} style={{ width: '100%', padding: 8, marginBottom: 12 }}>
           {loading ? 'ログイン中...' : 'ログイン'}
         </button>
-        <div style={{ textAlign: 'center', fontSize: 13 }}>
-          <Link to="/register">新規登録はこちら</Link>
-        </div>
       </form>
     </div>
   );

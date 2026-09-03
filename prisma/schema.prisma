@@ -78,7 +78,6 @@ model User {
   iconUrl           String?
   displayOrder      Int            @default(0)
   preferredViewMode ViewMode       @default(AUTO)
-  mustChangePassword Boolean       @default(true)
   failedLoginCount  Int            @default(0)
   lockedUntil       DateTime?
   createdAt         DateTime       @default(now())
@@ -702,4 +701,41 @@ model GoogleFormWebhookLog {
 
   @@index([responseId])
   @@index([createdAt])
+}
+
+// ============================================================
+// サマリータブ: Googleスプレッドシート風の自由編集表(セクション追加要望)
+// ============================================================
+
+// 1枚のシート(タブ)。セルは値のある箇所のみSummarySheetCellに保存する疎な構造。
+// 将来的な合計/平均等の機能追加はSummarySheetCellへformula列等を足すだけで対応できる想定。
+model SummarySheet {
+  id        String    @id @default(uuid())
+  name      String
+  order     Int       @default(0)
+  rowCount  Int       @default(20)
+  colCount  Int       @default(10)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  createdBy String?
+  updatedBy String?
+  deletedAt DateTime?
+
+  cells     SummarySheetCell[]
+
+  @@index([order])
+}
+
+model SummarySheetCell {
+  id        String   @id @default(uuid())
+  sheetId   String
+  sheet     SummarySheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  row       Int
+  col       Int
+  value     String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@unique([sheetId, row, col])
+  @@index([sheetId])
 }
