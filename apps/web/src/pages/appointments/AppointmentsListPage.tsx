@@ -369,7 +369,6 @@ export function AppointmentsListPage() {
           getRowId={(r) => r.id}
           onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           rowStyle={(r) => ({ background: progressBg(r.progressStatusId) })}
-          fontSize={12}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

@@ -471,7 +471,6 @@ export function TossCasesListPage() {
           onPageChange={setPage}
           getRowId={(r) => r.id}
           rowStyle={(r) => ({ background: r.isCallingInProgress ? 'var(--color-danger-soft)' : statusBg(r.statusId) })}
-          fontSize={12}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

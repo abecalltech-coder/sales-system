@@ -331,7 +331,6 @@ export function ContractsListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          fontSize={12}
           onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}

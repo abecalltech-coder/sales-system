@@ -6,6 +6,22 @@ declare const self: ServiceWorkerGlobalScope;
 // vite-plugin-pwa(injectManifest方式)がビルド時にプリキャッシュ対象ファイル一覧を注入する
 precacheAndRoute(self.__WB_MANIFEST);
 
+// injectManifest方式ではskipWaiting/clientsClaimが自動注入されないため明示する。
+// これがないと新しいSWが「待機中」のまま有効化されず、デプロイしても全タブを
+// 完全に閉じるまで古い画面が表示され続ける(要望のUI変更が反映されない原因)。
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+// registerType:'autoUpdate' が新SW検出時に送ってくるメッセージにも対応する
+self.addEventListener('message', (event) => {
+  if ((event.data as { type?: string } | undefined)?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 interface PushPayload {
   title: string;
   body: string;
