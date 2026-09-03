@@ -26,6 +26,7 @@ import { CommentsModule } from './comments/comments.module';
 import { PushNotificationsModule } from './push-notifications/push-notifications.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { GoogleFormsModule } from './integrations/google-forms/google-forms.module';
+import { GoogleCalendarModule } from './integrations/google-calendar/google-calendar.module';
 import { PreferencesModule } from './preferences/preferences.module';
 
 @Module({
@@ -64,6 +65,7 @@ import { PreferencesModule } from './preferences/preferences.module';
     PushNotificationsModule,
     RemindersModule,
     GoogleFormsModule,
+    GoogleCalendarModule,
   ],
   controllers: [HealthController],
 })

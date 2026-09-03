@@ -54,6 +54,7 @@ interface DraftEvent {
   reminderMinutesBefore: number;
   // 既存アポを開いたときに表示する自動組み立て済みの題名(読み取り専用)
   titlePreview: string;
+  meetingUrl: string;
 }
 
 function eventToDraft(ev: AppointmentListItem, titlePreview: string): DraftEvent {
@@ -73,6 +74,7 @@ function eventToDraft(ev: AppointmentListItem, titlePreview: string): DraftEvent
     reminderEnabled: ev.reminderEnabled,
     reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
     titlePreview,
+    meetingUrl: ev.meetingUrl ?? '',
   };
 }
 
@@ -95,6 +97,7 @@ function slotToDraft(slot: Date): DraftEvent {
     reminderEnabled: false,
     reminderMinutesBefore: 30,
     titlePreview: '',
+    meetingUrl: '',
   };
 }
 
@@ -772,6 +775,8 @@ function EventFormModal({
           </select>
         )}
 
+        {draft.id && <MeetSection appointmentId={draft.id} meetingUrl={draft.meetingUrl} defaultTitle={draft.titlePreview} />}
+
         {draft.id && <ReportSection appointmentId={draft.id} />}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -780,6 +785,52 @@ function EventFormModal({
             {draft.id ? '更新する' : '追加する'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Google Meet セクション(要望: Meetの題名は都度作成、アポ詳細のmeetingUrlへ自動追記)。
+ * Googleカレンダー未連携の場合はエラーメッセージが返る(連携設定から接続)。
+ */
+function MeetSection({ appointmentId, meetingUrl, defaultTitle }: { appointmentId: string; meetingUrl: string; defaultTitle: string }) {
+  const [title, setTitle] = useState(defaultTitle);
+  const [url, setUrl] = useState(meetingUrl);
+  const [err, setErr] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const createMutation = useMutation({
+    mutationFn: () => api.post<{ meetUrl: string }>(`/integrations/google-calendar/appointments/${appointmentId}/create-meet`, { title }),
+    onSuccess: (res) => {
+      setUrl(res.meetUrl);
+      setErr(null);
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+    },
+    onError: (e) => setErr(e instanceof ApiError ? e.message : 'Meetの作成に失敗しました'),
+  });
+
+  return (
+    <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+      <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 6 }}>Google Meet</label>
+      {url && (
+        <div style={{ fontSize: 12, marginBottom: 6, wordBreak: 'break-all' }}>
+          <a href={url} target="_blank" rel="noreferrer">
+            {url}
+          </a>
+        </div>
+      )}
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Meetの題名"
+        style={{ width: '100%', marginBottom: 6 }}
+      />
+      {err && <p style={{ fontSize: 11, color: 'var(--color-danger)', marginBottom: 6 }}>{err}</p>}
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
+          {url ? 'Meetを作り直す' : 'Meetを作成'}
+        </button>
       </div>
     </div>
   );

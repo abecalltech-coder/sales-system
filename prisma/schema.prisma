@@ -109,6 +109,23 @@ model UserPreference {
   @@index([userId])
 }
 
+// Google連携(カレンダー/Meet)の接続情報。単一接続(provider一意)。
+// アカウントを含め、連携設定ページから後から紐づける(要望)。トークンは暗号化して保存。
+model GoogleIntegration {
+  id            String    @id @default(uuid())
+  provider      String    @unique @default("google_calendar")
+  accountEmail  String?
+  accessToken   String? // 暗号化(token-crypto.util)
+  refreshToken  String? // 暗号化
+  tokenExpiry   DateTime?
+  scope         String?
+  calendarId    String    @default("primary")
+  connectedById String?
+  connectedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 // ブラウザ/PWAのWeb Push購読情報(セクション追加要望: リマインドのデスクトップ/スマホ通知)
 model PushSubscription {
   id        String   @id @default(uuid())

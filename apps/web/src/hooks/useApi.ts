@@ -90,6 +90,7 @@ export interface AppointmentListItem {
   meetingType: string;
   meetingStatusId: string;
   visitAddress: string | null;
+  meetingUrl: string | null;
   calendarSyncStatus: string;
   calendarSyncError: string | null;
   memo: string | null;
@@ -458,6 +459,22 @@ export function useGoogleFormLogs() {
     queryKey: ['google-form-logs'],
     queryFn: () => api.get<GoogleFormWebhookLogItem[]>('/integrations/google-forms/logs'),
     refetchInterval: 15000,
+  });
+}
+
+export interface GoogleCalendarStatus {
+  configured: boolean;
+  connected: boolean;
+  accountEmail: string | null;
+  connectedAt: string | null;
+  calendarId: string;
+  redirectUri: string | null;
+}
+
+export function useGoogleCalendarStatus() {
+  return useQuery({
+    queryKey: ['google-calendar-status'],
+    queryFn: () => api.get<GoogleCalendarStatus>('/integrations/google-calendar/status'),
   });
 }
 

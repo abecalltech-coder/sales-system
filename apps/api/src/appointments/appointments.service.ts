@@ -9,6 +9,7 @@ import { CaseHistoryService } from '../common/services/case-history.service';
 import { ContractsService } from '../contracts/contracts.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SystemSettingsService } from '../system-settings/system-settings.module';
+import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { toDateOrUndefined } from '../common/utils/date.util';
 import { extractPrefecture } from '../common/utils/prefecture.util';
 import { buildCalendarTitle, closerSurname, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
@@ -25,6 +26,7 @@ export class AppointmentsService {
     private readonly contracts: ContractsService,
     private readonly realtime: RealtimeService,
     private readonly systemSettings: SystemSettingsService,
+    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   async list(params: {
@@ -226,7 +228,13 @@ export class AppointmentsService {
         },
       );
 
-      return appointment;
+      // HPZOOM(=Google Meet)なら、Googleカレンダー連携済みのときだけMeetのURLを自動発行し
+      // meetingUrl・備考へ反映する(未連携なら何もしない)。
+      if (isOnline) {
+        await this.googleCalendar.tryAutoCreateMeet(appointment.id, calendarTitle || 'オンライン商談');
+      }
+
+      return this.prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id } });
     } catch (err) {
       // 一意制約違反(並行実行での二重作成)は既存レコードを返して冪等性を保つ
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {

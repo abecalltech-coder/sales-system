@@ -39,8 +39,14 @@ GET :key / PUT :key(body `{ value }`) — ログインユーザー本人のUI設
 
 ## Google連携
 POST /integrations/google-forms/webhook (署名検証必須、認証はSecretベース)
-GET /integrations/google-calendar/auth-url, GET .../callback,
-POST .../test, POST .../disconnect
+
+### Googleカレンダー / Meet `/integrations/google-calendar`
+GET status(connected/accountEmail/configured) / GET auth-url / GET callback(Public、?google=connected|errorでフロントへ戻す) /
+POST disconnect / POST appointments/:id/create-meet(body {title}、Meet発行してAppointment.meetingUrl・googleCalendarEventIdへ保存)
+
+- 単一接続(GoogleIntegration provider一意)。トークンはAES-256-GCMで暗号化保存
+- env: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI / GOOGLE_TOKEN_ENCRYPTION_KEY
+- 商談形式=HPZOOMのアポ詳細作成時、連携済みならMeetを自動発行(未連携ならスキップ)
 
 ## 共通仕様
 - すべて Zod DTO 検証、失敗時 400 + フィールド単位エラー
