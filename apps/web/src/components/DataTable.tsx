@@ -60,7 +60,7 @@ export function DataTable<T>({
   onRowClick,
   getRowId,
   rowStyle,
-  fontSize = 12,
+  fontSize = 10,
   expandedRowId,
   renderExpanded,
   onCellFocus,
@@ -156,7 +156,7 @@ export function DataTable<T>({
                     whiteSpace: 'nowrap',
                     overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
-                    borderRight: colIdx < columns.length - 1 ? '1px solid var(--color-border-subtle)' : undefined,
+                    borderRight: colIdx < columns.length - 1 ? '1px dotted var(--color-border-strong)' : undefined,
                   }}
                 >
                   {col.renderHeader ? col.renderHeader() : col.label}
@@ -231,7 +231,7 @@ export function DataTable<T>({
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        borderRight: colIdx < columns.length - 1 ? '1px solid var(--color-border-subtle)' : undefined,
+                        borderRight: colIdx < columns.length - 1 ? '1px dotted var(--color-border-strong)' : undefined,
                         boxShadow: cursor ? `inset 0 0 0 2px ${cursor.color}` : undefined,
                         background: cursor ? `${cursor.color}1a` : undefined,
                       }}
