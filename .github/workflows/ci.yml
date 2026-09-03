@@ -47,9 +47,8 @@ jobs:
       - name: Prisma migrate deploy
         run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
 
-      - name: Lint (api)
-        run: pnpm --filter @sales-system/api lint
-
+      # Lintは未セットアップ(eslint依存も設定ファイルも未導入)のため一旦外す。
+      # ESLintを導入したらこのステップを復活させる。
       - name: Typecheck & build (api)
         run: pnpm --filter @sales-system/api build
 
