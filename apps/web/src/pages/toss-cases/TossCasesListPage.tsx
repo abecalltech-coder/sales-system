@@ -4,6 +4,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
+import { MemoModal } from '../../components/MemoModal';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -36,6 +37,8 @@ export function TossCasesListPage() {
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
+  const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
+  const hookSelectOptions = (meetingFormatOptions ?? []).map((o) => ({ id: o.displayName, label: o.displayName }));
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ corporateName: '', contactName: '', phone: '', memo: '' });
@@ -45,6 +48,8 @@ export function TossCasesListPage() {
   const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; statusId: string } | null>(null);
   const [preContactInput, setPreContactInput] = useState('');
   const [meetingAtInput, setMeetingAtInput] = useState('');
+  const [meetingFormatInput, setMeetingFormatInput] = useState('');
+  const [memoModalRow, setMemoModalRow] = useState<TossCaseListItem | null>(null);
   const [preContactError, setPreContactError] = useState<string | null>(null);
 
   const createMutation = useMutation({
@@ -71,17 +76,26 @@ export function TossCasesListPage() {
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
   const preContactMutation = useMutation({
-    mutationFn: (vars: { id: string; version: number; statusId: string; initialPreContactAt: string; confirmedStartAt: string }) =>
+    mutationFn: (vars: {
+      id: string;
+      version: number;
+      statusId: string;
+      initialPreContactAt: string;
+      confirmedStartAt: string;
+      hook: string;
+    }) =>
       api.patch(`/toss-cases/${vars.id}`, {
         version: vars.version,
         statusId: vars.statusId,
         initialPreContactAt: vars.initialPreContactAt,
         confirmedStartAt: vars.confirmedStartAt,
+        hook: vars.hook,
       }),
     onSuccess: () => {
       setPreContactModal(null);
       setPreContactInput('');
       setMeetingAtInput('');
+      setMeetingFormatInput('');
       setPreContactError(null);
       queryClient.invalidateQueries({ queryKey: ['toss-cases'] });
     },
@@ -253,7 +267,25 @@ export function TossCasesListPage() {
       label: '備考',
       width: 320,
       renderHeader: filterHeader('memo', '備考'),
-      render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} />,
+      render: (r) => (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setMemoModalRow(r);
+          }}
+          title="クリックで全文表示"
+          style={{
+            cursor: 'pointer',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            textDecoration: 'underline dotted',
+            textUnderlineOffset: 2,
+          }}
+        >
+          {(r.memo ?? '').replace(/\n/g, ' ') || <span style={{ color: 'var(--color-text-faint)' }}>(なし)</span>}
+        </div>
+      ),
     },
     {
       key: 'status',
@@ -270,6 +302,7 @@ export function TossCasesListPage() {
               setPreContactModal({ row: r, statusId: v });
               setPreContactInput('');
               setMeetingAtInput('');
+              setMeetingFormatInput(r.hook ?? '');
               setPreContactError(null);
             } else {
               save(r, { statusId: v });
@@ -360,10 +393,10 @@ export function TossCasesListPage() {
     },
     {
       key: 'hook',
-      label: 'フック',
+      label: 'フック(商談形式)',
       width: 110,
       renderHeader: filterHeader('hook', 'フック'),
-      render: (r) => <InlineText value={r.hook} onSave={(v) => save(r, { hook: v })} />,
+      render: (r) => <InlineSelect value={r.hook} options={hookSelectOptions} onSave={(v) => save(r, { hook: v })} />,
     },
     {
       key: 'existingContract',
@@ -515,15 +548,34 @@ export function TossCasesListPage() {
               onChange={(e) => setMeetingAtInput(e.target.value)}
               style={{ display: 'block', width: '100%', marginBottom: 12 }}
             />
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>商談形式(フック)</label>
+            <select
+              value={meetingFormatInput}
+              onChange={(e) => setMeetingFormatInput(e.target.value)}
+              style={{ display: 'block', width: '100%', marginBottom: 12 }}
+            >
+              <option value="">選択してください</option>
+              {(meetingFormatOptions ?? []).map((o) => (
+                <option key={o.id} value={o.displayName}>
+                  {o.displayName}
+                </option>
+              ))}
+              {meetingFormatInput && !(meetingFormatOptions ?? []).some((o) => o.displayName === meetingFormatInput) && (
+                <option value={meetingFormatInput}>{meetingFormatInput}</option>
+              )}
+            </select>
+            <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginBottom: 10 }}>
+              HPZOOMはオンライン用フォーマット、それ以外は訪問用フォーマットで備考(アポ詳細)が生成されます。
+            </p>
             {preContactError && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 10 }}>{preContactError}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button onClick={() => setPreContactModal(null)}>キャンセル</button>
               <button
                 className="btn-primary"
-                disabled={!preContactInput || !meetingAtInput || preContactMutation.isPending}
+                disabled={!preContactInput || !meetingAtInput || !meetingFormatInput || preContactMutation.isPending}
                 onClick={() => {
-                  if (!preContactInput || !meetingAtInput) {
-                    setPreContactError('前連日時・商談日時を入力してください');
+                  if (!preContactInput || !meetingAtInput || !meetingFormatInput) {
+                    setPreContactError('前連日時・商談日時・商談形式を入力してください');
                     return;
                   }
                   preContactMutation.mutate({
@@ -532,6 +584,7 @@ export function TossCasesListPage() {
                     statusId: preContactModal.statusId,
                     initialPreContactAt: new Date(preContactInput).toISOString(),
                     confirmedStartAt: new Date(meetingAtInput).toISOString(),
+                    hook: meetingFormatInput,
                   });
                 }}
               >
@@ -540,6 +593,15 @@ export function TossCasesListPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {memoModalRow && (
+        <MemoModal
+          title={`備考 - ${memoModalRow.customer?.corporateName ?? memoModalRow.id}`}
+          value={memoModalRow.memo ?? ''}
+          onSave={(next) => save(memoModalRow, { memo: next })}
+          onClose={() => setMemoModalRow(null)}
+        />
       )}
     </AppLayout>
   );

@@ -11,7 +11,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { SystemSettingsService } from '../system-settings/system-settings.module';
 import { toDateOrUndefined } from '../common/utils/date.util';
 import { extractPrefecture } from '../common/utils/prefecture.util';
-import { buildCalendarTitle, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
+import { buildCalendarTitle, closerSurname, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
 
 @Injectable()
 export class AppointmentsService {
@@ -116,35 +116,36 @@ export class AppointmentsService {
     const progressStatusId = await this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT');
     // 案件番号・案件名はトス案件からそのまま引き継ぐ(要望: トス/アポ/成約で番号・名称を統一する)
 
-    const [customer, departmentStatus, hookMap, preConfirmStatus, memoTemplate] = await Promise.all([
+    // フック(商談形式)。トス側でプルダウン選択された表示名がそのまま入る(既定はGoogleフォーム等からの自由文言)。
+    const hook = tossCase.hook ?? '';
+    const isOnline = hook === 'HPZOOM';
+
+    const [customer, departmentStatus, preConfirmStatus, zoomTemplate, visitTemplate] = await Promise.all([
       tossCase.customerId ? this.prisma.customer.findUnique({ where: { id: tossCase.customerId } }) : Promise.resolve(null),
       tossCase.department ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.department } }) : Promise.resolve(null),
-      tossCase.hook
-        ? this.prisma.statusMaster.findUnique({
-            where: { category_internalCode: { category: 'TOSS_HOOK_LABEL_MAP', internalCode: tossCase.hook.trim() } },
-          })
-        : Promise.resolve(null),
       tossCase.preConfirmStatusId ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.preConfirmStatusId } }) : Promise.resolve(null),
       this.systemSettings.getOne('tossAppointmentMemoTemplate'),
+      this.systemSettings.getOne('tossAppointmentMemoTemplateVisit'),
     ]);
 
     const prefecture = extractPrefecture(customer?.address);
-    // 【】の既定ラベルはフック→ラベル変換の変換後ラベル。以降はアポ実績/カレンダーの
-    // プルダウンで変更でき、題名は部署・ラベル・店舗名から都度組み立て直される(要望)。
-    const calendarBracketLabel = hookMap?.displayName ?? '';
 
     const calendarTitle = buildCalendarTitle({
       departmentLabel: departmentStatus?.displayName ?? '',
+      closerSurname: '',
       prefecture,
-      bracketLabel: calendarBracketLabel,
+      hook,
       storeName: customer?.corporateName ?? '(店舗名未設定)',
     });
     const calendarColor = departmentStatus?.color ?? undefined;
 
+    // 詳細フォーマット(備考の雛形)はフックから自動選択: HPZOOM=オンライン用、それ以外=訪問用(要望)
+    const memoTemplate = isOnline ? zoomTemplate : visitTemplate;
+
     const memo =
       typeof memoTemplate === 'string'
         ? renderTemplate(memoTemplate, {
-            acquisitionAngle: calendarBracketLabel,
+            acquisitionAngle: hook,
             nextActionAt: formatJaDateTimeWithWeekday(tossCase.nextActionAt),
             meetingAt: formatJaDateTimeWithWeekday(tossCase.confirmedStartAt),
             storeName: customer?.corporateName ?? '',
@@ -176,12 +177,13 @@ export class AppointmentsService {
           meetingStartAt: tossCase.confirmedStartAt,
           meetingEndAt: tossCase.confirmedEndAt,
           visitAddress: undefined,
+          // HPZOOM=オンライン、それ以外=訪問
+          meetingType: isOnline ? 'GOOGLE_MEET' : 'VISIT',
           meetingStatusId,
           progressStatusId,
           idempotencyKey: tossCaseId,
           preContactAt,
           calendarTitle,
-          calendarBracketLabel,
           calendarColor,
           memo,
           // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
@@ -300,20 +302,23 @@ export class AppointmentsService {
     return { ...appointment, storeName: appointment.customer?.corporateName ?? null, prefecture: extractPrefecture(appointment.customer?.address) };
   }
 
-  /** 部署ラベル・【】ラベル・都道府県・店舗名からカレンダー題名を組み立てる(表示側と規則を揃える) */
+  /** 部署ラベル・CL名字・都道府県・フック・店舗名からカレンダー題名を組み立てる(表示側と規則を揃える) */
   private async composeCalendarTitle(params: {
     departmentBranchId: string | null;
-    bracketLabel: string | null;
+    closerStatusId: string | null;
+    hook: string | null;
     prefecture: string | null;
     storeName: string | null;
   }): Promise<string> {
-    const branch = params.departmentBranchId
-      ? await this.prisma.statusMaster.findUnique({ where: { id: params.departmentBranchId } })
-      : null;
+    const [branch, closer] = await Promise.all([
+      params.departmentBranchId ? this.prisma.statusMaster.findUnique({ where: { id: params.departmentBranchId } }) : null,
+      params.closerStatusId ? this.prisma.statusMaster.findUnique({ where: { id: params.closerStatusId } }) : null,
+    ]);
     return buildCalendarTitle({
       departmentLabel: branch?.displayName ?? '',
+      closerSurname: closerSurname(closer?.displayName),
       prefecture: params.prefecture,
-      bracketLabel: params.bracketLabel ?? '',
+      hook: params.hook ?? '',
       storeName: params.storeName ?? '(店舗名未設定)',
     });
   }
@@ -324,13 +329,17 @@ export class AppointmentsService {
       throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
     }
 
-    // 題名に影響する項目(部署ブランチ・【】ラベル・店舗名・住所)が変わりうるので毎回組み立て直す。
+    const pick = <K extends keyof UpdateAppointmentDto>(key: K, fallback: unknown) =>
+      dto[key] !== undefined ? dto[key] : fallback;
+
+    // 題名に影響する項目(部署ブランチ・CL・フック・店舗名・住所)が変わりうるので毎回組み立て直す。
     const nextCalendarTitle = await this.composeCalendarTitle({
-      departmentBranchId: dto.department !== undefined ? dto.department : existing.department,
-      bracketLabel: dto.calendarBracketLabel !== undefined ? dto.calendarBracketLabel : existing.calendarBracketLabel,
+      departmentBranchId: pick('department', existing.department) as string | null,
+      closerStatusId: pick('closerStatusId', existing.closerStatusId) as string | null,
+      hook: pick('hook', existing.hook) as string | null,
       prefecture:
         dto.address !== undefined ? extractPrefecture(dto.address) : extractPrefecture(existing.customer?.address ?? undefined),
-      storeName: dto.corporateName !== undefined ? dto.corporateName : existing.customer?.corporateName ?? existing.storeName,
+      storeName: (dto.corporateName !== undefined ? dto.corporateName : existing.customer?.corporateName ?? existing.storeName) as string | null,
     });
 
     const {

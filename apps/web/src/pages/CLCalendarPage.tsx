@@ -5,7 +5,7 @@ import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentList
 import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
-import { buildCalendarTitle, buildPreContactTitle } from '../lib/calendarTitle';
+import { buildCalendarTitle, buildPreContactTitle, closerSurname } from '../lib/calendarTitle';
 
 const COLOR_PALETTE = [
   '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
@@ -52,14 +52,11 @@ interface DraftEvent {
   memo: string;
   reminderEnabled: boolean;
   reminderMinutesBefore: number;
-  // トス由来のアポ詳細向け。題名の「部署」と「【】ラベル」はここから組み立てる。
-  departmentBranchId: string;
-  calendarBracketLabel: string;
-  prefecture: string | null;
-  isTossOrigin: boolean;
+  // 既存アポを開いたときに表示する自動組み立て済みの題名(読み取り専用)
+  titlePreview: string;
 }
 
-function eventToDraft(ev: AppointmentListItem): DraftEvent {
+function eventToDraft(ev: AppointmentListItem, titlePreview: string): DraftEvent {
   return {
     id: ev.id,
     version: ev.version,
@@ -75,10 +72,7 @@ function eventToDraft(ev: AppointmentListItem): DraftEvent {
     memo: ev.memo ?? '',
     reminderEnabled: ev.reminderEnabled,
     reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
-    departmentBranchId: ev.department ?? '',
-    calendarBracketLabel: ev.calendarBracketLabel ?? '',
-    prefecture: ev.prefecture,
-    isTossOrigin: Boolean(ev.calendarBracketLabel !== null || ev.department),
+    titlePreview,
   };
 }
 
@@ -100,15 +94,13 @@ function slotToDraft(slot: Date): DraftEvent {
     memo: '',
     reminderEnabled: false,
     reminderMinutesBefore: 30,
-    departmentBranchId: '',
-    calendarBracketLabel: '',
-    prefecture: null,
-    isTossOrigin: false,
+    titlePreview: '',
   };
 }
 
 export function CLCalendarPage() {
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  // ベース表示は「日」(要望)
+  const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [anchor, setAnchor] = useState(() => new Date());
   const [departmentId, setDepartmentId] = useState('');
   const [closerStatusId, setCloserStatusId] = useState('');
@@ -120,7 +112,6 @@ export function CLCalendarPage() {
   const { data: departments } = useDepartments();
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
-  const { data: bracketLabelOptions } = useStatuses('TOSS_HOOK_LABEL_MAP');
   const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
 
   const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
@@ -134,7 +125,10 @@ export function CLCalendarPage() {
     userId: accountUserId || undefined,
   });
   const events = useMemo(() => (data?.items ?? []).filter((e) => e.meetingStartAt || e.preContactAt), [data]);
-  const displayEvents = useMemo(() => buildDisplayEvents(events, departmentBranchOptions), [events, departmentBranchOptions]);
+  const displayEvents = useMemo(
+    () => buildDisplayEvents(events, departmentBranchOptions, closerOptions),
+    [events, departmentBranchOptions, closerOptions],
+  );
 
   const closerLabel = (id: string | null) => closerOptions?.find((s) => s.id === id)?.displayName ?? '';
 
@@ -180,29 +174,35 @@ export function CLCalendarPage() {
       meetingEndAt = new Date(`${parsedDate}T${parsedEnd}`).toISOString();
     }
 
-    const body: Record<string, unknown> = {
-      corporateName: d.corporateName || undefined,
-      meetingStartAt,
-      meetingEndAt,
-      meetingType: d.meetingType,
-      closerStatusId: d.closerStatusId || undefined,
-      snapshotDepartmentId: d.snapshotDepartmentId || undefined,
-      meetingUserId: d.meetingUserId || undefined,
-      calendarColor: d.calendarColor,
-      memo: d.memo || undefined,
-      reminderEnabled: d.reminderEnabled,
-      reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
-    };
-    // 既存アポの更新時のみ、題名に関わる部署ブランチ・【】ラベルを送る(新規作成DTOにはこの項目がない)
-    if (d.id) {
-      body.department = d.departmentBranchId || undefined;
-      body.calendarBracketLabel = d.calendarBracketLabel;
-    }
-
     if (d.id && d.version != null) {
-      updateMutation.mutate({ id: d.id, version: d.version, patch: body });
+      // 既存アポの予定モーダルで編集できるのは日時・色・リマインド・備考のみ。
+      // 店舗名/形式/CL/部署/フック等はアポ実績で編集する(要望)。
+      updateMutation.mutate({
+        id: d.id,
+        version: d.version,
+        patch: {
+          meetingStartAt,
+          meetingEndAt,
+          calendarColor: d.calendarColor,
+          memo: d.memo || undefined,
+          reminderEnabled: d.reminderEnabled,
+          reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
+        },
+      });
     } else {
-      createMutation.mutate(body);
+      createMutation.mutate({
+        corporateName: d.corporateName || undefined,
+        meetingStartAt,
+        meetingEndAt,
+        meetingType: d.meetingType,
+        closerStatusId: d.closerStatusId || undefined,
+        snapshotDepartmentId: d.snapshotDepartmentId || undefined,
+        meetingUserId: d.meetingUserId || undefined,
+        calendarColor: d.calendarColor,
+        memo: d.memo || undefined,
+        reminderEnabled: d.reminderEnabled,
+        reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
+      });
     }
   };
 
@@ -290,7 +290,7 @@ export function CLCalendarPage() {
             events={displayEvents}
             closerLabel={closerLabel}
             onSlotClick={(day) => setDraft(slotToDraft(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0)))}
-            onEventClick={(ev) => setDraft(eventToDraft(ev))}
+            onEventClick={(ev, title) => setDraft(eventToDraft(ev, title))}
           />
         )}
         {viewMode !== 'month' && (
@@ -299,7 +299,7 @@ export function CLCalendarPage() {
             events={displayEvents}
             closerLabel={closerLabel}
             onSlotClick={(slot) => setDraft(slotToDraft(slot))}
-            onEventClick={(ev) => setDraft(eventToDraft(ev))}
+            onEventClick={(ev, title) => setDraft(eventToDraft(ev, title))}
           />
         )}
       </div>
@@ -310,8 +310,6 @@ export function CLCalendarPage() {
           departments={departments}
           closerOptions={closerOptions}
           users={usersData?.items}
-          branchOptions={departmentBranchOptions}
-          bracketLabelOptions={bracketLabelOptions}
           saving={createMutation.isPending || updateMutation.isPending}
           onChange={setDraft}
           onSave={() => saveDraft(draft)}
@@ -326,14 +324,15 @@ export function CLCalendarPage() {
 }
 
 /**
- * 商談予定のタイトルは「部署ラベル 都道府県【獲得角度ラベル】店舗名」で都度組み立てる(要望)。
- * 部署(DEPARTMENT_BRANCH)・【】ラベル・店舗名を変えると即座に題名へ反映される。
+ * 商談予定のタイトルは「部署 CL名字 都道府県頭文字 【フック】店舗名」で都度組み立てる(要望)。
+ * 部署(DEPARTMENT_BRANCH)・CL・フック・店舗名を変えると即座に題名へ反映される。時刻は入れない。
  */
-function eventLabel(ev: AppointmentListItem, departmentBranchLabel: string): string {
+function eventLabel(ev: AppointmentListItem, branchLabel: string, closerName: string): string {
   const composed = buildCalendarTitle({
-    departmentLabel: departmentBranchLabel,
+    departmentLabel: branchLabel,
+    closerSurname: closerSurname(closerName),
     prefecture: ev.prefecture,
-    bracketLabel: ev.calendarBracketLabel ?? '',
+    hook: ev.hook ?? '',
     storeName: ev.storeName ?? '(店舗名未設定)',
   });
   return composed || ev.storeName || '(店舗名未設定)';
@@ -355,17 +354,19 @@ interface CalendarEvent {
 function buildDisplayEvents(
   events: AppointmentListItem[],
   departmentBranchOptions: { id: string; displayName: string; color: string | null }[] | undefined,
+  closerOptions: { id: string; displayName: string }[] | undefined,
 ): CalendarEvent[] {
   const result: CalendarEvent[] = [];
   for (const ev of events) {
     const departmentStatus = departmentBranchOptions?.find((s) => s.id === ev.department);
     const branchLabel = departmentStatus?.displayName ?? '';
+    const closerName = closerOptions?.find((s) => s.id === ev.closerStatusId)?.displayName ?? '';
     if (ev.meetingStartAt) {
       result.push({
         key: ev.id,
         start: new Date(ev.meetingStartAt),
         end: ev.meetingEndAt ? new Date(ev.meetingEndAt) : null,
-        title: eventLabel(ev, branchLabel),
+        title: eventLabel(ev, branchLabel, closerName),
         color: ev.calendarColor ?? departmentStatus?.color ?? DEFAULT_COLOR,
         appointment: ev,
       });
@@ -376,7 +377,12 @@ function buildDisplayEvents(
         key: `${ev.id}-precontact`,
         start,
         end: new Date(start.getTime() + 30 * 60000),
-        title: buildPreContactTitle({ departmentLabel: branchLabel, prefecture: ev.prefecture, storeName: ev.storeName ?? '' }),
+        title: buildPreContactTitle({
+          departmentLabel: branchLabel,
+          closerSurname: closerSurname(closerName),
+          prefecture: ev.prefecture,
+          storeName: ev.storeName ?? '',
+        }),
         color: departmentStatus?.color ?? ev.calendarColor ?? DEFAULT_COLOR,
         appointment: ev,
       });
@@ -396,7 +402,7 @@ function MonthGrid({
   events: CalendarEvent[];
   closerLabel: (id: string | null) => string;
   onSlotClick: (day: Date) => void;
-  onEventClick: (ev: AppointmentListItem) => void;
+  onEventClick: (ev: AppointmentListItem, title: string) => void;
 }) {
   const days = monthGridDays(anchor);
   const eventsByDay = useMemo(() => {
@@ -453,7 +459,7 @@ function MonthGrid({
                   key={ev.key}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEventClick(ev.appointment);
+                    onEventClick(ev.appointment, ev.title);
                   }}
                   title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                   style={{
@@ -468,7 +474,7 @@ function MonthGrid({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {ev.start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {ev.title}
+                  {ev.title}
                 </div>
               ))}
               {dayEvents.length > 3 && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>+{dayEvents.length - 3}件</div>}
@@ -491,7 +497,7 @@ function TimeGrid({
   events: CalendarEvent[];
   closerLabel: (id: string | null) => string;
   onSlotClick: (slot: Date) => void;
-  onEventClick: (ev: AppointmentListItem) => void;
+  onEventClick: (ev: AppointmentListItem, title: string) => void;
 }) {
   const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
   const gridHeight = (DAY_END_HOUR - DAY_START_HOUR) * HOUR_HEIGHT;
@@ -569,7 +575,7 @@ function TimeGrid({
                       key={ev.key}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEventClick(ev.appointment);
+                        onEventClick(ev.appointment, ev.title);
                       }}
                       title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                       style={{
@@ -587,7 +593,7 @@ function TimeGrid({
                         cursor: 'pointer',
                       }}
                     >
-                      {start.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })} {ev.title}
+                      {ev.title}
                     </div>
                   );
                 })}
@@ -605,8 +611,6 @@ function EventFormModal({
   departments,
   closerOptions,
   users,
-  branchOptions,
-  bracketLabelOptions,
   saving,
   onChange,
   onSave,
@@ -616,21 +620,12 @@ function EventFormModal({
   departments: { id: string; name: string }[] | undefined;
   closerOptions: { id: string; displayName: string }[] | undefined;
   users: { id: string; name: string }[] | undefined;
-  branchOptions: { id: string; displayName: string; color: string | null }[] | undefined;
-  bracketLabelOptions: { id: string; displayName: string }[] | undefined;
   saving: boolean;
   onChange: (d: DraftEvent) => void;
   onSave: () => void;
   onClose: () => void;
 }) {
   const set = (patch: Partial<DraftEvent>) => onChange({ ...draft, ...patch });
-  const branchLabel = branchOptions?.find((b) => b.id === draft.departmentBranchId)?.displayName ?? '';
-  const composedTitle = buildCalendarTitle({
-    departmentLabel: branchLabel,
-    prefecture: draft.prefecture,
-    bracketLabel: draft.calendarBracketLabel,
-    storeName: draft.corporateName || '(店舗名未設定)',
-  });
   return (
     <div
       onClick={onClose}
@@ -651,7 +646,7 @@ function EventFormModal({
       >
         <h2 style={{ fontSize: 16, marginBottom: 14 }}>{draft.id ? '予定を編集' : '予定を追加'}</h2>
 
-        {draft.id && (
+        {draft.id ? (
           <div
             style={{
               marginBottom: 12,
@@ -661,49 +656,17 @@ function EventFormModal({
               borderRadius: 6,
             }}
           >
-            <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginBottom: 4 }}>カレンダー題名(自動)</div>
-            <div style={{ fontSize: 12, fontWeight: 700, wordBreak: 'break-word' }}>{composedTitle}</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>部署</label>
-                <select
-                  value={draft.departmentBranchId}
-                  onChange={(e) => set({ departmentBranchId: e.target.value })}
-                  style={{ width: '100%' }}
-                >
-                  <option value="">未選択</option>
-                  {branchOptions?.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.displayName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ fontSize: 10, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>【】(獲得角度)</label>
-                <select
-                  value={draft.calendarBracketLabel}
-                  onChange={(e) => set({ calendarBracketLabel: e.target.value })}
-                  style={{ width: '100%' }}
-                >
-                  <option value="">未選択</option>
-                  {bracketLabelOptions?.map((o) => (
-                    <option key={o.id} value={o.displayName}>
-                      {o.displayName}
-                    </option>
-                  ))}
-                  {draft.calendarBracketLabel &&
-                    !bracketLabelOptions?.some((o) => o.displayName === draft.calendarBracketLabel) && (
-                      <option value={draft.calendarBracketLabel}>{draft.calendarBracketLabel}</option>
-                    )}
-                </select>
-              </div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginBottom: 4 }}>
+              カレンダー題名(自動 / 部署・CL・フックはアポ実績で編集)
             </div>
+            <div style={{ fontSize: 12, fontWeight: 700, wordBreak: 'break-word' }}>{draft.titlePreview || '(未設定)'}</div>
           </div>
+        ) : (
+          <>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>店舗名</label>
+            <input value={draft.corporateName} onChange={(e) => set({ corporateName: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
+          </>
         )}
-
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>店舗名</label>
-        <input value={draft.corporateName} onChange={(e) => set({ corporateName: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
@@ -720,50 +683,54 @@ function EventFormModal({
           </div>
         </div>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>形式</label>
-        <select value={draft.meetingType} onChange={(e) => set({ meetingType: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
-          {MEETING_TYPE_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        {!draft.id && (
+          <>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>形式</label>
+            <select value={draft.meetingType} onChange={(e) => set({ meetingType: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+              {MEETING_TYPE_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>CL</label>
-        <select value={draft.closerStatusId} onChange={(e) => set({ closerStatusId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
-          <option value="">未選択</option>
-          {closerOptions?.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.displayName}
-            </option>
-          ))}
-        </select>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>CL</label>
+            <select value={draft.closerStatusId} onChange={(e) => set({ closerStatusId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+              <option value="">未選択</option>
+              {closerOptions?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.displayName}
+                </option>
+              ))}
+            </select>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>所属部署(組織)</label>
-        <select value={draft.snapshotDepartmentId} onChange={(e) => set({ snapshotDepartmentId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
-          <option value="">未選択</option>
-          {departments?.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>所属部署(組織)</label>
+            <select value={draft.snapshotDepartmentId} onChange={(e) => set({ snapshotDepartmentId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+              <option value="">未選択</option>
+              {departments?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>担当アカウント</label>
-        <select value={draft.meetingUserId} onChange={(e) => set({ meetingUserId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
-          <option value="">未選択</option>
-          {users?.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>担当アカウント</label>
+            <select value={draft.meetingUserId} onChange={(e) => set({ meetingUserId: e.target.value })} style={{ width: '100%', marginBottom: 10 }}>
+              <option value="">未選択</option>
+              {users?.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>備考(アポ詳細)</label>
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>備考(アポ詳細・全文)</label>
         <textarea
           value={draft.memo}
           onChange={(e) => set({ memo: e.target.value })}
-          style={{ width: '100%', minHeight: 200, marginBottom: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
+          style={{ width: '100%', minHeight: 320, marginBottom: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontSize: 13 }}
         />
 
         <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>色</label>
@@ -819,20 +786,19 @@ function EventFormModal({
 }
 
 /**
- * 実施報告(前連結果・訪問状況等)の提出フォーム(セクション追加要望)。
+ * 実施報告フォーム(要望: 定型文ボタンではなく、種別を選んで内容を入力する形式)。
  * 提出内容はアポの備考へ自動追記され、部署責任者(MANAGER)へ確認通知として届く。
  */
 function ReportSection({ appointmentId }: { appointmentId: string }) {
-  const [activeCheckpoint, setActiveCheckpoint] = useState<string | null>(null);
+  const [checkpoint, setCheckpoint] = useState<string>(REPORT_CHECKPOINTS[0].id);
   const [text, setText] = useState('');
-  const [justSubmitted, setJustSubmitted] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const queryClient = useQueryClient();
 
   const reportMutation = useMutation({
     mutationFn: (body: { appointmentId: string; checkpoint: string; reportText: string }) => api.post('/appointment-reports', body),
-    onSuccess: (_, vars) => {
-      setJustSubmitted(vars.checkpoint);
-      setActiveCheckpoint(null);
+    onSuccess: () => {
+      setDone(true);
       setText('');
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
       queryClient.invalidateQueries({ queryKey: ['appointment-reports'] });
@@ -842,51 +808,39 @@ function ReportSection({ appointmentId }: { appointmentId: string }) {
   return (
     <div style={{ marginBottom: 16, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
       <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 6 }}>実施報告</label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: activeCheckpoint ? 8 : 0 }}>
+      <select
+        value={checkpoint}
+        onChange={(e) => {
+          setCheckpoint(e.target.value);
+          setDone(false);
+        }}
+        style={{ width: '100%', marginBottom: 6 }}
+      >
         {REPORT_CHECKPOINTS.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => {
-              setActiveCheckpoint(c.id);
-              setText('');
-              setJustSubmitted(null);
-            }}
-            style={{
-              fontSize: 11,
-              padding: '4px 8px',
-              borderRadius: 999,
-              border: '1px solid var(--color-border)',
-              background: activeCheckpoint === c.id ? 'var(--color-primary)' : justSubmitted === c.id ? 'var(--color-primary-soft)' : 'var(--color-surface)',
-              color: activeCheckpoint === c.id ? '#fff' : 'inherit',
-            }}
-          >
-            {justSubmitted === c.id ? '✓ ' : ''}
+          <option key={c.id} value={c.id}>
             {c.label}
-          </button>
+          </option>
         ))}
+      </select>
+      <textarea
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setDone(false);
+        }}
+        placeholder={checkpoint === 'RESCHEDULE' ? '再訪日または次回商談日を含めて記載してください' : '報告内容を入力'}
+        style={{ width: '100%', minHeight: 60, marginBottom: 6 }}
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }}>
+        {done && <span style={{ fontSize: 11, color: 'var(--color-success)' }}>✓ 報告しました</span>}
+        <button
+          className="btn-primary"
+          disabled={!text.trim() || reportMutation.isPending}
+          onClick={() => reportMutation.mutate({ appointmentId, checkpoint, reportText: text.trim() })}
+        >
+          報告する
+        </button>
       </div>
-      {activeCheckpoint && (
-        <div>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={
-              activeCheckpoint === 'RESCHEDULE' ? '再訪日または次回商談日を含めて記載してください' : `${REPORT_CHECKPOINTS.find((c) => c.id === activeCheckpoint)?.label}の内容を入力`
-            }
-            style={{ width: '100%', minHeight: 50, marginBottom: 6 }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
-            <button onClick={() => setActiveCheckpoint(null)}>閉じる</button>
-            <button
-              className="btn-primary"
-              disabled={!text.trim() || reportMutation.isPending}
-              onClick={() => reportMutation.mutate({ appointmentId, checkpoint: activeCheckpoint, reportText: text.trim() })}
-            >
-              報告する
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -64,10 +64,16 @@ const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
     ],
   },
   {
+    title: '商談形式・部署',
+    categories: [
+      { value: 'MEETING_FORMAT', label: '商談形式(=フック / HPZOOM・撮＆訪・HP＆訪・電気フック)' },
+      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)' },
+    ],
+  },
+  {
     title: '自動化設定',
     categories: [
-      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)' },
-      { value: 'TOSS_HOOK_LABEL_MAP', label: 'フック→ラベル変換(内部コード=フックの原文、表示名=変換後ラベル)' },
+      { value: 'TOSS_HOOK_LABEL_MAP', label: 'Googleフォームのフック文言→商談形式の変換(内部コード=フォームの原文、表示名=変換後)' },
     ],
   },
 ];

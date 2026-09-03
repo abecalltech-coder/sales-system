@@ -35,6 +35,36 @@ HP：
 GoogleMeetURL：{{meetingUrl}}
 備考：`;
 
+// 訪問系(HPZOOM以外)の詳細フォーマット。アポ変換時にフック(商談形式)がHPZOOM以外なら
+// こちらが備考へ入る(要望)。
+const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT = `【{{hook}}】獲得角度：{{acquisitionAngle}}
+取り次ぎ日時：{{nextActionAt}}
+訪問日時：{{meetingAt}}
+店舗名：{{storeName}}
+住所：{{address}}
+業種：{{industry}}
+最寄り駅：　駅　徒歩　分
+店舗番号：{{storePhone}}
+携帯番号：
+担当者名：{{contactName}}
+対応者：
+利用電気：
+アポインター：{{apStaffName}}
+前確者：{{preConfirmName}}
+料金：
+明細準備：
+法人or屋号：
+対象外確認：
+地点数：従量（地点）/動力（地点）
+支払方法、印鑑・支払情報の準備：クレカor口座orコンビニ払い/有or無
+提案：
+リスト名：{{listName}}
+前連：{{preContactAt}}
+フック：{{hook}}
+インドアビュー：
+GoogleビジネスURL：
+備考：`;
+
 // セクション40等で参照される既定のシステム設定キー一覧(値は管理画面から変更可能)
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   arrivalWarningDistanceMeters: 500,
@@ -42,7 +72,10 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   visitReminderMinutesBefore: 30,
   requireDelayReason: true,
   duplicateCustomerRule: 'ADMIN_REVIEW',
+  // HPZOOM用(オンライン)の詳細フォーマット
   tossAppointmentMemoTemplate: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE,
+  // 訪問用(HPZOOM以外)の詳細フォーマット
+  tossAppointmentMemoTemplateVisit: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT,
 };
 
 class SetSettingDto {

@@ -180,6 +180,13 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'TOSS_HOOK_LABEL_MAP', internalCode: 'HP(シュミ)', displayName: 'HPZOOM' },
   { category: 'TOSS_HOOK_LABEL_MAP', internalCode: 'インドア', displayName: '撮＆訪' },
   { category: 'TOSS_HOOK_LABEL_MAP', internalCode: '電気フック', displayName: '電気フック' },
+  // 商談形式(=フック)。トス実績・アポ実績のフック列およびアポ変換モーダルのプルダウン。
+  // カレンダー題名の【】に入り、アポ変換時の詳細フォーマット(ZOOM用/訪問用)の判定にも使う。
+  // HPZOOM=オンライン(ZOOMフォーマット)、それ以外=訪問(訪問フォーマット)。
+  { category: 'MEETING_FORMAT', internalCode: 'MF_HPZOOM', displayName: 'HPZOOM', order: 10 },
+  { category: 'MEETING_FORMAT', internalCode: 'MF_SATSU_HOU', displayName: '撮＆訪', order: 20 },
+  { category: 'MEETING_FORMAT', internalCode: 'MF_HP_HOU', displayName: 'HP＆訪', order: 30 },
+  { category: 'MEETING_FORMAT', internalCode: 'MF_DENKI', displayName: '電気フック', order: 40 },
 ];
 
 async function main() {

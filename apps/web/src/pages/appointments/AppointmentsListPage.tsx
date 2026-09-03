@@ -40,7 +40,7 @@ export function AppointmentsListPage() {
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
-  const { data: bracketLabelOptions } = useStatuses('TOSS_HOOK_LABEL_MAP');
+  const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
   const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
@@ -164,7 +164,6 @@ export function AppointmentsListPage() {
   filterValueFns.email = (r) => r.customer?.email ?? '';
   filterValueFns.status = (r) => statusLabel(r.meetingStatusId);
   filterValueFns.memo = (r) => r.memo ?? '';
-  filterValueFns.calendarBracketLabel = (r) => r.calendarBracketLabel ?? '';
 
   const columns: Column<AppointmentListItem>[] = [
     { key: 'apoDate', label: 'アポ日', render: (r) => formatDate(r.createdAt), width: 90, renderHeader: filterHeader('apoDate', 'アポ日') },
@@ -190,22 +189,21 @@ export function AppointmentsListPage() {
     selectColumn('preConfirmStatusId', '前確', preConfirmOptions, 90),
     selectColumn('preContactStatusId', '前連担当', preContactOptions, 100),
     selectColumn('closerStatusId', 'CL', closerOptions, 90),
-    textColumn('hook', 'フック', 100),
-    selectColumn('department', '部署', departmentOptions, 84),
     {
-      key: 'calendarBracketLabel',
-      label: '獲得角度【】',
-      width: 96,
-      renderHeader: filterHeader('calendarBracketLabel', '獲得角度【】'),
-      // カレンダー題名の【】に入るラベル。値は表示名の文字列そのものを保存する。
+      key: 'hook',
+      label: 'フック(商談形式)',
+      width: 104,
+      renderHeader: filterHeader('hook', 'フック'),
+      // フック=商談形式。カレンダー題名の【】に入り、詳細フォーマット(ZOOM/訪問)の判定にも使う。
       render: (r) => (
         <InlineSelect
-          value={r.calendarBracketLabel}
-          options={(bracketLabelOptions ?? []).map((o) => ({ id: o.displayName, label: o.displayName }))}
-          onSave={(v) => save(r, { calendarBracketLabel: v })}
+          value={r.hook}
+          options={(meetingFormatOptions ?? []).map((o) => ({ id: o.displayName, label: o.displayName }))}
+          onSave={(v) => save(r, { hook: v })}
         />
       ),
     },
+    selectColumn('department', '部署', departmentOptions, 84),
     {
       key: 'storeName',
       label: '店舗名',
