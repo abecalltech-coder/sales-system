@@ -68,12 +68,16 @@ export function InlineText({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused]);
 
+  // rect を依存に含めるのが重要: focused=true の初回レンダーではまだ textarea が
+  // マウントされておらず(rect が null のため)高さ計算が空振りする。rect 確定後の
+  // 再レンダーでこの effect を再実行させることで全文の高さに広げる。
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!focused || !el) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [focused, draft]);
+    const min = expand ? 120 : 0;
+    el.style.height = `${Math.max(el.scrollHeight, min)}px`;
+  }, [focused, draft, rect, expand]);
 
   const commit = () => {
     setFocused(false);

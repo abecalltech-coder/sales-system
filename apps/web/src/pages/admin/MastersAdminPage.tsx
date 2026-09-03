@@ -7,92 +7,84 @@ import { api, ApiError } from '../../lib/api';
 interface CategoryDef {
   value: string;
   label: string;
+  /** 複数画面で使う項目。ここで編集すると全画面に反映される */
+  shared?: boolean;
 }
 
-// タブ単位でまとめることで、関連する項目を一度に見渡せるようにしている(要望: タブ毎・項目ごとに見やすく)
+// 画面ごとのタブ。各タブの中は「項目」ごとのカードに分かれる(要望: 画面毎→項目毎)。
+// 同じ項目(部署・商談形式・前確・業種など)は複数タブに出るが、中身は共通で連動する。
 const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
   {
     title: 'トス実績',
     categories: [
-      { value: 'TOSS_PRE_CONFIRM', label: '前確担当者' },
+      { value: 'MEETING_FORMAT', label: '商談形式(フック)', shared: true },
+      { value: 'TOSS_PRE_CONFIRM', label: '前確担当者', shared: true },
       { value: 'TOSS_PROGRESS', label: '進捗' },
       { value: 'TOSS_NG_REASON', label: 'NG理由' },
+      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)', shared: true },
+      { value: 'INDUSTRY', label: '業種', shared: true },
+      { value: 'EXISTING_CONTRACT', label: '既契約', shared: true },
+      { value: 'PROPOSAL_LOCATION', label: '提案(場所)', shared: true },
+      { value: 'TOSS', label: 'トスステータス(グループ色分け)' },
     ],
   },
   {
-    title: 'アポ実績: 担当者',
+    title: 'アポ実績',
     categories: [
+      { value: 'MEETING_FORMAT', label: '商談形式(フック)', shared: true },
+      { value: 'TOSS_PRE_CONFIRM', label: '前確担当者', shared: true },
       { value: 'APPOINTMENT_PRE_CONTACT', label: '前連担当' },
-      { value: 'APPOINTMENT_CLOSER', label: 'CL(クロージング担当)' },
-    ],
-  },
-  {
-    title: 'アポ実績: ステータス',
-    categories: [
+      { value: 'APPOINTMENT_CLOSER', label: 'CL(クロージング担当)', shared: true },
+      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)', shared: true },
+      { value: 'INDUSTRY', label: '業種', shared: true },
+      { value: 'EXISTING_CONTRACT', label: '既契約', shared: true },
+      { value: 'PROPOSAL_LOCATION', label: '提案場所', shared: true },
+      { value: 'APPOINTMENT', label: '商談ステータス' },
+      { value: 'APPOINTMENT_PROGRESS', label: '進捗' },
       { value: 'APPOINTMENT_HP_PROGRESS', label: 'HP進捗' },
       { value: 'APPOINTMENT_TYPE', label: '種別' },
-      { value: 'APPOINTMENT_PROGRESS', label: '進捗' },
       { value: 'APPOINTMENT_ACQUISITION_METHOD', label: '獲得方法' },
-    ],
-  },
-  {
-    title: 'アポ実績: 商材別ステータス',
-    categories: [
       { value: 'APPOINTMENT_ANSHIN_BIZ_STATUS', label: 'あんしんBiz' },
       { value: 'APPOINTMENT_ANSHIN_BIZ_LOST_REASON', label: 'あんしんBiz失注理由' },
       { value: 'APPOINTMENT_MOBILE_STATUS', label: 'モバイル' },
       { value: 'APPOINTMENT_MOBILE_LOST_REASON', label: 'モバイル失注理由' },
       { value: 'APPOINTMENT_FUNFO_STATUS', label: 'funfo' },
       { value: 'APPOINTMENT_FUNFO_LOST_REASON', label: 'funfo失注理由' },
-    ],
-  },
-  {
-    title: 'アポ実績: 交付関連',
-    categories: [
       { value: 'APPOINTMENT_CONSENT_FORM_TYPE', label: '同意書種別' },
       { value: 'APPOINTMENT_DELIVERY_METHOD', label: '交付方法' },
       { value: 'APPOINTMENT_DELIVERY_STATUS', label: '交付状況' },
+      { value: 'VISIT', label: '訪問ステータス' },
     ],
   },
   {
-    title: '基本ステータス',
+    title: 'エントリー管理',
+    categories: [{ value: 'MATCHING', label: 'マッチング状況' }],
+  },
+  {
+    title: 'CLカレンダー',
     categories: [
-      { value: 'TOSS', label: 'トス' },
-      { value: 'APPOINTMENT', label: 'アポ' },
-      { value: 'VISIT', label: '訪問' },
-      { value: 'MATCHING', label: 'マッチング' },
+      { value: 'DEPARTMENT_BRANCH', label: '部署(予定の色分けにも使用)', shared: true },
+      { value: 'APPOINTMENT_CLOSER', label: 'CL(クロージング担当)', shared: true },
+      { value: 'MEETING_FORMAT', label: '商談形式(フック / 題名の【】に入る)', shared: true },
     ],
   },
   {
-    title: '商談形式・部署',
+    title: 'その他',
     categories: [
-      { value: 'MEETING_FORMAT', label: '商談形式(=フック / HPZOOM・撮＆訪・HP＆訪・電気フック)' },
-      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)' },
-    ],
-  },
-  {
-    title: '共通項目(トス/アポ/エントリー連動)',
-    categories: [
-      { value: 'INDUSTRY', label: '業種' },
-      { value: 'EXISTING_CONTRACT', label: '既契約' },
-      { value: 'PROPOSAL_LOCATION', label: '提案(場所)' },
-    ],
-  },
-  {
-    title: '自動化設定',
-    categories: [
-      { value: 'TOSS_HOOK_LABEL_MAP', label: 'Googleフォームのフック文言→商談形式の変換(内部コード=フォームの原文、表示名=変換後)' },
+      {
+        value: 'TOSS_HOOK_LABEL_MAP',
+        label: 'Googleフォームのフック文言 → 商談形式の変換(内部コード=フォームの原文、表示名=変換後)',
+      },
     ],
   },
 ];
 
 // 内部コードに意味を持たせず単純な選択肢名の管理として使うカテゴリでは、追加フォームで
 // 表示名のみ入力させ内部コードは自動採番する。ただし以下は内部コード自体が判定キーとして
-// 使われるため対象外(部署=自動化コード、フック変換=マッチング元テキストそのもの)。
+// 使われるため対象外(基本ステータス=自動化コード、部署=自動化コード、フック変換=変換元テキスト)。
 const NON_SIMPLE_LABEL_CATEGORIES = new Set(['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING', 'DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP']);
-const SIMPLE_LABEL_CATEGORIES = new Set(
-  TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)).filter((v) => !NON_SIMPLE_LABEL_CATEGORIES.has(v)),
-);
+const ALL_CATEGORY_VALUES = new Set(TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)));
+const SIMPLE_LABEL_CATEGORIES = new Set([...ALL_CATEGORY_VALUES].filter((v) => !NON_SIMPLE_LABEL_CATEGORIES.has(v)));
 
 interface StatusRow {
   id: string;
@@ -138,11 +130,23 @@ export function MastersAdminPage() {
         </div>
 
         {tabIndex < TAB_GROUPS.length && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {TAB_GROUPS[tabIndex].categories.map((c) => (
-              <CategoryCard key={c.value} category={c.value} label={c.label} simpleLabel={SIMPLE_LABEL_CATEGORIES.has(c.value)} />
-            ))}
-          </div>
+          <>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+              「{allTitles[tabIndex]}」で使うプルダウンの選択肢です。各項目カードで追加・名前変更・削除できます。
+              <span style={{ color: 'var(--color-primary)' }}> 共通</span> の項目は他の画面と連動します。
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+              {TAB_GROUPS[tabIndex].categories.map((c) => (
+                <CategoryCard
+                  key={c.value}
+                  category={c.value}
+                  label={c.label}
+                  shared={c.shared}
+                  simpleLabel={SIMPLE_LABEL_CATEGORIES.has(c.value)}
+                />
+              ))}
+            </div>
+          </>
         )}
         {tabIndex === TAB_GROUPS.length && <ProductsAndSources />}
         {tabIndex === TAB_GROUPS.length + 1 && <TemplateEditors />}
@@ -221,7 +225,17 @@ function TemplateEditors() {
   );
 }
 
-function CategoryCard({ category, label, simpleLabel }: { category: string; label: string; simpleLabel: boolean }) {
+function CategoryCard({
+  category,
+  label,
+  simpleLabel,
+  shared,
+}: {
+  category: string;
+  label: string;
+  simpleLabel: boolean;
+  shared?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [newCode, setNewCode] = useState('');
@@ -270,7 +284,24 @@ function CategoryCard({ category, label, simpleLabel }: { category: string; labe
         background: 'var(--color-surface)',
       }}
     >
-      <h2 style={{ fontSize: 14, marginBottom: 10 }}>{label}</h2>
+      <h2 style={{ fontSize: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {label}
+        {shared && (
+          <span
+            title="複数画面で共通。ここで編集すると全画面に反映されます"
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'var(--color-primary)',
+              background: 'var(--color-primary-soft)',
+              borderRadius: 4,
+              padding: '1px 5px',
+            }}
+          >
+            共通
+          </span>
+        )}
+      </h2>
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
       {isLoading ? (
