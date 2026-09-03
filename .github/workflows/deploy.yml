@@ -12,6 +12,16 @@ name: Post-deploy health check
 on:
   push:
     branches: [main]
+    # railway.json の watchPatterns と一致させる。ここに載らないパスだけの変更
+    # (docs、このworkflow自身、CI設定など)ではRailwayがデプロイを起こさないため、
+    # SHA一致を待つこのチェックを走らせると誤ってfailする。
+    paths:
+      - 'apps/api/**'
+      - 'apps/web/**'
+      - 'prisma/**'
+      - 'scripts/**'
+      - 'Dockerfile.api'
+      - 'railway.json'
 
 jobs:
   healthcheck:
