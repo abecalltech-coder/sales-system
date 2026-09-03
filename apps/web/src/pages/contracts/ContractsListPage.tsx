@@ -30,7 +30,6 @@ export function ContractsListPage() {
   const { data: statuses } = useStatuses('MATCHING');
 
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
-  const statusColor = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#9ca3af';
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
@@ -160,17 +159,10 @@ export function ContractsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.matchingStatusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
+          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { matchingStatusId: v })}
-          style={{
-            background: statusColor(r.matchingStatusId),
-            color: '#fff',
-            borderRadius: 999,
-            padding: '2px 6px',
-            fontSize: 11,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}
+          colored
+          style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
         />
       ),
     },

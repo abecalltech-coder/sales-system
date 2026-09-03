@@ -55,7 +55,6 @@ export function AppointmentsListPage() {
   const { data: deliveryStatusOptions } = useStatuses('APPOINTMENT_DELIVERY_STATUS');
 
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
-  const statusColor = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#9ca3af';
   // 進捗の並び順(ET→成約→保留→失注→リスケ→新規訪問等)はStatusMaster.orderで表現している
   const progressGroupOrder = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.order ?? 999 : 999);
   const progressBg = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.color ?? '#ffffff' : '#ffffff');
@@ -242,17 +241,10 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.meetingStatusId}
-          options={toOptions(statuses)}
+          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { meetingStatusId: v })}
-          style={{
-            background: statusColor(r.meetingStatusId),
-            color: '#fff',
-            borderRadius: 999,
-            padding: '2px 6px',
-            fontSize: 11,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}
+          colored
+          style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
         />
       ),
       width: 120,

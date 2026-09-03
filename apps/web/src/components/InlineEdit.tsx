@@ -7,6 +7,18 @@ import {
   parseTimeText as parseFlexTimeText,
 } from '../lib/dateInput';
 
+/** 背景色に対して読みやすい文字色(明るい背景なら黒、暗い背景なら白)を返す */
+function readableTextColor(bg: string | null | undefined): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec((bg ?? '').trim());
+  if (!m) return '#111827';
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? '#111827' : '#ffffff';
+}
+
 const baseStyle: CSSProperties = {
   border: 'none',
   background: 'transparent',
@@ -181,6 +193,8 @@ export function InlineSelect({
   // 既知の選択肢に一致しない値(例: Googleフォーム等の外部連携で選択肢外の文言が入った場合)でも
   // 空欄表示にせず、そのままの文言を選べる状態として表示する。
   const hasUnknownValue = !!value && !options.some((o) => o.id === value);
+  // 明るい背景色(新規=白、見込み=淡黄など)のときは白文字だと読めないので黒にする(要望)
+  const textColor = colored ? (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)') : 'inherit';
 
   return (
     <select
@@ -191,10 +205,17 @@ export function InlineSelect({
       onChange={(e) => onSave(e.target.value)}
       style={{
         font: 'inherit',
-        color: colored ? (selectedColor ? '#fff' : 'var(--color-text-muted)') : 'inherit',
+        color: textColor,
         width: '100%',
         backgroundColor: colored ? (selectedColor ?? 'var(--color-border)') : 'transparent',
         cursor: disabled ? 'default' : 'pointer',
+        // 明るい背景ではプルダウン矢印(既定は白)も暗くする
+        ...(colored && textColor === '#111827'
+          ? {
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23111827' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+            }
+          : {}),
         ...style,
       }}
     >
