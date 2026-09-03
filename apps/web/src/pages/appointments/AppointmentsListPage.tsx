@@ -37,6 +37,9 @@ export function AppointmentsListPage() {
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
+  const { data: industryOptions } = useStatuses('INDUSTRY');
+  const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
+  const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
   const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
@@ -143,6 +146,29 @@ export function AppointmentsListPage() {
     };
   };
 
+  // 表示名の文字列そのものを値として保存する共通マスタ列(業種・既契約・提案など。トス/エントリーと連動)
+  const labelColumn = (
+    key: keyof AppointmentListItem,
+    label: string,
+    options: StatusMasterItem[] | undefined,
+    width = 100,
+  ): Column<AppointmentListItem> => {
+    filterValueFns[key as string] = (r) => (r[key] as string | null) ?? '';
+    return {
+      key: key as string,
+      label,
+      width,
+      renderHeader: filterHeader(key as string, label),
+      render: (r) => (
+        <InlineSelect
+          value={r[key] as string | null}
+          options={(options ?? []).map((o) => ({ id: o.displayName, label: o.displayName }))}
+          onSave={(v) => save(r, { [key]: v })}
+        />
+      ),
+    };
+  };
+
   filterValueFns.apoDate = (r) => formatDate(r.createdAt);
   filterValueFns.meetingDate = (r) => isoToDateInput(r.meetingStartAt);
   filterValueFns.meetingTime = (r) => (r.meetingStartAt ? new Date(r.meetingStartAt).toTimeString().slice(0, 5) : '');
@@ -231,7 +257,7 @@ export function AppointmentsListPage() {
       ),
       width: 120,
     },
-    textColumn('industry', '業種', 84),
+    labelColumn('industry', '業種', industryOptions, 96),
     dateColumn('importantMattersOkAt', '重説OK日'),
     dateColumn('electronicContractAt', 'ET日'),
     dateColumn('nextActionAt', '決着予定日'),
@@ -262,8 +288,8 @@ export function AppointmentsListPage() {
     selectColumn('progressStatusId', '進捗', progressOptions, 110),
     textColumn('listName', 'リスト', 96),
     selectColumn('acquisitionMethodStatusId', '獲得方法', acquisitionMethodOptions, 100),
-    textColumn('proposalLocation', '提案場所', 100),
-    textColumn('existingContract', '既契約', 100),
+    labelColumn('proposalLocation', '提案場所', proposalOptions, 100),
+    labelColumn('existingContract', '既契約', existingContractOptions, 110),
     checkboxColumn('anshinBizProposed', 'あんしんBiz(提案)', 90),
     selectColumn('anshinBizStatusId', 'あんしんBiz', anshinBizStatusOptions, 100),
     selectColumn('anshinBizLostReasonStatusId', 'あんしんBiz失注理由', anshinBizLostReasonOptions, 130),

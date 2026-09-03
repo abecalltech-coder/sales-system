@@ -71,6 +71,14 @@ const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
     ],
   },
   {
+    title: '共通項目(トス/アポ/エントリー連動)',
+    categories: [
+      { value: 'INDUSTRY', label: '業種' },
+      { value: 'EXISTING_CONTRACT', label: '既契約' },
+      { value: 'PROPOSAL_LOCATION', label: '提案(場所)' },
+    ],
+  },
+  {
     title: '自動化設定',
     categories: [
       { value: 'TOSS_HOOK_LABEL_MAP', label: 'Googleフォームのフック文言→商談形式の変換(内部コード=フォームの原文、表示名=変換後)' },

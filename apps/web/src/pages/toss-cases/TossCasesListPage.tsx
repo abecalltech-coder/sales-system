@@ -37,7 +37,11 @@ export function TossCasesListPage() {
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
-  const hookSelectOptions = (meetingFormatOptions ?? []).map((o) => ({ id: o.displayName, label: o.displayName }));
+  const { data: industryOptions } = useStatuses('INDUSTRY');
+  const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
+  const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
+  const labelOpts = (rows?: { displayName: string }[]) => (rows ?? []).map((o) => ({ id: o.displayName, label: o.displayName }));
+  const hookSelectOptions = labelOpts(meetingFormatOptions);
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ corporateName: '', contactName: '', phone: '', memo: '' });
@@ -320,7 +324,7 @@ export function TossCasesListPage() {
       label: '提案',
       width: 110,
       renderHeader: filterHeader('proposal', '提案'),
-      render: (r) => <InlineText value={r.proposal} onSave={(v) => save(r, { proposal: v })} />,
+      render: (r) => <InlineSelect value={r.proposal} options={labelOpts(proposalOptions)} onSave={(v) => save(r, { proposal: v })} />,
     },
     {
       key: 'progress',
@@ -367,9 +371,9 @@ export function TossCasesListPage() {
     {
       key: 'industry',
       label: '業種',
-      width: 84,
+      width: 96,
       renderHeader: filterHeader('industry', '業種'),
-      render: (r) => <InlineText value={r.industry} onSave={(v) => save(r, { industry: v })} />,
+      render: (r) => <InlineSelect value={r.industry} options={labelOpts(industryOptions)} onSave={(v) => save(r, { industry: v })} />,
     },
     {
       key: 'hook',
@@ -381,9 +385,11 @@ export function TossCasesListPage() {
     {
       key: 'existingContract',
       label: '既契約',
-      width: 100,
+      width: 110,
       renderHeader: filterHeader('existingContract', '既契約'),
-      render: (r) => <InlineText value={r.existingContract} onSave={(v) => save(r, { existingContract: v })} />,
+      render: (r) => (
+        <InlineSelect value={r.existingContract} options={labelOpts(existingContractOptions)} onSave={(v) => save(r, { existingContract: v })} />
+      ),
     },
   ];
 

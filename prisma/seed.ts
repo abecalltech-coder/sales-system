@@ -187,6 +187,23 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'MEETING_FORMAT', internalCode: 'MF_SATSU_HOU', displayName: '撮＆訪', order: 20 },
   { category: 'MEETING_FORMAT', internalCode: 'MF_HP_HOU', displayName: 'HP＆訪', order: 30 },
   { category: 'MEETING_FORMAT', internalCode: 'MF_DENKI', displayName: '電気フック', order: 40 },
+  // トス・アポ・エントリーで共通の選択肢(要望: 同じ項目は全画面連動)。マスタ管理で追加削除可。
+  { category: 'INDUSTRY', internalCode: 'IND_1', displayName: '飲食', order: 10 },
+  { category: 'INDUSTRY', internalCode: 'IND_2', displayName: '小売', order: 20 },
+  { category: 'INDUSTRY', internalCode: 'IND_3', displayName: '美容・サロン', order: 30 },
+  { category: 'INDUSTRY', internalCode: 'IND_4', displayName: '医療・クリニック', order: 40 },
+  { category: 'INDUSTRY', internalCode: 'IND_5', displayName: '建設・不動産', order: 50 },
+  { category: 'INDUSTRY', internalCode: 'IND_6', displayName: '製造', order: 60 },
+  { category: 'INDUSTRY', internalCode: 'IND_7', displayName: 'サービス', order: 70 },
+  { category: 'INDUSTRY', internalCode: 'IND_8', displayName: 'その他', order: 80 },
+  { category: 'EXISTING_CONTRACT', internalCode: 'EC_1', displayName: '東京電力', order: 10 },
+  { category: 'EXISTING_CONTRACT', internalCode: 'EC_2', displayName: '関西電力', order: 20 },
+  { category: 'EXISTING_CONTRACT', internalCode: 'EC_3', displayName: '中部電力', order: 30 },
+  { category: 'EXISTING_CONTRACT', internalCode: 'EC_4', displayName: 'その他新電力', order: 40 },
+  { category: 'EXISTING_CONTRACT', internalCode: 'EC_5', displayName: 'なし', order: 50 },
+  { category: 'PROPOSAL_LOCATION', internalCode: 'PL_1', displayName: '店舗', order: 10 },
+  { category: 'PROPOSAL_LOCATION', internalCode: 'PL_2', displayName: '自宅', order: 20 },
+  { category: 'PROPOSAL_LOCATION', internalCode: 'PL_3', displayName: '事務所', order: 30 },
 ];
 
 async function main() {
