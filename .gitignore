@@ -10,3 +10,6 @@ apps/api/dist/
 apps/web/dist/
 prisma/migrations/.gitkeep
 .DS_Store
+
+# TypeScript incremental build cache
+*.tsbuildinfo

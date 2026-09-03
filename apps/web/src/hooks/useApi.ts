@@ -75,28 +75,6 @@ export function useTossCases(params: { page: number; pageSize: number; keyword?:
   });
 }
 
-export interface KpiSummary {
-  range: { gte: string; lte: string };
-  counts: {
-    tossCount: number;
-    appointmentCount: number;
-    visitScheduledCount: number;
-    visitArrivedCount: number;
-    meetingCount: number;
-    contractCount: number;
-  };
-  conversionRates: {
-    tossToAppointment: number;
-    appointmentToVisit: number;
-    visitToMeeting: number;
-    meetingToContract: number;
-  };
-}
-
-export function useKpiSummary() {
-  return useQuery({ queryKey: ['summary', 'kpi'], queryFn: () => api.get<KpiSummary>('/summary/kpi') });
-}
-
 // ============================================================
 // アポ
 // ============================================================

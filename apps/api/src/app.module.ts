@@ -19,7 +19,6 @@ import { StatusMasterModule } from './status-master/status-master.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { AutomationRulesModule } from './automation-rules/automation-rules.module';
 import { RealtimeModule } from './realtime/realtime.module';
-import { SummaryModule } from './summary/summary.module';
 import { SummarySheetsModule } from './summary-sheets/summary-sheets.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SystemSettingsModule } from './system-settings/system-settings.module';
@@ -56,7 +55,6 @@ import { GoogleFormsModule } from './integrations/google-forms/google-forms.modu
     StatusMasterModule,
     CustomFieldsModule,
     AutomationRulesModule,
-    SummaryModule,
     SummarySheetsModule,
     AuditLogsModule,
     SystemSettingsModule,

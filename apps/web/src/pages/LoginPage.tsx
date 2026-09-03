@@ -15,7 +15,7 @@ export function LoginPage() {
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
-      navigate('/dashboard');
+      navigate('/toss-cases');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '通信エラーが発生しました');
     } finally {

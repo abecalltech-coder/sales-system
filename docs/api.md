@@ -28,10 +28,6 @@ GET /visits/:id/history, POST /offline-actions/sync(冪等性キーで重複無�
 ## 成約 `/contracts`, エントリー `/entries`
 GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日付処理をサーバー側で実施)
 
-## サマリー(KPI集計) `/summary`
-GET kpi / by-department / by-team / by-user / timeseries / funnel / visits
-(すべてクエリで期間・部署・チーム・担当者・商材・流入元を指定可能)
-
 ## サマリー(自由編集表) `/summary-sheets`
 GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /
 PUT :id/cells(セル1件upsert) / POST,DELETE :id/rows(/:row) / POST,DELETE :id/columns(/:col)

@@ -9,7 +9,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (isLoading) return <div style={{ padding: 24 }}>読み込み中...</div>;
   if (isError || !data) return <Navigate to="/login" replace />;
-  if (!data.roles.some((r) => ADMIN_ROLES.includes(r))) return <Navigate to="/dashboard" replace />;
+  if (!data.roles.some((r) => ADMIN_ROLES.includes(r))) return <Navigate to="/toss-cases" replace />;
 
   return <>{children}</>;
 }

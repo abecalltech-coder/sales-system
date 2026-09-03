@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
 import { AppointmentsListPage } from './pages/appointments/AppointmentsListPage';
 import { CLCalendarPage } from './pages/CLCalendarPage';
@@ -35,7 +34,6 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard" element={protect(<DashboardPage />)} />
         <Route path="/toss-cases" element={protect(<TossCasesListPage />)} />
         <Route path="/appointments" element={protect(<AppointmentsListPage />)} />
         <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
@@ -50,7 +48,7 @@ export function App() {
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
         <Route path="/admin/system-settings" element={protectAdmin(<SystemSettingsPage />)} />
         <Route path="/admin/integrations" element={protectAdmin(<IntegrationsPage />)} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/toss-cases" replace />} />
       </Routes>
     </BrowserRouter>
   );
