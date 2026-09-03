@@ -3,12 +3,12 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "Dockerfile.api",
-    "watchPatterns": ["/apps/api/**", "/apps/web/**", "/prisma/**", "/Dockerfile.api", "/railway.json"]
+    "watchPatterns": ["/apps/api/**", "/apps/web/**", "/prisma/**", "/scripts/**", "/Dockerfile.api", "/railway.json"]
   },
   "deploy": {
-    "startCommand": "node apps/api/dist/main.js",
+    "startCommand": "sh scripts/release.sh",
     "healthcheckPath": "/health",
-    "healthcheckTimeout": 30,
+    "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
   }

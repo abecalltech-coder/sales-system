@@ -33,9 +33,12 @@ COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/apps/web/dist ./apps/api/web-dist
 COPY --from=build /repo/prisma ./prisma
+COPY --from=build /repo/scripts ./scripts
 COPY --from=build /repo/apps/api/package.json ./apps/api/package.json
 
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD wget -qO- http://localhost:4000/health || exit 1
 
-CMD ["node", "apps/api/dist/main.js"]
+# railway.jsonのstartCommandが本番では優先されるが、素のdocker runでも
+# マイグレーション適用込みで起動できるよう合わせておく。
+CMD ["sh", "scripts/release.sh"]

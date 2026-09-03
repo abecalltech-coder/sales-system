@@ -81,15 +81,22 @@ Google連携用の変数(`GOOGLE_CLIENT_ID`等)は、Phase5着手時に別途設
 
 ## 7. マイグレーションの適用と初期データ投入
 
-Railwayの各サービスには **Shell** タブ(またはRailway CLIの`railway run`)からコマンドを
-実行できる。以下を実行する。
+### マイグレーション: 自動(コンテナ起動時)
 
-```bash
-pnpm exec prisma migrate deploy --schema prisma/schema.prisma
-pnpm exec tsx prisma/seed.ts
-```
+コンテナの起動コマンドは `sh scripts/release.sh`(`railway.json` の `startCommand`)で、
+API起動前に `prisma migrate deploy` が自動実行される。**デプロイのたびに未適用の
+マイグレーションが本番DBへ適用される**ため、通常は手動作業は不要。
+マイグレーションが失敗した場合はAPIが起動せず、ヘルスチェック失敗でRailwayが
+直前の正常なデプロイを維持する。
 
-Railway CLIを使う場合はローカルから以下でも実行できる。
+### 初期データ(seed): 原則手動
+
+`scripts/release.sh` は環境変数 `RUN_SEED_ON_BOOT=true` のときのみ `prisma/seed.ts` も
+実行する(seedは全てupsertで冪等・管理者パスワードは上書きしない)。
+初回構築時やステータスマスタ／ロール定義を更新したときだけ一時的に `true` にして
+1回デプロイし、その後 `false`(または削除)に戻す運用。
+
+手動で流したい場合は従来どおり Railway の **Shell** タブか CLI から実行できる。
 
 ```bash
 railway link   # プロジェクトを選択
@@ -100,9 +107,9 @@ railway run pnpm exec tsx prisma/seed.ts
 ## 8. 動作確認
 
 1. 公開URLへアクセスし、ログイン画面が表示されることを確認する
-2. `ADMIN_EMAIL` / `ADMIN_INITIAL_PASSWORD` でログインする
-3. 初回ログイン時にパスワード変更画面が表示されることを確認する
-4. `<公開URL>/health` にアクセスし、`{"status":"ok"}` が返ることを確認する
+2. `ADMIN_EMAIL` / `ADMIN_INITIAL_PASSWORD` でそのままログインできることを確認する
+   (強制パスワード変更フローは廃止済み。パスワード変更は管理者のみが実行する)
+3. `<公開URL>/health` にアクセスし、`{"status":"ok"}` が返ることを確認する
 5. `<公開URL>/api/docs` でSwagger UIが表示されることを確認する
 
 ## 9. 今後の自動デプロイ
@@ -119,6 +126,9 @@ variables → Actions** で以下を設定しておくと、mainブランチへ�
 
 - **ビルドが`prisma generate`で失敗する**: `prisma/schema.prisma`の構文エラー、または
   `DATABASE_URL`未設定が原因のことが多い。ビルドログを確認する。
-- **起動はするがAPIが500を返す**: マイグレーション未適用の可能性が高い。手順7を再確認する。
+- **起動はするがAPIが500を返す**: マイグレーション未適用の可能性がある。デプロイログで
+  `[release] prisma migrate deploy を実行します` 以降の出力を確認する。engineバイナリ不足や
+  `DATABASE_URL` 未設定だとここで失敗する。
 - **ログインできるがステータス変更が反映されない**: `prisma/seed.ts`のステータスマスタ投入が
-  実行されていない可能性がある。手順7の`seed.ts`実行を確認する。
+  実行されていない可能性がある。`RUN_SEED_ON_BOOT=true` で1回デプロイするか、手順7の
+  `seed.ts`を手動実行する。

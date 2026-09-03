@@ -1,0 +1,3 @@
+# シェルスクリプトは常にLF。CRLFだとRailway/Alpineコンテナ内で
+# 「node_modules/.bin/prisma\r: not found」のように壊れるため。
+*.sh text eol=lf
