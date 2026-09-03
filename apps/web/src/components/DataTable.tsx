@@ -73,7 +73,7 @@ export function DataTable<T>({
         <table style={{ fontSize, tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ background: '#fafafa', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
-              {columns.map((col) => (
+              {columns.map((col, colIdx) => (
                 <th
                   key={col.key}
                   style={{
@@ -85,6 +85,7 @@ export function DataTable<T>({
                     whiteSpace: 'nowrap',
                     overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
+                    borderRight: colIdx < columns.length - 1 ? '1px solid var(--color-border-subtle)' : undefined,
                   }}
                 >
                   {col.renderHeader ? col.renderHeader() : col.label}
@@ -122,7 +123,7 @@ export function DataTable<T>({
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-soft)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = restingBackground)}
                 >
-                  {columns.map((col) => {
+                  {columns.map((col, colIdx) => {
                     const rowId = getRowId(row);
                     const cursor = cellCursor?.(rowId, col.key);
                     return (
@@ -138,6 +139,7 @@ export function DataTable<T>({
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
+                        borderRight: colIdx < columns.length - 1 ? '1px solid var(--color-border-subtle)' : undefined,
                         boxShadow: cursor ? `inset 0 0 0 2px ${cursor.color}` : undefined,
                         background: cursor ? `${cursor.color}1a` : undefined,
                       }}

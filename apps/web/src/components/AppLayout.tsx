@@ -19,8 +19,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/toss-cases', label: 'トス実績管理', icon: '📥' },
       { to: '/appointments', label: 'アポ実績管理', icon: '📅' },
-      { to: '/cl-calendar', label: 'CLカレンダー', icon: '🗓️' },
       { to: '/contracts', label: 'エントリー管理', icon: '📄' },
+      { to: '/cl-calendar', label: 'CLカレンダー', icon: '🗓️' },
     ],
   },
 ];
