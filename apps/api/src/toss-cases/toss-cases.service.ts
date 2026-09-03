@@ -91,6 +91,9 @@ export class TossCasesService {
   /** 手動登録(セクション9)。顧客が未指定なら簡易情報からその場で作成する。 */
   async create(dto: CreateTossCaseDto, actorUserId: string) {
     const statusId = dto.statusId ?? (await this.statusResolver.resolveId('TOSS', 'TOSS_NEW'));
+    // トスの状況管理は進捗に一本化。未指定なら「新規」を既定値にする。
+    const progressStatusId =
+      dto.progressStatusId ?? (await this.statusResolver.resolveId('TOSS_PROGRESS', 'PROGRESS_NEW').catch(() => undefined));
 
     if (dto.address && !extractPrefecture(dto.address)) {
       throw new BadRequestException('住所は都道府県から入力してください');
@@ -142,7 +145,7 @@ export class TossCasesService {
         hook: dto.hook,
         existingContract: dto.existingContract,
         preConfirmStatusId: dto.preConfirmStatusId,
-        progressStatusId: dto.progressStatusId,
+        progressStatusId,
         ngReasonStatusId: dto.ngReasonStatusId,
         nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : undefined,
         createdBy: actorUserId,
@@ -257,18 +260,24 @@ export class TossCasesService {
       },
     );
 
-    // ステータスがTOSS_APPOINTMENTに変わった場合、アポ案件へ自動移行する(セクション10)。
-    // ステータス変更自体は上のトランザクションで確定済み。アポ作成が失敗しても
-    // トス側の状態はロールバックせず、Appointment側でエラーとして扱う設計とする。
-    if (dto.statusId && dto.statusId !== existing.statusId) {
-      const internalCode = await this.statusResolver.internalCodeOf(dto.statusId);
-      if (internalCode === 'TOSS_APPOINTMENT') {
-        await this.appointments.createFromTossAutomation(
-          id,
-          userId,
-          initialPreContactAt ? new Date(initialPreContactAt) : undefined,
-        );
+    // 進捗(=ステータス)が「アポイント」に変わった場合、アポ詳細へ自動移行する。
+    // トスの状況管理は進捗(TOSS_PROGRESS)に一本化したため、判定は progressStatusId を主にし、
+    // 旧UI/Googleフォーム互換のため statusId=TOSS_APPOINTMENT でも発火させる。
+    const changedToAppointment = async (): Promise<boolean> => {
+      if (dto.progressStatusId && dto.progressStatusId !== existing.progressStatusId) {
+        if ((await this.statusResolver.internalCodeOf(dto.progressStatusId)) === 'PROGRESS_APPOINTMENT') return true;
       }
+      if (dto.statusId && dto.statusId !== existing.statusId) {
+        if ((await this.statusResolver.internalCodeOf(dto.statusId)) === 'TOSS_APPOINTMENT') return true;
+      }
+      return false;
+    };
+    if (await changedToAppointment()) {
+      await this.appointments.createFromTossAutomation(
+        id,
+        userId,
+        initialPreContactAt ? new Date(initialPreContactAt) : undefined,
+      );
     }
 
     return updated;
@@ -278,20 +287,21 @@ export class TossCasesService {
     const result = await this.prisma.tossCase.updateMany({
       where: { id: { in: dto.ids }, deletedAt: null },
       data: {
-        statusId: dto.statusId,
+        ...(dto.statusId ? { statusId: dto.statusId } : {}),
+        ...(dto.progressStatusId ? { progressStatusId: dto.progressStatusId } : {}),
         salesUserId: dto.salesUserId,
         updatedBy: userId,
         version: { increment: 1 },
       },
     });
 
-    // 一括でTOSS_APPOINTMENTへ変更した場合も自動移行を発火させる
-    if (dto.statusId) {
-      const internalCode = await this.statusResolver.internalCodeOf(dto.statusId);
-      if (internalCode === 'TOSS_APPOINTMENT') {
-        for (const id of dto.ids) {
-          await this.appointments.createFromTossAutomation(id, userId);
-        }
+    // 一括で「アポイント」へ変更した場合も自動移行を発火させる
+    const toAppointment =
+      (dto.progressStatusId && (await this.statusResolver.internalCodeOf(dto.progressStatusId)) === 'PROGRESS_APPOINTMENT') ||
+      (dto.statusId && (await this.statusResolver.internalCodeOf(dto.statusId)) === 'TOSS_APPOINTMENT');
+    if (toAppointment) {
+      for (const id of dto.ids) {
+        await this.appointments.createFromTossAutomation(id, userId);
       }
     }
 

@@ -142,7 +142,12 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'MATCHING', internalCode: 'SWITCHING_PENDING', displayName: 'スイッチング待ち', color: '#3b82f6' },
   { category: 'MATCHING', internalCode: 'SWITCHING_COMPLETED', displayName: 'スイッチング完了', color: '#16a34a' },
   { category: 'MATCHING', internalCode: 'CANCELLED', displayName: 'キャンセル', color: '#ef4444' },
-  // トス実績: 進捗(前確架電の結果)
+  // トス実績: 進捗(=ステータス。トスの状況管理はこれ1本で行う)。
+  // PROGRESS_APPOINTMENT はトス→アポ詳細の自動生成トリガー(internalCode変更不可)。
+  { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_NEW', displayName: '新規', color: '#ffffff', order: 5 },
+  { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_PROSPECT', displayName: '見込み', color: '#fef9c3', order: 15 },
+  { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_APPOINTMENT', displayName: 'アポイント', color: '#fecaca', order: 20 },
+  { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_EXCLUDED', displayName: '対象外', color: '#e5e7eb', order: 90 },
   { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_PRE_CONFIRM_OK', displayName: '前確OK', color: '#16a34a' },
   { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_NG', displayName: 'NG', color: '#ef4444' },
   { category: 'TOSS_PROGRESS', internalCode: 'PROGRESS_ABSENT', displayName: '不在', color: '#a3a3a3' },

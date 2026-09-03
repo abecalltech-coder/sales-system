@@ -19,13 +19,12 @@ const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
     categories: [
       { value: 'MEETING_FORMAT', label: '商談形式(フック)', shared: true },
       { value: 'TOSS_PRE_CONFIRM', label: '前確担当者', shared: true },
-      { value: 'TOSS_PROGRESS', label: '進捗' },
+      { value: 'TOSS_PROGRESS', label: '進捗(状況 / ステータス兼用)' },
       { value: 'TOSS_NG_REASON', label: 'NG理由' },
       { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)', shared: true },
       { value: 'INDUSTRY', label: '業種', shared: true },
       { value: 'EXISTING_CONTRACT', label: '既契約', shared: true },
       { value: 'PROPOSAL_LOCATION', label: '提案(場所)', shared: true },
-      { value: 'TOSS', label: 'トスステータス(グループ色分け)' },
     ],
   },
   {

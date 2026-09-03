@@ -20,18 +20,16 @@ type FilterValueFn = (r: TossCaseListItem) => string;
 export function TossCasesListPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
-  const [statusId, setStatusId] = useState('');
   // 列フィルター(Googleスプレッドシート風)。自分の画面だけのローカルstateで、他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
-  // ステータスごとのグループ化・列フィルターをページ内で完結させるため、
+  // 進捗ごとのグループ化・列フィルターをページ内で完結させるため、
   // 一覧APIの許容上限(ListQueryDto: 最大100件)いっぱいまで1ページで取得する
   const pageSize = 100;
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined, statusId: statusId || undefined });
+  const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined });
   const { data: me } = useMe();
   const presence = usePresence('TOSS_CASE', me?.id);
-  const { data: statuses } = useStatuses('TOSS');
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
@@ -48,7 +46,7 @@ export function TossCasesListPage() {
   const [error, setError] = useState<string | null>(null);
 
   // ステータスを「アポイント」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
-  const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; statusId: string } | null>(null);
+  const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; progressStatusId: string } | null>(null);
   const [preContactInput, setPreContactInput] = useState('');
   const [meetingAtInput, setMeetingAtInput] = useState('');
   const [meetingFormatInput, setMeetingFormatInput] = useState('');
@@ -81,14 +79,14 @@ export function TossCasesListPage() {
     mutationFn: (vars: {
       id: string;
       version: number;
-      statusId: string;
+      progressStatusId: string;
       initialPreContactAt: string;
       confirmedStartAt: string;
       hook: string;
     }) =>
       api.patch(`/toss-cases/${vars.id}`, {
         version: vars.version,
-        statusId: vars.statusId,
+        progressStatusId: vars.progressStatusId,
         initialPreContactAt: vars.initialPreContactAt,
         confirmedStartAt: vars.confirmedStartAt,
         hook: vars.hook,
@@ -110,9 +108,10 @@ export function TossCasesListPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
-  const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? '';
-  const statusBg = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#ffffff';
-  const statusGroupOrder = (id: string) => statuses?.find((s) => s.id === id)?.order ?? 999;
+  // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
+  const progressBg = (id: string | null) => progressOptions?.find((s) => s.id === id)?.color ?? '#ffffff';
+  const progressGroupOrder = (id: string | null) => progressOptions?.find((s) => s.id === id)?.order ?? 999;
+  const progressInternalCode = (id: string) => progressOptions?.find((s) => s.id === id)?.internalCode;
 
   const filterValueFns: Record<string, FilterValueFn> = {
     tossDate: (r) => formatDate(r.receivedAt),
@@ -125,7 +124,6 @@ export function TossCasesListPage() {
     calling: (r) => (r.isCallingInProgress ? '架電中' : ''),
     corporateName: (r) => r.customer?.corporateName ?? '',
     memo: (r) => r.memo ?? '',
-    status: (r) => statusLabel(r.statusId),
     contactName: (r) => r.customer?.contactName ?? '',
     phone: (r) => r.customer?.phone ?? '',
     prefecture: (r) => r.prefecture ?? '',
@@ -166,14 +164,14 @@ export function TossCasesListPage() {
       }),
     );
     return [...filtered].sort((a, b) => {
-      const groupDiff = statusGroupOrder(a.statusId) - statusGroupOrder(b.statusId);
+      const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
       if (groupDiff !== 0) return groupDiff;
       const at = a.nextActionAt ? new Date(a.nextActionAt).getTime() : Infinity;
       const bt = b.nextActionAt ? new Date(b.nextActionAt).getTime() : Infinity;
       return at - bt;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, filters, statuses]);
+  }, [rawRows, filters, progressOptions]);
 
   const columns: Column<TossCaseListItem>[] = [
     { key: 'tossDate', label: 'トス日', render: (r) => formatDate(r.receivedAt), width: 86, renderHeader: filterHeader('tossDate', 'トス日') },
@@ -272,32 +270,6 @@ export function TossCasesListPage() {
       render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
     },
     {
-      key: 'status',
-      label: 'ステータス',
-      width: 100,
-      renderHeader: filterHeader('status', 'ステータス'),
-      render: (r) => (
-        <InlineSelect
-          value={r.statusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
-          onSave={(v) => {
-            const internalCode = statuses?.find((s) => s.id === v)?.internalCode;
-            if (internalCode === 'TOSS_APPOINTMENT') {
-              setPreContactModal({ row: r, statusId: v });
-              setPreContactInput('');
-              setMeetingAtInput('');
-              setMeetingFormatInput(r.hook ?? '');
-              setPreContactError(null);
-            } else {
-              save(r, { statusId: v });
-            }
-          }}
-          hideBlankOption
-          style={{ fontWeight: 600 }}
-        />
-      ),
-    },
-    {
       key: 'contactName',
       label: '担当者名',
       width: 96,
@@ -328,14 +300,25 @@ export function TossCasesListPage() {
     },
     {
       key: 'progress',
-      label: '進捗',
-      width: 100,
+      label: '進捗(状況)',
+      width: 110,
       renderHeader: filterHeader('progress', '進捗'),
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
           options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
-          onSave={(v) => save(r, { progressStatusId: v })}
+          onSave={(v) => {
+            // 「アポイント」に変えたら前連日時・商談日時・商談形式の入力を求め、アポ詳細を自動生成する
+            if (progressInternalCode(v) === 'PROGRESS_APPOINTMENT') {
+              setPreContactModal({ row: r, progressStatusId: v });
+              setPreContactInput('');
+              setMeetingAtInput('');
+              setMeetingFormatInput(r.hook ?? '');
+              setPreContactError(null);
+            } else {
+              save(r, { progressStatusId: v });
+            }
+          }}
           colored
         />
       ),
@@ -453,7 +436,7 @@ export function TossCasesListPage() {
 
         <PresenceBar viewers={presence.viewers} />
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             placeholder="店舗名・備考で検索"
             value={keyword}
@@ -463,20 +446,6 @@ export function TossCasesListPage() {
             }}
             style={{ width: 280 }}
           />
-          <select
-            value={statusId}
-            onChange={(e) => {
-              setStatusId(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">すべてのステータス</option>
-            {statuses?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.displayName}
-              </option>
-            ))}
-          </select>
         </div>
 
         <DataTable
@@ -489,7 +458,7 @@ export function TossCasesListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          rowStyle={(r) => ({ background: r.isCallingInProgress ? 'var(--color-danger-soft)' : statusBg(r.statusId) })}
+          rowStyle={(r) => ({ background: r.isCallingInProgress ? 'var(--color-danger-soft)' : progressBg(r.progressStatusId) })}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
@@ -567,7 +536,7 @@ export function TossCasesListPage() {
                   preContactMutation.mutate({
                     id: preContactModal.row.id,
                     version: preContactModal.row.version,
-                    statusId: preContactModal.statusId,
+                    progressStatusId: preContactModal.progressStatusId,
                     initialPreContactAt: new Date(preContactInput).toISOString(),
                     confirmedStartAt: new Date(meetingAtInput).toISOString(),
                     hook: meetingFormatInput,

@@ -134,6 +134,10 @@ export class GoogleFormsService {
 
     const customerId = await this.resolveCustomerId(customerFields);
     const statusId = await this.statusResolver.resolveId('TOSS', 'TOSS_NEW');
+    // トスの状況管理は進捗に一本化。フォーム流入は「新規」で入れる。
+    const progressStatusId = await this.statusResolver
+      .resolveId('TOSS_PROGRESS', 'PROGRESS_NEW')
+      .catch(() => undefined);
     const caseNumber = await this.sequence.nextCaseNumber('TOSS');
 
     const tossCase = await this.prisma.tossCase.create({
@@ -142,6 +146,7 @@ export class GoogleFormsService {
         caseName: tossTextFields.caseName ?? customerFields.corporateName,
         customerId,
         statusId,
+        progressStatusId,
         apStaffName: tossTextFields.apStaffName,
         proposal: tossTextFields.proposal,
         listName: tossTextFields.listName,

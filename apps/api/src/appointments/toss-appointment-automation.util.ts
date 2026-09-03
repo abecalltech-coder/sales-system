@@ -16,10 +16,17 @@ export function formatJaDateTimeWithWeekday(date: Date | null | undefined): stri
   return `${parts.month}/${parts.day}（${parts.weekday}）${parts.hour}:${parts.minute}`;
 }
 
-/** CL担当の表示名から名字だけを取り出す(半角/全角スペース区切りの先頭) */
+/**
+ * CL担当の表示名から名字だけを取り出す。表示側 lib/calendarTitle.ts と規則を揃えること。
+ * 区切り(空白/中黒/カンマ/読点)前を採用。区切りが無く漢字4文字なら前2文字。それ以外はそのまま。
+ */
 export function closerSurname(closerDisplayName: string | null | undefined): string {
   if (!closerDisplayName) return '';
-  return closerDisplayName.trim().split(/[\s　]+/)[0] ?? '';
+  const name = closerDisplayName.trim();
+  const head = name.split(/[\s　・,、]+/)[0];
+  if (head && head !== name) return head;
+  if (/^[一-鿿々]{4}$/.test(name)) return name.slice(0, 2);
+  return name;
 }
 
 /**

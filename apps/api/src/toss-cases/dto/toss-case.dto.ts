@@ -81,6 +81,7 @@ export class UpdateTossCaseDto {
 export class BulkUpdateTossCaseDto {
   @IsArray() @IsUUID('4', { each: true }) ids!: string[];
   @IsOptional() @IsString() statusId?: string;
+  @IsOptional() @IsString() progressStatusId?: string;
   @IsOptional() @IsUUID() salesUserId?: string;
 }
 
