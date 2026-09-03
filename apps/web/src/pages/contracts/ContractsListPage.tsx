@@ -4,7 +4,6 @@ import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
-import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useContracts, useStatuses, useMe, ContractListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -20,7 +19,6 @@ export function ContractsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
   const [keyword, setKeyword] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const pageSize = 100;
   const queryClient = useQueryClient();
@@ -331,12 +329,9 @@ export function ContractsListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
-          expandedRowId={expandedId}
-          renderExpanded={(r) => <CommentsPanel entityType="CONTRACT" entityId={r.id} />}
         />
       </div>
     </AppLayout>

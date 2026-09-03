@@ -4,9 +4,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
-import { CommentsPanel } from '../../components/CommentsPanel';
 import { PresenceBar } from '../../components/PresenceBar';
-import { MemoModal } from '../../components/MemoModal';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput } from '../../lib/dateInput';
@@ -24,8 +22,6 @@ type FilterValueFn = (r: AppointmentListItem) => string;
 export function AppointmentsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [memoModalRow, setMemoModalRow] = useState<AppointmentListItem | null>(null);
   // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const pageSize = 100;
@@ -72,11 +68,6 @@ export function AppointmentsListPage() {
   });
   const save = (row: AppointmentListItem, patch: Record<string, unknown>) =>
     updateMutation.mutate({ id: row.id, version: row.version, patch });
-
-  const retryCalendarMutation = useMutation({
-    mutationFn: (id: string) => api.post(`/appointments/${id}/retry-calendar`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
-  });
 
   // 列ごとの絞り込み用の値抽出関数。各列ヘルパーが自身の列を作る際に登録する。
   const filterValueFns: Record<string, FilterValueFn> = {};
@@ -214,27 +205,9 @@ export function AppointmentsListPage() {
     {
       key: 'memo',
       label: '備考(アポ詳細)',
-      width: 150,
+      width: 180,
       renderHeader: filterHeader('memo', '備考'),
-      render: (r) => (
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setMemoModalRow(r);
-          }}
-          title="クリックで全文表示"
-          style={{
-            cursor: 'pointer',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            textDecoration: 'underline dotted',
-            textUnderlineOffset: 2,
-          }}
-        >
-          {(r.memo ?? '').replace(/\n/g, ' ') || <span style={{ color: 'var(--color-text-faint)' }}>(なし)</span>}
-        </div>
-      ),
+      render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
     },
     {
       key: 'status',
@@ -408,58 +381,12 @@ export function AppointmentsListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          onRowClick={(r) => setExpandedId((cur) => (cur === r.id ? null : r.id))}
           rowStyle={(r) => ({ background: progressBg(r.progressStatusId) })}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
-          expandedRowId={expandedId}
-          renderExpanded={(r) => (
-            <div>
-              {r.contract && (
-                <p style={{ fontSize: 13, marginBottom: 8 }}>
-                  ✅ エントリー案件が作成済みです。 <a href="/contracts">エントリー管理一覧を見る →</a>
-                </p>
-              )}
-              <div style={{ display: 'flex', gap: 24, marginBottom: 12, fontSize: 13 }}>
-                <div>
-                  <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>商談形式</label>
-                  <select value={r.meetingType} onChange={(e) => save(r, { meetingType: e.target.value })}>
-                    <option value="VISIT">訪問</option>
-                    <option value="GOOGLE_MEET">Google Meet</option>
-                    <option value="PHONE">電話</option>
-                    <option value="OTHER">その他</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 2 }}>訪問先住所</label>
-                  <InlineText
-                    value={r.visitAddress}
-                    onSave={(v) => save(r, { visitAddress: v })}
-                    style={{ border: '1px solid var(--color-border)', padding: 6, background: 'var(--color-surface)', borderRadius: 4 }}
-                  />
-                </div>
-              </div>
-              {r.calendarSyncStatus === 'ERROR' && (
-                <div style={{ marginBottom: 12 }}>
-                  <p style={{ fontSize: 13, color: 'var(--color-danger)', marginBottom: 4 }}>{r.calendarSyncError ?? 'カレンダー連携に失敗しました'}</p>
-                  <button onClick={() => retryCalendarMutation.mutate(r.id)}>カレンダー連携を再試行</button>
-                </div>
-              )}
-              <CommentsPanel entityType="APPOINTMENT" entityId={r.id} />
-            </div>
-          )}
         />
       </div>
-
-      {memoModalRow && (
-        <MemoModal
-          title={`備考(アポ詳細) - ${memoModalRow.storeName ?? memoModalRow.caseNumber}`}
-          value={memoModalRow.memo ?? ''}
-          onSave={(next) => save(memoModalRow, { memo: next })}
-          onClose={() => setMemoModalRow(null)}
-        />
-      )}
     </AppLayout>
   );
 }

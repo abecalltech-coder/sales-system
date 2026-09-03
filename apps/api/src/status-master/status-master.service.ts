@@ -41,4 +41,20 @@ export class StatusMasterService {
     if (!existing) throw new NotFoundException('ステータスが見つかりません');
     return this.prisma.statusMaster.update({ where: { id }, data: dto });
   }
+
+  /**
+   * 選択肢の削除(要望: マスタ管理で追加・編集・削除)。物理削除。
+   * 自動処理が参照する内部コード(TOSS/APPOINTMENT/VISIT/MATCHINGの基本ステータス等)は
+   * 誤削除防止のため無効化(active:false)を促す。
+   */
+  async delete(id: string) {
+    const existing = await this.prisma.statusMaster.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('ステータスが見つかりません');
+    const protectedCategories = ['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING'];
+    if (protectedCategories.includes(existing.category)) {
+      throw new ConflictException('基本ステータスは削除できません。「有効」のチェックを外して無効化してください');
+    }
+    await this.prisma.statusMaster.delete({ where: { id } });
+    return { ok: true };
+  }
 }

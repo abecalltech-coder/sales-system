@@ -97,7 +97,7 @@ interface StatusRow {
 }
 
 // カテゴリ一覧以外の特殊タブ(商材・流入元の閲覧、自動作成テンプレートの編集)
-const EXTRA_TAB_TITLES = ['商材・流入元', 'テンプレート'];
+const EXTRA_TAB_TITLES = ['商材・流入元', 'アポ詳細FMT'];
 
 export function MastersAdminPage() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -195,10 +195,19 @@ function TemplateEditor({ settingKey, title, description }: { settingKey: string
 function TemplateEditors() {
   return (
     <div>
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16, lineHeight: 1.7 }}>
+        トス実績を「アポイント」に変更したとき、選ばれた<b>商談形式</b>によってどちらかのフォーマットが
+        アポ詳細(備考)へ自動的に入ります。HPZOOM = オンライン用、それ以外(撮＆訪 / HP＆訪 / 電気フック) = 訪問用。
+      </p>
       <TemplateEditor
         settingKey="tossAppointmentMemoTemplate"
-        title="トス→アポイント変更時の備考テンプレート"
-        description="トス実績を「アポイント」に変更した際、アポ実績の備考(CLカレンダーの詳細欄と共通)へ自動的に入る文面です。"
+        title="アポ詳細FMT: オンライン用(HPZOOM)"
+        description="商談形式が HPZOOM のときのアポ詳細(備考)の雛形です。"
+      />
+      <TemplateEditor
+        settingKey="tossAppointmentMemoTemplateVisit"
+        title="アポ詳細FMT: 訪問用(撮＆訪 / HP＆訪 / 電気フック)"
+        description="商談形式が HPZOOM 以外のときのアポ詳細(備考)の雛形です。"
       />
     </div>
   );
@@ -236,6 +245,12 @@ function CategoryCard({ category, label, simpleLabel }: { category: string; labe
       queryClient.invalidateQueries({ queryKey: ['status-master', category] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/status-master/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
   });
 
   return (
@@ -277,6 +292,15 @@ function CategoryCard({ category, label, simpleLabel }: { category: string; labe
                 />
                 有効
               </label>
+              <button
+                onClick={() => {
+                  if (window.confirm(`「${s.displayName}」を削除しますか？`)) deleteMutation.mutate(s.id);
+                }}
+                title="削除"
+                style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11, color: 'var(--color-danger)' }}
+              >
+                削除
+              </button>
             </div>
           ))}
         </div>

@@ -4,7 +4,6 @@ import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
-import { MemoModal } from '../../components/MemoModal';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -49,7 +48,6 @@ export function TossCasesListPage() {
   const [preContactInput, setPreContactInput] = useState('');
   const [meetingAtInput, setMeetingAtInput] = useState('');
   const [meetingFormatInput, setMeetingFormatInput] = useState('');
-  const [memoModalRow, setMemoModalRow] = useState<TossCaseListItem | null>(null);
   const [preContactError, setPreContactError] = useState<string | null>(null);
 
   const createMutation = useMutation({
@@ -267,25 +265,7 @@ export function TossCasesListPage() {
       label: '備考',
       width: 320,
       renderHeader: filterHeader('memo', '備考'),
-      render: (r) => (
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setMemoModalRow(r);
-          }}
-          title="クリックで全文表示"
-          style={{
-            cursor: 'pointer',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            textDecoration: 'underline dotted',
-            textUnderlineOffset: 2,
-          }}
-        >
-          {(r.memo ?? '').replace(/\n/g, ' ') || <span style={{ color: 'var(--color-text-faint)' }}>(なし)</span>}
-        </div>
-      ),
+      render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
     },
     {
       key: 'status',
@@ -593,15 +573,6 @@ export function TossCasesListPage() {
             </div>
           </div>
         </div>
-      )}
-
-      {memoModalRow && (
-        <MemoModal
-          title={`備考 - ${memoModalRow.customer?.corporateName ?? memoModalRow.id}`}
-          value={memoModalRow.memo ?? ''}
-          onSave={(next) => save(memoModalRow, { memo: next })}
-          onClose={() => setMemoModalRow(null)}
-        />
       )}
     </AppLayout>
   );

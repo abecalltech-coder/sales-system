@@ -30,12 +30,15 @@ export function InlineText({
   placeholder,
   style,
   disabled,
+  expand,
 }: {
   value: string | null | undefined;
   onSave: (next: string) => void;
   placeholder?: string;
   style?: CSSProperties;
   disabled?: boolean;
+  /** 長文(備考/アポ詳細)向け。クリックしたセル位置で広く開き、全文を表示・編集できる */
+  expand?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
@@ -122,10 +125,14 @@ export function InlineText({
             position: 'fixed',
             top: rect.top - 6,
             left: rect.left - 9,
-            width: Math.min(Math.max(rect.width + 48, 220), 440),
+            width: expand
+              ? Math.min(Math.max(rect.width + 48, 460), Math.round(window.innerWidth * 0.7))
+              : Math.min(Math.max(rect.width + 48, 220), 440),
+            maxHeight: expand ? '65vh' : undefined,
             zIndex: 1000,
             resize: 'none',
-            overflow: 'hidden',
+            overflowY: expand ? 'auto' : 'hidden',
+            overflowX: 'hidden',
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             font: 'inherit',
