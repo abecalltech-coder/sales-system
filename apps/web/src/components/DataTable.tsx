@@ -45,6 +45,16 @@ interface DataTableProps<T> {
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
 
+// 列の区切り線(点線)。table が border-collapse:collapse のため、border だと
+// 行の実線ボーダーに負けて分断されてしまう。セル右端に縦の点線パターンを
+// 背景画像として敷くことで、行ボーダーに影響されず通しの点線にする。
+const COLUMN_SEPARATOR: CSSProperties = {
+  backgroundImage: 'linear-gradient(to bottom, var(--color-border-strong) 45%, transparent 45%)',
+  backgroundPosition: 'top right',
+  backgroundSize: '1px 4px',
+  backgroundRepeat: 'repeat-y',
+};
+
 /**
  * 一覧画面共通コンポーネント(セクション31)。検索・フィルターは呼び出し側のQueryパラメータで実装し、
  * このコンポーネントは表示・ページネーション・行クリック・列幅調整を担当する。
@@ -156,7 +166,7 @@ export function DataTable<T>({
                     whiteSpace: 'nowrap',
                     overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
-                    borderRight: colIdx < columns.length - 1 ? '1px dotted var(--color-border-strong)' : undefined,
+                    ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                   }}
                 >
                   {col.renderHeader ? col.renderHeader() : col.label}
@@ -231,9 +241,9 @@ export function DataTable<T>({
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        borderRight: colIdx < columns.length - 1 ? '1px dotted var(--color-border-strong)' : undefined,
+                        ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                         boxShadow: cursor ? `inset 0 0 0 2px ${cursor.color}` : undefined,
-                        background: cursor ? `${cursor.color}1a` : undefined,
+                        backgroundColor: cursor ? `${cursor.color}1a` : undefined,
                       }}
                     >
                       {cursor && (

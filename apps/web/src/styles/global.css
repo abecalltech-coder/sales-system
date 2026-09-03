@@ -3,8 +3,6 @@
   --color-surface: #ffffff;
   --color-border: #e5e7eb;
   --color-border-strong: #d1d5db;
-  /* 一覧の列区切りなど、罫線よりさらに控えめに見せたい縦線用 */
-  --color-border-subtle: #eef0f2;
   --color-text: #111827;
   --color-text-muted: #6b7280;
   --color-text-faint: #9ca3af;
