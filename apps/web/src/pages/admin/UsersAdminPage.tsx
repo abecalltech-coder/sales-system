@@ -186,9 +186,9 @@ export function UsersAdminPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h1 style={{ fontSize: 20 }}>ユーザー管理</h1>
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">ユーザー管理</h1>
           <button onClick={() => setShowCreate((v) => !v)}>{showCreate ? '閉じる' : '＋ 新規ユーザー'}</button>
         </div>
 

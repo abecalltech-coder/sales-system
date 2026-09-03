@@ -39,8 +39,8 @@ export function OrganizationsAdminPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24, maxWidth: 640 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>組織管理</h1>
+      <div className="page" style={{ maxWidth: 640 }}>
+        <h1 className="page-title" style={{ marginBottom: 10 }}>組織管理</h1>
         {error && <p style={{ color: 'crimson', fontSize: 13 }}>{error}</p>}
 
         {departments?.map((dept) => (

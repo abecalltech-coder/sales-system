@@ -376,9 +376,9 @@ export function TossCasesListPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: '28px 32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h1 style={{ fontSize: 22 }}>トス実績</h1>
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">トス実績</h1>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <a href="/api/toss-cases/export" style={{ fontSize: 13 }}>
               CSV出力

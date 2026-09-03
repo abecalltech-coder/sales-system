@@ -147,8 +147,8 @@ export function SummarySheetsPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>サマリー</h1>
+      <div className="page">
+        <h1 className="page-title" style={{ marginBottom: 10 }}>サマリー</h1>
 
         {error && <p style={{ color: 'crimson', fontSize: 13, marginBottom: 12 }}>{error}</p>}
 

@@ -50,19 +50,19 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: collapsed ? 'center' : 'flex-start',
-        gap: 10,
-        padding: collapsed ? '8px 0' : '8px 10px',
-        borderRadius: 8,
-        fontSize: 13,
+        gap: 9,
+        padding: collapsed ? '6px 0' : '5px 9px',
+        borderRadius: 6,
+        fontSize: 12,
         textDecoration: 'none',
         color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
         background: isActive ? 'var(--color-primary-soft)' : 'transparent',
         fontWeight: isActive ? 700 : 500,
-        marginBottom: 2,
+        marginBottom: 1,
         whiteSpace: 'nowrap',
       })}
     >
-      <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
+      <span style={{ fontSize: 13, flexShrink: 0 }}>{item.icon}</span>
       {!collapsed && item.label}
     </NavLink>
   );
@@ -88,13 +88,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <nav
         style={{
-          width: collapsed ? 56 : 232,
+          width: collapsed ? 52 : 200,
           flexShrink: 0,
           background: '#fff',
           borderRight: '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
-          padding: collapsed ? '20px 8px' : '20px 12px',
+          padding: collapsed ? '12px 8px' : '12px 10px',
           position: 'sticky',
           top: 0,
           height: '100vh',
@@ -105,8 +105,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
       >
         <div
           style={{
-            padding: collapsed ? 0 : '0 8px',
-            marginBottom: 24,
+            padding: collapsed ? 0 : '0 6px',
+            marginBottom: 14,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
@@ -117,22 +117,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
               <div
                 style={{
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   flexShrink: 0,
-                  borderRadius: 8,
+                  borderRadius: 6,
                   background: 'var(--color-primary)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 800,
-                  fontSize: 14,
+                  fontSize: 13,
                 }}
               >
                 営
               </div>
-              <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap' }}>営業案件管理</div>
+              <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>営業案件管理</div>
             </div>
           )}
           <button
@@ -141,8 +141,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-label={collapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
             style={{
               flexShrink: 0,
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -158,12 +158,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 12 }}>
           {TOP_NAV.map((item) => renderNavItem(item, collapsed))}
         </div>
 
         {navGroups.map((group) => (
-          <div key={group.title} style={{ marginBottom: 18 }}>
+          <div key={group.title} style={{ marginBottom: 12 }}>
             {!collapsed && group.title && (
               <div
                 style={{

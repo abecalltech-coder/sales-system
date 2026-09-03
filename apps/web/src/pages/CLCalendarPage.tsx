@@ -202,9 +202,9 @@ export function CLCalendarPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-          <h1 style={{ fontSize: 20 }}>CLカレンダー</h1>
+      <div className="page">
+        <div className="page-header">
+          <h1 className="page-title">CLカレンダー</h1>
           <div style={{ display: 'flex', gap: 8 }}>
             {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
               <button

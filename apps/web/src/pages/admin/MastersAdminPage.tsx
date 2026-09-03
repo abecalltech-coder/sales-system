@@ -99,8 +99,8 @@ export function MastersAdminPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24, maxWidth: 1000 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>マスタ管理</h1>
+      <div className="page" style={{ maxWidth: 1000 }}>
+        <h1 className="page-title" style={{ marginBottom: 10 }}>マスタ管理</h1>
 
         <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
           {allTitles.map((title, i) => (

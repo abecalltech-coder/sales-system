@@ -17,8 +17,8 @@ export function AuditLogsPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>操作ログ</h1>
+      <div className="page">
+        <h1 className="page-title" style={{ marginBottom: 10 }}>操作ログ</h1>
         <DataTable
           columns={columns}
           rows={data?.items ?? []}

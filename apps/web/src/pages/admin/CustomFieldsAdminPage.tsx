@@ -42,8 +42,8 @@ export function CustomFieldsAdminPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24, maxWidth: 640 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>カスタム項目管理</h1>
+      <div className="page" style={{ maxWidth: 640 }}>
+        <h1 className="page-title" style={{ marginBottom: 10 }}>カスタム項目管理</h1>
         {error && <p style={{ color: 'crimson', fontSize: 13 }}>{error}</p>}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>

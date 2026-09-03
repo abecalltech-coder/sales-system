@@ -35,8 +35,8 @@ export function SystemSettingsPage() {
 
   return (
     <AppLayout>
-      <div style={{ padding: 24, maxWidth: 480 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>システム設定</h1>
+      <div className="page" style={{ maxWidth: 480 }}>
+        <h1 className="page-title" style={{ marginBottom: 10 }}>システム設定</h1>
 
         {message && <p style={{ color: '#16a34a', fontSize: 13 }}>{message}</p>}
 

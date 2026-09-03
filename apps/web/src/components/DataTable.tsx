@@ -60,7 +60,7 @@ export function DataTable<T>({
   onRowClick,
   getRowId,
   rowStyle,
-  fontSize = 13,
+  fontSize = 12,
   expandedRowId,
   renderExpanded,
   onCellFocus,
@@ -149,7 +149,7 @@ export function DataTable<T>({
                   key={col.key}
                   style={{
                     position: 'relative',
-                    padding: '10px 12px',
+                    padding: '4px 8px',
                     color: 'var(--color-text-muted)',
                     fontWeight: 600,
                     fontSize: Math.max(fontSize - 1, 10),
@@ -189,13 +189,13 @@ export function DataTable<T>({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-faint)' }}>
+                <td colSpan={columns.length} style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-faint)' }}>
                   読み込み中...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-faint)' }}>
+                <td colSpan={columns.length} style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-faint)' }}>
                   データがありません
                 </td>
               </tr>
@@ -227,7 +227,7 @@ export function DataTable<T>({
                       onBlurCapture={() => onCellBlur?.(rowId, col.key)}
                       style={{
                         position: 'relative',
-                        padding: '9px 12px',
+                        padding: '3px 8px',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -257,7 +257,7 @@ export function DataTable<T>({
                 </tr>
                 {renderExpanded && getRowId(row) === expandedRowId && (
                   <tr>
-                    <td colSpan={columns.length} style={{ padding: '16px 20px', background: '#fafafa', borderBottom: '1px solid var(--color-border)' }}>
+                    <td colSpan={columns.length} style={{ padding: '10px 14px', background: '#fafafa', borderBottom: '1px solid var(--color-border)' }}>
                       {renderExpanded(row)}
                     </td>
                   </tr>
@@ -274,8 +274,8 @@ export function DataTable<T>({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '12px 16px',
-          fontSize: 13,
+          padding: '5px 12px',
+          fontSize: 12,
           borderTop: '1px solid var(--color-border)',
           background: '#fafafa',
         }}

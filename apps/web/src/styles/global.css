@@ -16,9 +16,9 @@
   --color-danger: #dc2626;
   --color-danger-soft: #fef2f2;
   --color-warning: #d97706;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans',
@@ -40,8 +40,10 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.6;
+  /* 膨大な案件数を1画面で見渡せるよう全体を高密度に振っている(要望)。
+     さらに詰めたい場合はこのfont-size/line-heightとDataTableのpaddingを触る。 */
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -63,9 +65,9 @@ a:hover {
 
 button {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 8px 14px;
+  padding: 5px 11px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
@@ -101,8 +103,8 @@ input,
 select,
 textarea {
   font-family: inherit;
-  font-size: 13px;
-  padding: 8px 10px;
+  font-size: 12px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
@@ -128,9 +130,9 @@ select {
   -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 8px center;
   background-size: 10px 6px;
-  padding-right: 28px;
+  padding-right: 24px;
   cursor: pointer;
 }
 select:disabled {
@@ -179,7 +181,7 @@ select:disabled {
 }
 
 label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--color-text-muted);
 }
@@ -195,19 +197,36 @@ table {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  padding: 20px;
+  padding: 12px;
 }
 
 /* ステータスバッジ */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #fff;
-  line-height: 1.6;
+  line-height: 1.5;
+}
+
+/* 画面共通のレイアウト枠(要望: 全体的に余白を詰めて1画面の情報量を増やす)。
+   個別ページで inline style の padding:24 等を置き換えて使う。 */
+.page {
+  padding: 10px 14px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.page-title {
+  font-size: 16px;
 }
 
 /* セル編集ポップアップ(InlineText)がふわっと現れる程度の控えめな出現アニメーション */

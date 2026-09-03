@@ -178,8 +178,8 @@ function GoogleFormIntegrationSection() {
 export function IntegrationsPage() {
   return (
     <AppLayout>
-      <div style={{ padding: 24, maxWidth: 680 }}>
-        <h1 style={{ fontSize: 20, marginBottom: 16 }}>連携設定</h1>
+      <div className="page" style={{ maxWidth: 680 }}>
+        <h1 className="page-title" style={{ marginBottom: 10 }}>連携設定</h1>
 
         <GoogleFormIntegrationSection />
 
