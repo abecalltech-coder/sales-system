@@ -9,6 +9,7 @@ import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/
 import { api, ApiError } from '../../lib/api';
 import { formatDate, formatTime, isoToDateInput, isoToTimeInput } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
+import { pastel } from '../../lib/color';
 
 const CALL_DIRECTION_OPTIONS = [
   { id: '架電', label: '架電' },
@@ -109,7 +110,8 @@ export function TossCasesListPage() {
   });
 
   // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
-  const progressBg = (id: string | null) => progressOptions?.find((s) => s.id === id)?.color ?? '#ffffff';
+  // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
+  const progressBg = (id: string | null) => pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) ?? '#ffffff';
   const progressGroupOrder = (id: string | null) => progressOptions?.find((s) => s.id === id)?.order ?? 999;
   const progressInternalCode = (id: string) => progressOptions?.find((s) => s.id === id)?.internalCode;
 

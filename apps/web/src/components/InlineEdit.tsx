@@ -6,18 +6,7 @@ import {
   parseDateText as parseFlexDateText,
   parseTimeText as parseFlexTimeText,
 } from '../lib/dateInput';
-
-/** 背景色に対して読みやすい文字色(明るい背景なら黒、暗い背景なら白)を返す */
-function readableTextColor(bg: string | null | undefined): string {
-  const m = /^#?([0-9a-fA-F]{6})$/.exec((bg ?? '').trim());
-  if (!m) return '#111827';
-  const n = parseInt(m[1], 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.62 ? '#111827' : '#ffffff';
-}
+import { pastel, readableTextColor } from '../lib/color';
 
 const baseStyle: CSSProperties = {
   border: 'none',
@@ -189,11 +178,13 @@ export function InlineSelect({
   /** 進捗・NG理由等、選択肢ごとに色を持つ項目向け。選択中の値の色をボタン風の枠・背景に反映する(要望) */
   colored?: boolean;
 }) {
-  const selectedColor = colored ? options.find((o) => o.id === value)?.color : undefined;
+  const rawColor = colored ? options.find((o) => o.id === value)?.color : undefined;
+  // セル背景は元色を白側に寄せて淡くする(要望: 濃くて見づらい)
+  const selectedColor = rawColor ? pastel(rawColor) : undefined;
   // 既知の選択肢に一致しない値(例: Googleフォーム等の外部連携で選択肢外の文言が入った場合)でも
   // 空欄表示にせず、そのままの文言を選べる状態として表示する。
   const hasUnknownValue = !!value && !options.some((o) => o.id === value);
-  // 明るい背景色(新規=白、見込み=淡黄など)のときは白文字だと読めないので黒にする(要望)
+  // 淡いパステル背景なので基本は黒文字。ごく暗い色だけ白にする(readableは淡色化後の色で判定)
   const textColor = colored ? (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)') : 'inherit';
 
   return (
@@ -207,9 +198,9 @@ export function InlineSelect({
         font: 'inherit',
         color: textColor,
         width: '100%',
-        backgroundColor: colored ? (selectedColor ?? 'var(--color-border)') : 'transparent',
+        backgroundColor: colored ? (selectedColor ?? 'var(--color-bg)') : 'transparent',
         cursor: disabled ? 'default' : 'pointer',
-        // 明るい背景ではプルダウン矢印(既定は白)も暗くする
+        // 淡い背景ではプルダウン矢印(既定は白)も暗くする
         ...(colored && textColor === '#111827'
           ? {
               backgroundImage:

@@ -9,6 +9,7 @@ import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListI
 import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
+import { pastel } from '../../lib/color';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -57,7 +58,9 @@ export function AppointmentsListPage() {
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
   // 進捗の並び順(ET→成約→保留→失注→リスケ→新規訪問等)はStatusMaster.orderで表現している
   const progressGroupOrder = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.order ?? 999 : 999);
-  const progressBg = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.color ?? '#ffffff' : '#ffffff');
+  // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
+  const progressBg = (id: string | null) =>
+    (id ? pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) : null) ?? '#ffffff';
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
