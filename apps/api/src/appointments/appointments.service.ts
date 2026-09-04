@@ -453,6 +453,15 @@ export class AppointmentsService {
     return { ok: true, count: ids.length };
   }
 
+  /** 複数のアポ詳細を論理削除する(一覧の右クリックメニューから) */
+  async bulkDelete(ids: string[], userId: string) {
+    const result = await this.prisma.appointment.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { deletedAt: new Date(), updatedBy: userId },
+    });
+    return { ok: true, deleted: result.count };
+  }
+
   /** Googleカレンダー連携の再実行(Phase5でWorkerジョブとして実装。ここではステータスのみ更新可能にしておく) */
   async retryCalendarSync(id: string) {
     await this.findOne(id);

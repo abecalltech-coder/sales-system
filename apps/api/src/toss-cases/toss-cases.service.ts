@@ -313,6 +313,15 @@ export class TossCasesService {
     return { ok: true };
   }
 
+  /** 複数のトス案件を論理削除する(一覧の右クリックメニューから) */
+  async bulkDelete(ids: string[], userId: string) {
+    const result = await this.prisma.tossCase.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { deletedAt: new Date(), updatedBy: userId },
+    });
+    return { ok: true, deleted: result.count };
+  }
+
   /** 手動並び替え: 渡されたID配列の順で manualOrder を10刻みで振り直す(要望) */
   async reorder(ids: string[]) {
     await this.prisma.$transaction(

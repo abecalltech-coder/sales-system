@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/c
 import { Response } from 'express';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
-import { ReorderDto } from '../common/dto/reorder.dto';
+import { ReorderDto, BulkIdsDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -190,5 +190,11 @@ export class AppointmentsController {
   @Post('reorder')
   reorder(@Body() dto: ReorderDto) {
     return this.appointmentsService.reorder(dto.ids);
+  }
+
+  @RequirePermissions({ resource: 'appointment', action: 'delete' })
+  @Post('bulk-delete')
+  bulkDelete(@Body() dto: BulkIdsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.appointmentsService.bulkDelete(dto.ids, user.id);
   }
 }

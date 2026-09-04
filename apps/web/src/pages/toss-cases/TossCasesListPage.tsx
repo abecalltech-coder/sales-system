@@ -118,6 +118,12 @@ export function TossCasesListPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/toss-cases/bulk-delete', { ids }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['toss-cases'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
   // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
   // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
   const progressBg = (id: string | null) => pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) ?? '#ffffff';
@@ -552,6 +558,7 @@ export function TossCasesListPage() {
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
+          onDeleteRows={(ids) => deleteMutation.mutate(ids)}
         />
       </div>
 

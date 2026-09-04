@@ -76,6 +76,12 @@ export function AppointmentsListPage() {
   const save = (row: AppointmentListItem, patch: Record<string, unknown>) =>
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/appointments/bulk-delete', { ids }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
   // 列ごとの絞り込み用の値抽出関数。各列ヘルパーが自身の列を作る際に登録する。
   const filterValueFns: Record<string, FilterValueFn> = {};
   const rawRows = useMemo(() => data?.items ?? [], [data]);
@@ -496,6 +502,7 @@ export function AppointmentsListPage() {
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
+          onDeleteRows={(ids) => deleteMutation.mutate(ids)}
         />
       </div>
     </AppLayout>

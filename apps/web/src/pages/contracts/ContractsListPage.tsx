@@ -45,6 +45,12 @@ export function ContractsListPage() {
   const save = (row: ContractListItem, patch: Record<string, unknown>) =>
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
+  const deleteMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/contracts/bulk-delete', { ids }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contracts'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
   const numberColumn = (key: keyof ContractListItem, label: string, width = 110): Column<ContractListItem> => ({
     key: key as string,
     label,
@@ -297,6 +303,7 @@ export function ContractsListPage() {
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
+          onDeleteRows={(ids) => deleteMutation.mutate(ids)}
         />
       </div>
     </AppLayout>

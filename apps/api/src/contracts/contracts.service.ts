@@ -68,6 +68,15 @@ export class ContractsService {
     return { ok: true, count: ids.length };
   }
 
+  /** 複数のエントリー案件を論理削除する(一覧の右クリックメニューから) */
+  async bulkDelete(ids: string[], userId: string) {
+    const result = await this.prisma.contract.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { deletedAt: new Date(), updatedBy: userId },
+    });
+    return { ok: true, deleted: result.count };
+  }
+
   /** アポ案件の商談結果が成約になった際の自動移行(セクション25)。appointmentIdのunique制約で二重作成防止。 */
   async createFromAppointmentAutomation(appointmentId: string, actorUserId?: string) {
     const existing = await this.prisma.contract.findUnique({ where: { appointmentId } });

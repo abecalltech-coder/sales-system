@@ -11,6 +11,7 @@ import {
   useState,
 } from 'react';
 import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
+import { useHiddenRows } from '../hooks/useHiddenRows';
 
 export interface Column<T> {
   key: string;
@@ -42,10 +43,12 @@ interface DataTableProps<T> {
   onCellFocus?: (rowId: string, columnKey: string) => void;
   onCellBlur?: (rowId: string, columnKey: string) => void;
   cellCursor?: (rowId: string, columnKey: string) => { userName: string; color: string } | undefined;
-  /** 列幅の保存キー。画面ごとに一意な文字列(例: "toss-cases") */
+  /** 列幅・非表示行の保存キー。画面ごとに一意な文字列(例: "toss-cases") */
   tableKey?: string;
   /** 指定すると行をドラッグで並び替えられる(左端の行番号を掴む)。表示順のID配列を返す */
   onReorder?: (orderedIds: string[]) => void;
+  /** 指定すると右クリックメニューに「選択行を削除」が出る */
+  onDeleteRows?: (ids: string[]) => void;
 }
 
 const DEFAULT_COLUMN_WIDTH = 120;
@@ -102,22 +105,29 @@ export function DataTable<T>({
   cellCursor,
   tableKey,
   onReorder,
+  onDeleteRows,
 }: DataTableProps<T>) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
   const [draftWidths, setDraftWidths] = useState<ColumnWidths>({});
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
+  // 非表示行(Google Sheets の行非表示相当。端末ごとに記憶)
+  const { hidden, hide, unhide, unhideAll } = useHiddenRows(tableKey ?? '_');
+  const allRows = rows;
+  const rows2 = hidden.size ? allRows.filter((r) => !hidden.has(getRowId(r))) : allRows;
+  const hiddenCount = allRows.length - rows2.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
   const [sel, setSel] = useState<Sel | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const clipboardRef = useRef<string>('');
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // 最新の rows / columns を event ハンドラから参照するための ref
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
+  // 最新の rows(表示中) / columns を event ハンドラから参照するための ref
+  const rowsRef = useRef(rows2);
+  rowsRef.current = rows2;
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
 
@@ -138,7 +148,7 @@ export function DataTable<T>({
 
   useEffect(() => {
     setSel(null);
-  }, [rows.length]);
+  }, [rows2.length]);
 
   const widthOf = (col: Column<T>): number =>
     draftWidths[col.key] ?? savedWidths[col.key] ?? col.width ?? DEFAULT_COLUMN_WIDTH;
@@ -445,6 +455,35 @@ export function DataTable<T>({
     );
   };
 
+  // --- 右クリックメニュー(行削除・非表示) ------------------------
+  const selectedRowIds = (): string[] => {
+    if (!sel) return [];
+    const b = bounds(sel);
+    const ids: string[] = [];
+    for (let r = b.r0; r <= b.r1 && r < rowsRef.current.length; r++) ids.push(getRowId(rowsRef.current[r]));
+    return ids;
+  };
+  const onCellContextMenu = (e: ReactMouseEvent, r: number) => {
+    e.preventDefault();
+    // 右クリックした行が選択範囲外なら、その行だけを行選択する
+    if (!sel || !(r >= bounds(sel).r0 && r <= bounds(sel).r1)) {
+      setSel({ ar: r, ac: 0, fr: r, fc: columnsRef.current.length - 1 });
+    }
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [menu]);
+
   // --- 単一セル編集の undo 記録 -----------------------------------
   const handleCellFocus = (rowId: string, colKey: string) => {
     onCellFocus?.(rowId, colKey);
@@ -498,6 +537,8 @@ export function DataTable<T>({
 
   const tableWidth = resizable ? columns.reduce((sum, col) => sum + widthOf(col), 0) + GUTTER_WIDTH : undefined;
 
+  const menuIds = selectedRowIds();
+
   return (
     <div
       style={{
@@ -508,17 +549,80 @@ export function DataTable<T>({
         overflow: 'hidden',
       }}
     >
-      {toast && (
+      {(toast || hiddenCount > 0) && (
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
             padding: '3px 12px',
             fontSize: 11,
-            color: 'var(--color-success)',
             borderBottom: '1px solid var(--color-border)',
             background: '#fafafa',
           }}
         >
-          {toast}
+          {toast && <span style={{ color: 'var(--color-success)' }}>{toast}</span>}
+          {hiddenCount > 0 && (
+            <span style={{ color: 'var(--color-text-muted)' }}>
+              🚫 {hiddenCount}行 非表示中{' '}
+              <button onClick={unhideAll} style={{ fontSize: 10, padding: '1px 6px', marginLeft: 2 }}>
+                すべて表示
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {menu && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: Math.min(menu.y, window.innerHeight - 160),
+            left: Math.min(menu.x, window.innerWidth - 200),
+            zIndex: 3000,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: 6,
+            boxShadow: '0 8px 24px rgba(16,24,40,0.18)',
+            padding: 4,
+            minWidth: 180,
+            fontSize: 12,
+          }}
+        >
+          <MenuItem
+            label={`選択した ${menuIds.length} 行を非表示`}
+            onClick={() => {
+              hide(menuIds);
+              setSel(null);
+              setMenu(null);
+            }}
+          />
+          {onDeleteRows && (
+            <MenuItem
+              danger
+              label={`選択した ${menuIds.length} 行を削除`}
+              onClick={() => {
+                if (window.confirm(`${menuIds.length} 行を削除します。よろしいですか？`)) {
+                  onDeleteRows(menuIds);
+                  setSel(null);
+                }
+                setMenu(null);
+              }}
+            />
+          )}
+          {hiddenCount > 0 && (
+            <>
+              <div style={{ borderTop: '1px solid var(--color-border)', margin: '4px 0' }} />
+              <MenuItem
+                label={`非表示をすべて解除 (${hiddenCount}行)`}
+                onClick={() => {
+                  unhideAll();
+                  setMenu(null);
+                }}
+              />
+            </>
+          )}
         </div>
       )}
 
@@ -592,14 +696,14 @@ export function DataTable<T>({
                   読み込み中...
                 </td>
               </tr>
-            ) : rows.length === 0 ? (
+            ) : rows2.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + 1} style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-faint)' }}>
-                  データがありません
+                  {hiddenCount > 0 ? 'すべての行が非表示です' : 'データがありません'}
                 </td>
               </tr>
             ) : (
-              rows.map((row, i) => {
+              rows2.map((row, i) => {
                 const restingBackground: string = String(
                   rowStyle?.(row)?.background ?? (i % 2 === 1 ? '#fbfbfc' : 'transparent'),
                 );
@@ -618,6 +722,7 @@ export function DataTable<T>({
                     >
                       <td
                         onClick={(e) => selectRow(i, e.shiftKey)}
+                        onContextMenu={(e) => onCellContextMenu(e, i)}
                         draggable={reorderable}
                         onDragStart={reorderable ? (e) => onRowDragStart(e, i) : undefined}
                         onDragEnd={
@@ -658,6 +763,7 @@ export function DataTable<T>({
                             onBlurCapture={() => handleCellBlur(rowId, col.key)}
                             onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
                             onMouseEnter={() => onCellMouseEnter(i, colIdx)}
+                            onContextMenu={(e) => onCellContextMenu(e, i)}
                             style={{
                               position: 'relative',
                               padding: '3px 8px',
@@ -743,5 +849,29 @@ export function DataTable<T>({
         </div>
       </div>
     </div>
+  );
+}
+
+function MenuItem({ label, onClick, danger }: { label: string; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '6px 10px',
+        border: 'none',
+        background: 'transparent',
+        borderRadius: 4,
+        fontSize: 12,
+        cursor: 'pointer',
+        color: danger ? 'var(--color-danger)' : 'var(--color-text)',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-soft)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      {label}
+    </button>
   );
 }

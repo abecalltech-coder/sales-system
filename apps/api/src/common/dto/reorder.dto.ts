@@ -1,8 +1,11 @@
 import { IsArray, IsUUID } from 'class-validator';
 
-/** 一覧の手動並び替え。表示順に並べたID配列を受け取り manualOrder を振り直す(要望)。 */
-export class ReorderDto {
+/** ID配列だけを受け取る共通DTO(手動並び替え・一括削除など)。 */
+export class BulkIdsDto {
   @IsArray()
   @IsUUID('4', { each: true })
   ids!: string[];
 }
+
+/** @deprecated BulkIdsDto を使う。互換のため残置。 */
+export class ReorderDto extends BulkIdsDto {}

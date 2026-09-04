@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { TossCasesService } from './toss-cases.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto, SetCallingFlagDto } from './dto/toss-case.dto';
-import { ReorderDto } from '../common/dto/reorder.dto';
+import { ReorderDto, BulkIdsDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -138,6 +138,12 @@ export class TossCasesController {
   @Post('reorder')
   reorder(@Body() dto: ReorderDto) {
     return this.tossCasesService.reorder(dto.ids);
+  }
+
+  @RequirePermissions({ resource: 'toss_case', action: 'delete' })
+  @Post('bulk-delete')
+  bulkDelete(@Body() dto: BulkIdsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.tossCasesService.bulkDelete(dto.ids, user.id);
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'delete' })
