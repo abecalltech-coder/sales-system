@@ -129,12 +129,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontWeight: 800,
-                  fontSize: 13,
+                  fontSize: 10,
+                  letterSpacing: '-0.02em',
                 }}
               >
-                営
+                CH
               </div>
-              <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>営業案件管理</div>
+              <div style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>CH partners実績管理</div>
             </div>
           )}
           <button

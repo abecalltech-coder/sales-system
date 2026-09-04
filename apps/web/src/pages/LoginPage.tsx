@@ -26,7 +26,7 @@ export function LoginPage() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center' }}>
       <form onSubmit={handleSubmit} style={{ width: 320 }}>
-        <h1 style={{ fontSize: 18, marginBottom: 24 }}>営業案件管理システム</h1>
+        <h1 style={{ fontSize: 18, marginBottom: 24 }}>CH partners実績管理</h1>
         <label>
           メールアドレス
           <input

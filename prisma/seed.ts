@@ -244,7 +244,7 @@ async function main() {
   const company = await prisma.company.upsert({
     where: { id: 'seed-default-company' },
     update: {},
-    create: { id: 'seed-default-company', name: '株式会社Calltech' },
+    create: { id: 'seed-default-company', name: 'CH partners' },
   });
 
   const department = await prisma.department.upsert({

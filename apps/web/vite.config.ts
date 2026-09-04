@@ -15,8 +15,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
       manifest: {
-        name: '案件・営業進捗・訪問営業管理システム',
-        short_name: '営業管理',
+        name: 'CH partners実績管理',
+        short_name: 'CH実績管理',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',

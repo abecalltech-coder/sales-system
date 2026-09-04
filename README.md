@@ -1,6 +1,6 @@
-# 案件・営業進捗・訪問営業管理システム
+# CH partners実績管理
 
-営業部向け、トス→アポ→訪問→成約→エントリーを一元管理するシステム。詳細設計は `docs/` 配下。
+CH partners 向け、トス→アポ→訪問→成約→エントリーを一元管理するシステム。詳細設計は `docs/` 配下。
 
 - [architecture.md](docs/architecture.md) — 全体構成/Railwayサービス/技術スタック
 - [repo-structure.md](docs/repo-structure.md) — ディレクトリ構成
