@@ -35,6 +35,14 @@ POST reorder(body {ids:[]}で手動並び順=manualOrderを更新)
 GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /
 PUT :id/cells(セル1件upsert) / POST,DELETE :id/rows(/:row) / POST,DELETE :id/columns(/:col)
 
+## トス登録フォーム `/toss-form`
+GET fields(?all=1で無効項目も。アポインターの登録画面用、選択肢を解決して返す) /
+POST submit(body {answers}、トス案件を作成) /
+POST fields / PATCH fields/:id / DELETE fields/:id (管理: 「トスフォーム設定」タブ)
+
+- TossFormField: targetKey(保存先固定キー)・label・fieldType・required・active・order・optionsMode(NONE/STATIC/MASTER/USERS)
+- 初期値は Googleフォーム「トスアップフォーマット」の15項目
+
 ## ユーザー個人設定 `/me/preferences`
 GET :key / PUT :key(body `{ value }`) — ログインユーザー本人のUI設定を保存(userIdはJWTから)。
 権限不要(認証のみ)。keyは `[A-Za-z0-9_:-]{1,64}`。

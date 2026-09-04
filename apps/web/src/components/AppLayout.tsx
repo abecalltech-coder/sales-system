@@ -17,6 +17,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: '営業',
     items: [
+      { to: '/toss/new', label: 'トス登録', icon: '✏️' },
       { to: '/toss-cases', label: 'トス実績管理', icon: '📥' },
       { to: '/appointments', label: 'アポ実績管理', icon: '📅' },
       { to: '/contracts', label: 'エントリー管理', icon: '📄' },
@@ -31,6 +32,7 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/users', label: 'ユーザー管理', icon: '👤' },
     { to: '/admin/organizations', label: '組織管理', icon: '🏗' },
     { to: '/admin/masters', label: 'マスタ管理', icon: '⚙️' },
+    { to: '/admin/toss-form', label: 'トスフォーム設定', icon: '📝' },
     { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: '🧩' },
     { to: '/admin/integrations', label: '連携設定', icon: '🔗' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: '🧾' },

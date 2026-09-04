@@ -500,3 +500,28 @@ export function useComments(entityType: string, entityId: string) {
     enabled: !!entityId,
   });
 }
+
+// ============================================================
+// トス登録フォーム(アポインター用) / トスフォーム設定(管理)
+// ============================================================
+export interface TossFormField {
+  id: string;
+  targetKey: string;
+  label: string;
+  fieldType: 'TEXT' | 'TEXTAREA' | 'SELECT' | 'MULTISELECT' | 'RADIO' | 'DATE' | 'DATETIME';
+  required: boolean;
+  active: boolean;
+  order: number;
+  helpText: string | null;
+  optionsMode: 'NONE' | 'STATIC' | 'MASTER' | 'USERS';
+  masterCategory: string | null;
+  staticOptions: string[];
+  options: string[];
+}
+
+export function useTossFormFields(all = false) {
+  return useQuery({
+    queryKey: ['toss-form-fields', all],
+    queryFn: () => api.get<TossFormField[]>(`/toss-form/fields${all ? '?all=1' : ''}`),
+  });
+}

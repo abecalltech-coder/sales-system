@@ -28,6 +28,7 @@ import { RemindersModule } from './reminders/reminders.module';
 import { GoogleFormsModule } from './integrations/google-forms/google-forms.module';
 import { GoogleCalendarModule } from './integrations/google-calendar/google-calendar.module';
 import { PreferencesModule } from './preferences/preferences.module';
+import { TossFormModule } from './toss-form/toss-form.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { PreferencesModule } from './preferences/preferences.module';
     AutomationRulesModule,
     SummarySheetsModule,
     PreferencesModule,
+    TossFormModule,
     AuditLogsModule,
     SystemSettingsModule,
     CommentsModule,

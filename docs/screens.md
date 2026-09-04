@@ -2,19 +2,21 @@
 
 ## PC版(権限に応じ表示/非表示)
 
-1. トス実績管理 一覧/詳細 `/toss-cases`
-2. アポ実績管理 一覧/詳細 `/appointments`
-3. CLカレンダー `/cl-calendar`
-4. エントリー管理 一覧/詳細 `/contracts`
-5. サマリー(自由編集表) `/summary`
-6. ユーザー管理 `/admin/users`
-7. 組織管理(部署/チーム) `/admin/organizations`
-8. マスタ管理(ステータス/商材/流入元) `/admin/masters`
-9. カスタム項目管理 `/admin/custom-fields`
-10. 連携設定(Googleフォーム/カレンダー) `/admin/integrations`
-11. 操作ログ `/admin/audit-logs`
-12. システム設定 `/admin/system-settings`
-13. ログイン `/login`
+1. トス登録(アポインター用フォーム) `/toss/new`
+2. トス実績管理 一覧/詳細 `/toss-cases`
+3. アポ実績管理 一覧/詳細 `/appointments`
+4. CLカレンダー `/cl-calendar`
+5. エントリー管理 一覧/詳細 `/contracts`
+6. サマリー(自由編集表) `/summary`
+7. ユーザー管理 `/admin/users`
+8. 組織管理(部署/チーム) `/admin/organizations`
+9. マスタ管理(ステータス/商材/流入元) `/admin/masters`
+10. トスフォーム設定 `/admin/toss-form`
+11. カスタム項目管理 `/admin/custom-fields`
+12. 連携設定(Googleフォーム/カレンダー) `/admin/integrations`
+13. 操作ログ `/admin/audit-logs`
+14. システム設定 `/admin/system-settings`
+15. ログイン `/login`
 
 ※ 「営業」グループ以外(管理グループ)は ADMIN/SUPER_ADMIN のみ表示。
    ログイン後・ルート `/` は `/toss-cases` へ遷移する。

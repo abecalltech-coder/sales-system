@@ -10,5 +10,6 @@ import { AppointmentsModule } from '../appointments/appointments.module';
   imports: [AppointmentsModule],
   providers: [TossCasesService, SequenceService, StatusResolverService, CaseHistoryService],
   controllers: [TossCasesController],
+  exports: [TossCasesService],
 })
 export class TossCasesModule {}

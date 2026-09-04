@@ -247,6 +247,28 @@ model Source {
   order  Int     @default(0)
 }
 
+// アプリ内トス登録フォーム(アポインター用)の項目定義。管理タブ「トスフォーム設定」で編集する。
+model TossFormField {
+  id             String   @id @default(uuid())
+  // マッピング先のキー(corporateName/phone/address/industry/hook/... サーバーが解釈できる固定値)
+  targetKey      String
+  label          String
+  // TEXT / TEXTAREA / SELECT / MULTISELECT / RADIO / DATE / DATETIME
+  fieldType      String   @default("TEXT")
+  required       Boolean  @default(false)
+  active         Boolean  @default(true)
+  order          Int      @default(0)
+  helpText       String?
+  // NONE / STATIC / MASTER / USERS
+  optionsMode    String   @default("NONE")
+  masterCategory String? // optionsMode=MASTER のとき(INDUSTRY等)
+  staticOptions  Json     @default("[]") // optionsMode=STATIC のとき string[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([order])
+}
+
 model StatusMaster {
   id           String  @id @default(uuid())
   category     String // TOSS / APPOINTMENT / VISIT / MATCHING / ENTRY

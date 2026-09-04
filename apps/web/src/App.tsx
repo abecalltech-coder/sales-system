@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
+import { TossEntryPage } from './pages/toss-cases/TossEntryPage';
 import { AppointmentsListPage } from './pages/appointments/AppointmentsListPage';
 import { CLCalendarPage } from './pages/CLCalendarPage';
 import { ContractsListPage } from './pages/contracts/ContractsListPage';
@@ -14,6 +15,7 @@ import { SummarySheetsPage } from './pages/SummarySheetsPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { SystemSettingsPage } from './pages/admin/SystemSettingsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
+import { TossFormAdminPage } from './pages/admin/TossFormAdminPage';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
 
@@ -34,6 +36,7 @@ export function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/toss/new" element={protect(<TossEntryPage />)} />
         <Route path="/toss-cases" element={protect(<TossCasesListPage />)} />
         <Route path="/appointments" element={protect(<AppointmentsListPage />)} />
         <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
@@ -43,6 +46,7 @@ export function App() {
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
         <Route path="/admin/custom-fields" element={protectAdmin(<CustomFieldsAdminPage />)} />
+        <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
         <Route path="/m" element={protect(<MobileHomePage />)} />
         <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
