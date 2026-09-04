@@ -84,6 +84,7 @@ export class AppointmentReportsService {
           title: `実施報告: ${label}`,
           body: `${appointment.caseName ?? ''} ${dto.reportText}`.trim(),
           url: '/cl-calendar',
+          tag: `report:${appointment.id}:${dto.checkpoint}`,
         },
       );
     }

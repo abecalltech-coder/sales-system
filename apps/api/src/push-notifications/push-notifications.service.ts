@@ -8,6 +8,8 @@ export interface PushPayload {
   title: string;
   body: string;
   url?: string;
+  /** 同種の通知をまとめて上書きするためのタグ(例: `reminder:<appointmentId>`) */
+  tag?: string;
 }
 
 @Injectable()

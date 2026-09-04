@@ -26,9 +26,11 @@ interface PushPayload {
   title: string;
   body: string;
   url?: string;
+  tag?: string;
 }
 
-// CLカレンダーのリマインド・実施報告通知(セクション追加要望)を表示する
+// 商談リマインド・実施報告の通知を表示する。
+// PCではデスクトップ通知、スマホ(PWA)ではバナー通知として出る。
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   let payload: PushPayload;
@@ -41,7 +43,12 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(payload.title, {
       body: payload.body,
       data: { url: payload.url ?? '/' },
-    }),
+      // 同じ種類の通知が来たら上書き(通知が積み上がらない)
+      tag: payload.tag ?? payload.title,
+      renotify: true,
+      // スマホでバイブレーション
+      vibrate: [80, 40, 80],
+    } as NotificationOptions),
   );
 });
 

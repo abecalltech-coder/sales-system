@@ -8,19 +8,19 @@ export function PushNotificationToggle({ collapsed }: { collapsed: boolean }) {
   if (permission === 'granted' && subscribed) {
     return (
       <div
-        title="通知は有効です"
+        title="商談リマインド・実施報告をこの端末の通知で受け取ります"
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'flex-start',
           gap: 8,
-          padding: collapsed ? '8px 0' : '8px 10px',
-          fontSize: 12,
+          padding: collapsed ? '6px 0' : '5px 9px',
+          fontSize: 11,
           color: 'var(--color-text-faint)',
         }}
       >
         <span>🔔</span>
-        {!collapsed && <span>通知: 有効</span>}
+        {!collapsed && <span>通知ON（この端末）</span>}
       </div>
     );
   }

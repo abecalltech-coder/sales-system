@@ -65,6 +65,18 @@ git push -u origin main
 
 Google連携用の変数(`GOOGLE_CLIENT_ID`等)は、Phase5着手時に別途設定します。今は空欄で構いません。
 
+### プッシュ通知(商談リマインド・実施報告のデスクトップ/スマホ通知)
+
+以下を設定すると Web Push が有効になります。未設定でもアプリ内のベル通知は動きます。
+
+| 変数名 | 値 |
+|---|---|
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | ローカルで `cd apps/api && node -e "console.log(require('web-push').generateVAPIDKeys())"` を実行して得た値 |
+| `VAPID_SUBJECT` | `mailto:<管理者メール>` |
+
+設定後、各ユーザーがアプリのサイドバー「通知を有効にする」を押し、ブラウザの通知許可を出すと、
+その端末にリマインド・実施報告が通知されます(PWAとしてスマホに追加すればスマホにも届きます)。
+
 ## 5. デプロイの実行
 
 1. Variablesを保存すると、Railwayが自動的にビルド・デプロイを開始する

@@ -46,6 +46,7 @@ export class RemindersService {
             minute: '2-digit',
           })}`,
           url: '/cl-calendar',
+          tag: `reminder:${appt.id}`,
         });
       } catch (err) {
         this.logger.warn(`reminder send failed for appointment=${appt.id}: ${(err as Error).message}`);
