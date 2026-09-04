@@ -426,7 +426,7 @@ function MonthGrid({
   }, [events]);
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'var(--color-surface)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border)' }}>
         {['日', '月', '火', '水', '木', '金', '土'].map((w) => (
           <div key={w} style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>
@@ -522,7 +522,15 @@ function TimeGrid({
   }, [events]);
 
   return (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden', display: 'flex' }}>
+    <div
+      style={{
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)',
+        overflow: 'hidden',
+        display: 'flex',
+        background: 'var(--color-surface)',
+      }}
+    >
       <div style={{ width: 48, flexShrink: 0, borderRight: '1px solid var(--color-border)' }}>
         <div style={{ height: 28, borderBottom: '1px solid var(--color-border)' }} />
         <div style={{ position: 'relative', height: gridHeight }}>
@@ -570,7 +578,7 @@ function TimeGrid({
                 }}
               >
                 {hours.map((h, hi) => (
-                  <div key={h} style={{ position: 'absolute', top: hi * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderBottom: '1px solid #f1f1f1' }} />
+                  <div key={h} style={{ position: 'absolute', top: hi * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderBottom: '1px solid var(--color-border)' }} />
                 ))}
                 {dayEvents.map((ev) => {
                   const start = ev.start;
@@ -644,7 +652,7 @@ function EventFormModal({
             style={{
               marginBottom: 12,
               padding: '8px 10px',
-              background: 'var(--color-bg)',
+              background: 'var(--color-sunken)',
               border: '1px solid var(--color-border)',
               borderRadius: 6,
             }}
