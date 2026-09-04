@@ -144,17 +144,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-label={collapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
             style={{
               flexShrink: 0,
-              width: 24,
+              width: 20,
               height: 24,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               padding: 0,
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              background: 'var(--color-surface)',
+              border: 'none',
+              background: 'transparent',
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 16,
+              color: 'var(--color-text-muted)',
             }}
           >
             {collapsed ? '›' : '‹'}
