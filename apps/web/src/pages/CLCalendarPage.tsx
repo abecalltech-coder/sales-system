@@ -427,7 +427,7 @@ function MonthGrid({
 
   return (
     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#fafafa', borderBottom: '1px solid var(--color-border)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border)' }}>
         {['日', '月', '火', '水', '木', '金', '土'].map((w) => (
           <div key={w} style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', textAlign: 'center' }}>
             {w}
@@ -448,7 +448,7 @@ function MonthGrid({
                 borderBottom: '1px solid var(--color-border)',
                 padding: 4,
                 cursor: 'pointer',
-                background: inMonth ? 'var(--color-surface)' : '#fafafa',
+                background: inMonth ? 'var(--color-surface)' : 'var(--color-sunken)',
                 overflow: 'hidden',
               }}
             >
@@ -635,24 +635,9 @@ function EventFormModal({
 }) {
   const set = (patch: Partial<DraftEvent>) => onChange({ ...draft, ...patch });
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.3)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="card"
-        style={{ width: 460, maxWidth: '94vw', maxHeight: '90vh', overflowY: 'auto', background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
-      >
-        <h2 style={{ fontSize: 16, marginBottom: 14 }}>{draft.id ? '予定を編集' : '予定を追加'}</h2>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="modal" style={{ maxWidth: 460, padding: 20 }}>
+        <h2 className="modal-title" style={{ marginBottom: 14 }}>{draft.id ? '予定を編集' : '予定を追加'}</h2>
 
         {draft.id ? (
           <div

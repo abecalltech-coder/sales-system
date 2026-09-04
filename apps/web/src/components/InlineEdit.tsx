@@ -147,8 +147,8 @@ export function InlineText({
                   padding: '4px 8px',
                   background: 'var(--color-surface)',
                   border: '1px solid var(--color-primary)',
-                  borderRadius: 4,
-                  boxShadow: '0 4px 16px rgba(16,24,40,0.14)',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)',
                 }
               : {
                   position: 'absolute',

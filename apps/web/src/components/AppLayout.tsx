@@ -4,24 +4,25 @@ import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationBell } from './NotificationBell';
 import { PushNotificationToggle } from './PushNotificationToggle';
+import { NavIcon, IconName } from './NavIcon';
 
 const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
 
-type NavItem = { to: string; label: string; icon: string };
+type NavItem = { to: string; label: string; icon: IconName };
 type NavGroup = { title?: string; items: NavItem[] };
 
-const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: '📈' }];
+const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: 'chart' }];
 
 const NAV_GROUPS: NavGroup[] = [
   {
     title: '営業',
     items: [
-      { to: '/toss/new', label: 'トス登録', icon: '✏️' },
-      { to: '/toss-cases', label: 'トス実績管理', icon: '📥' },
-      { to: '/appointments', label: 'アポ実績管理', icon: '📅' },
-      { to: '/contracts', label: 'エントリー管理', icon: '📄' },
-      { to: '/cl-calendar', label: 'CLカレンダー', icon: '🗓️' },
+      { to: '/toss/new', label: 'トス登録', icon: 'edit' },
+      { to: '/toss-cases', label: 'トス実績管理', icon: 'inbox' },
+      { to: '/appointments', label: 'アポ実績管理', icon: 'calendarCheck' },
+      { to: '/contracts', label: 'エントリー管理', icon: 'document' },
+      { to: '/cl-calendar', label: 'CLカレンダー', icon: 'calendar' },
     ],
   },
 ];
@@ -29,14 +30,14 @@ const NAV_GROUPS: NavGroup[] = [
 const ADMIN_NAV_GROUP: NavGroup = {
   title: '管理',
   items: [
-    { to: '/admin/users', label: 'ユーザー管理', icon: '👤' },
-    { to: '/admin/organizations', label: '組織管理', icon: '🏗' },
-    { to: '/admin/masters', label: 'マスタ管理', icon: '⚙️' },
-    { to: '/admin/toss-form', label: 'トスフォーム設定', icon: '📝' },
-    { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: '🧩' },
-    { to: '/admin/integrations', label: '連携設定', icon: '🔗' },
-    { to: '/admin/audit-logs', label: '操作ログ', icon: '🧾' },
-    { to: '/admin/system-settings', label: 'システム設定', icon: '🛠' },
+    { to: '/admin/users', label: 'ユーザー管理', icon: 'user' },
+    { to: '/admin/organizations', label: '組織管理', icon: 'building' },
+    { to: '/admin/masters', label: 'マスタ管理', icon: 'sliders' },
+    { to: '/admin/toss-form', label: 'トスフォーム設定', icon: 'form' },
+    { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: 'puzzle' },
+    { to: '/admin/integrations', label: '連携設定', icon: 'link' },
+    { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },
+    { to: '/admin/system-settings', label: 'システム設定', icon: 'gear' },
   ],
 };
 
@@ -49,23 +50,43 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
       to={item.to}
       title={collapsed ? item.label : undefined}
       style={({ isActive }) => ({
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         justifyContent: collapsed ? 'center' : 'flex-start',
         gap: 9,
-        padding: collapsed ? '6px 0' : '5px 9px',
-        borderRadius: 6,
+        padding: collapsed ? '7px 0' : '6px 9px',
+        borderRadius: 7,
         fontSize: 12,
         textDecoration: 'none',
-        color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+        color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
         background: isActive ? 'var(--color-primary-soft)' : 'transparent',
         fontWeight: isActive ? 700 : 500,
         marginBottom: 1,
         whiteSpace: 'nowrap',
+        transition: 'background-color 0.12s ease, color 0.12s ease',
       })}
     >
-      <span style={{ fontSize: 13, flexShrink: 0 }}>{item.icon}</span>
-      {!collapsed && item.label}
+      {({ isActive }) => (
+        <>
+          {isActive && !collapsed && (
+            <span
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: -10,
+                top: 6,
+                bottom: 6,
+                width: 3,
+                borderRadius: 999,
+                background: 'var(--color-primary)',
+              }}
+            />
+          )}
+          <NavIcon name={item.icon} active={isActive} />
+          {!collapsed && item.label}
+        </>
+      )}
     </NavLink>
   );
 }
@@ -90,25 +111,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <nav
         style={{
-          width: collapsed ? 52 : 200,
+          width: collapsed ? 54 : 208,
           flexShrink: 0,
-          background: '#fff',
+          background: 'var(--color-surface)',
           borderRight: '1px solid var(--color-border)',
           display: 'flex',
           flexDirection: 'column',
-          padding: collapsed ? '12px 8px' : '12px 10px',
+          padding: collapsed ? '14px 9px' : '14px 12px',
           position: 'sticky',
           top: 0,
           height: '100vh',
           overflowY: 'auto',
           overflowX: 'hidden',
-          transition: 'width 0.15s ease, padding 0.15s ease',
+          transition: 'width 0.16s ease, padding 0.16s ease',
         }}
       >
         <div
           style={{
-            padding: collapsed ? 0 : '0 6px',
-            marginBottom: 14,
+            padding: collapsed ? 0 : '0 4px',
+            marginBottom: 16,
             display: 'flex',
             alignItems: 'center',
             justifyContent: collapsed ? 'center' : 'space-between',
@@ -116,14 +137,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           }}
         >
           {!collapsed && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
               <div
                 style={{
-                  width: 24,
-                  height: 24,
+                  width: 26,
+                  height: 26,
                   flexShrink: 0,
-                  borderRadius: 6,
-                  background: 'var(--color-primary)',
+                  borderRadius: 7,
+                  background: 'linear-gradient(150deg, #4762e0 0%, #2c44b4 100%)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
@@ -131,11 +152,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   fontWeight: 800,
                   fontSize: 10,
                   letterSpacing: '-0.02em',
+                  boxShadow: '0 2px 6px rgba(44, 68, 180, 0.35)',
                 }}
               >
                 CH
               </div>
-              <div style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>CH partners実績管理</div>
+              <div style={{ fontWeight: 700, fontSize: 12.5, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                CH partners実績管理
+              </div>
             </div>
           )}
           <button
@@ -144,39 +168,44 @@ export function AppLayout({ children }: { children: ReactNode }) {
             aria-label={collapsed ? 'サイドバーを開く' : 'サイドバーを閉じる'}
             style={{
               flexShrink: 0,
-              width: 20,
-              height: 24,
+              width: 22,
+              height: 22,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               padding: 0,
               border: 'none',
+              borderRadius: 6,
               background: 'transparent',
               cursor: 'pointer',
-              fontSize: 16,
-              color: 'var(--color-text-muted)',
+              fontSize: 15,
+              lineHeight: 1,
+              color: 'var(--color-text-faint)',
+              boxShadow: 'none',
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-sunken)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
             {collapsed ? '›' : '‹'}
           </button>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 14 }}>
           {TOP_NAV.map((item) => renderNavItem(item, collapsed))}
         </div>
 
         {navGroups.map((group) => (
-          <div key={group.title} style={{ marginBottom: 12 }}>
+          <div key={group.title} style={{ marginBottom: 14 }}>
             {!collapsed && group.title && (
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: 700,
                   color: 'var(--color-text-faint)',
-                  padding: '0 10px',
-                  marginBottom: 6,
+                  padding: '0 9px',
+                  marginBottom: 5,
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.07em',
                   whiteSpace: 'nowrap',
                 }}
               >

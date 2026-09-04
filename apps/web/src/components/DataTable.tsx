@@ -558,7 +558,7 @@ export function DataTable<T>({
             padding: '3px 12px',
             fontSize: 11,
             borderBottom: '1px solid var(--color-border)',
-            background: '#fafafa',
+            background: 'var(--color-subtle)',
           }}
         >
           {toast && <span style={{ color: 'var(--color-success)' }}>{toast}</span>}
@@ -582,11 +582,11 @@ export function DataTable<T>({
             left: Math.min(menu.x, window.innerWidth - 200),
             zIndex: 3000,
             background: 'var(--color-surface)',
-            border: '1px solid var(--color-border-strong)',
-            borderRadius: 6,
-            boxShadow: '0 8px 24px rgba(16,24,40,0.18)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
             padding: 4,
-            minWidth: 180,
+            minWidth: 184,
             fontSize: 12,
           }}
         >
@@ -635,7 +635,7 @@ export function DataTable<T>({
             ))}
           </colgroup>
           <thead>
-            <tr style={{ background: '#fafafa', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+            <tr style={{ background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border-strong)', textAlign: 'left' }}>
               <th
                 title="行番号(クリックで行選択・ドラッグで範囲)"
                 style={{
@@ -661,7 +661,8 @@ export function DataTable<T>({
                     position: 'relative',
                     padding: '4px 8px',
                     color: 'var(--color-text-muted)',
-                    fontWeight: 600,
+                    fontWeight: 700,
+                    letterSpacing: '0.01em',
                     fontSize: Math.max(fontSize - 1, 10),
                     whiteSpace: 'nowrap',
                     overflow: col.renderHeader ? 'visible' : 'hidden',
@@ -705,7 +706,7 @@ export function DataTable<T>({
             ) : (
               rows2.map((row, i) => {
                 const restingBackground: string = String(
-                  rowStyle?.(row)?.background ?? (i % 2 === 1 ? '#fbfbfc' : 'transparent'),
+                  rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
                 );
                 return (
                   <Fragment key={getRowId(row)}>
@@ -809,7 +810,7 @@ export function DataTable<T>({
                       <tr>
                         <td
                           colSpan={columns.length + 1}
-                          style={{ padding: '10px 14px', background: '#fafafa', borderBottom: '1px solid var(--color-border)' }}
+                          style={{ padding: '10px 14px', background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border)' }}
                         >
                           {renderExpanded(row)}
                         </td>
@@ -830,7 +831,7 @@ export function DataTable<T>({
           padding: '5px 12px',
           fontSize: 12,
           borderTop: '1px solid var(--color-border)',
-          background: '#fafafa',
+          background: 'var(--color-subtle)',
         }}
       >
         <span style={{ color: 'var(--color-text-muted)' }}>

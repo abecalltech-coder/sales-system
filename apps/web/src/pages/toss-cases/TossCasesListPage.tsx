@@ -563,25 +563,10 @@ export function TossCasesListPage() {
       </div>
 
       {preContactModal && (
-        <div
-          onClick={() => setPreContactModal(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 2000,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="card"
-            style={{ width: 360, background: 'var(--color-surface)', padding: 20, borderRadius: 10 }}
-          >
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>前連日時・商談日時を入力してください</h2>
-            <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 14 }}>
+        <div className="modal-backdrop" onClick={() => setPreContactModal(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="modal" style={{ maxWidth: 380, padding: 18 }}>
+            <h2 className="modal-title" style={{ marginBottom: 8 }}>前連日時・商談日時を入力してください</h2>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
               「{preContactModal.row.customer?.corporateName ?? '(店舗名未設定)'}」をアポイントへ変更します。
               前連日時はアポ実績に反映され、CLカレンダーに30分予定として登録されます。
               商談日時はアポ実績の商談日/商談時間・カレンダーの予定日時・備考欄に反映されます。

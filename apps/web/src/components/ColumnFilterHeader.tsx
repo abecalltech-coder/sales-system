@@ -69,6 +69,7 @@ export function ColumnFilterHeader({ label, options, selected, onChange }: Colum
       </button>
       {open && (
         <div
+          className="popover"
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
@@ -80,10 +81,6 @@ export function ColumnFilterHeader({ label, options, selected, onChange }: Colum
             maxHeight: 320,
             display: 'flex',
             flexDirection: 'column',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
             fontWeight: 400,
             fontSize: 12,
           }}

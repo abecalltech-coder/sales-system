@@ -1,26 +1,47 @@
 :root {
-  --color-bg: #f7f8fa;
+  /* ---- サーフェス(奥行きを3段で表現) ---- */
+  --color-bg: #eef0f4;
   --color-surface: #ffffff;
-  --color-border: #e5e7eb;
-  --color-border-strong: #d1d5db;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
-  --color-text-faint: #9ca3af;
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-soft: #eff6ff;
-  --color-success: #16a34a;
-  --color-success-soft: #f0fdf4;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fef2f2;
-  --color-warning: #d97706;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --color-surface-raised: #ffffff;
+  --color-subtle: #f6f7f9;
+  --color-sunken: #f1f2f5;
+
+  /* ---- 罫線 ---- */
+  --color-border: #e4e6ea;
+  --color-border-strong: #d0d3da;
+
+  /* ---- テキスト ---- */
+  --color-text: #191c22;
+  --color-text-muted: #5b616e;
+  --color-text-secondary: #5b616e;
+  --color-text-faint: #949aa6;
+
+  /* ---- アクセント(落ち着いた青。既定のリンク色より一段深くして「意図した色」に見せる) ---- */
+  --color-primary: #3453d1;
+  --color-primary-hover: #2a44b4;
+  --color-primary-active: #23399a;
+  --color-primary-soft: #eef1fc;
+  --color-primary-border: #c6d0f4;
+
+  --color-success: #12894a;
+  --color-success-soft: #e9f7ef;
+  --color-danger: #d23b3b;
+  --color-danger-soft: #fdecec;
+  --color-warning: #c77a12;
+  --color-warning-soft: #fbf1e0;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+
+  /* ---- 影(やわらかく多層に。1本の濃い影より上質に見える) ---- */
+  --shadow-xs: 0 1px 1px rgba(23, 28, 38, 0.04);
+  --shadow-sm: 0 1px 2px rgba(23, 28, 38, 0.05), 0 1px 3px rgba(23, 28, 38, 0.05);
+  --shadow-md: 0 2px 6px -2px rgba(23, 28, 38, 0.08), 0 8px 20px -6px rgba(23, 28, 38, 0.12);
+  --shadow-lg: 0 4px 10px -4px rgba(23, 28, 38, 0.12), 0 20px 40px -12px rgba(23, 28, 38, 0.22);
+
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans',
-    'Noto Sans JP', Meiryo, sans-serif;
+    'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
 }
 
 * {
@@ -43,6 +64,15 @@ body {
   font-size: 13px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* 和文の字間を詰めて締まった印象にする(約物半角) */
+  font-feature-settings: 'palt' 1;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-active);
 }
 
 h1,
@@ -50,7 +80,8 @@ h2,
 h3 {
   margin: 0;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
+  color: var(--color-text);
 }
 
 a {
@@ -61,42 +92,82 @@ a:hover {
   text-decoration: underline;
 }
 
+/* ============ ボタン ============ */
 button {
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
+  line-height: 1.4;
   padding: 5px 11px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
   cursor: pointer;
-  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+  box-shadow: var(--shadow-xs);
+  transition: background-color 0.13s ease, border-color 0.13s ease, box-shadow 0.13s ease, opacity 0.13s ease,
+    transform 0.06s ease;
 }
 button:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--color-subtle);
+  border-color: var(--color-border-strong);
+}
+button:active:not(:disabled) {
+  transform: translateY(0.5px);
+  box-shadow: none;
 }
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
-/* プライマリボタン: 保存・登録・作成系。テキストで判定できないため、ページ側でstyleを重ねて使う想定の
-   デフォルトは中立ボタン。プライマリ色にしたい場合は className="btn-primary" を付与する。 */
+/* プライマリボタン: 保存・登録・作成系。テキストで判定できないため、ページ側で className="btn-primary" を付与する。 */
 .btn-primary {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: #fff;
+  box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
 }
+.btn-primary:active:not(:disabled) {
+  background: var(--color-primary-active);
+  border-color: var(--color-primary-active);
+}
 
+/* ゴーストボタン: 罫線なしの控えめなアクション */
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-sunken);
+}
+
+/* 破壊的アクション */
+.btn-danger {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: var(--color-surface);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-soft);
+}
+
+.btn-sm {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+/* ============ 入力欄 ============ */
 input,
 select,
 textarea {
@@ -107,7 +178,12 @@ textarea {
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface);
   color: var(--color-text);
-  transition: border-color 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+  transition: border-color 0.13s ease, box-shadow 0.13s ease, background-color 0.13s ease;
+}
+input:hover:not(:disabled):not(:focus),
+select:hover:not(:disabled):not(:focus),
+textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--color-text-faint);
 }
 input:focus,
 select:focus,
@@ -121,12 +197,11 @@ textarea::placeholder {
   color: var(--color-text-faint);
 }
 
-/* プルダウンは共通してネイティブの矢印を消し、控えめなシェブロンアイコンに差し替える(要望:
-   全てのプルダウンのデザインを統一しておしゃれにしたい)。 */
+/* プルダウンは共通してネイティブの矢印を消し、控えめなシェブロンに差し替える(要望: 全プルダウンの意匠統一)。 */
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236b7280' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%235b616e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 10px 6px;
@@ -144,8 +219,9 @@ select:disabled {
   border: 1px solid transparent;
   background-color: transparent;
   padding: 4px 22px 4px 6px;
-  border-radius: 4px;
+  border-radius: 5px;
   background-position: right 6px center;
+  box-shadow: none;
 }
 .inline-select:hover:not(:disabled) {
   background-color: var(--color-primary-soft);
@@ -156,13 +232,14 @@ select:disabled {
   box-shadow: none;
 }
 
-/* 進捗・NG理由等、選択肢に色を持つプルダウンをボタン風のピルとして表示する(要望: 枠付け・色付け)。
+/* 進捗・NG理由等、選択肢に色を持つプルダウンをピルとして表示する(要望: 枠付け・色付け)。
    背景色は選択中の値ごとにJS側でinline styleとして設定される。 */
 .inline-select-colored {
-  border: 1px solid rgba(16, 24, 40, 0.1);
+  border: 1px solid rgba(23, 28, 38, 0.09);
   border-radius: 999px;
-  padding: 4px 26px 4px 10px;
+  padding: 3px 24px 3px 10px;
   font-weight: 600;
+  font-size: 11px;
   text-align: center;
   background-position: right 9px center;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23374151' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -170,8 +247,8 @@ select:disabled {
   transition: filter 0.12s ease, box-shadow 0.12s ease;
 }
 .inline-select-colored:hover:not(:disabled) {
-  filter: brightness(0.95);
-  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.2);
+  filter: brightness(0.96);
+  box-shadow: 0 1px 4px rgba(23, 28, 38, 0.16);
 }
 .inline-select-colored:focus {
   box-shadow: 0 0 0 3px var(--color-primary-soft);
@@ -188,16 +265,15 @@ table {
   width: 100%;
 }
 
-/* カード風コンテナ(フォーム・パネル用の共通クラス) */
+/* ============ 共通コンテナ ============ */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  padding: 12px;
+  padding: 14px;
 }
 
-/* ステータスバッジ */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -209,10 +285,10 @@ table {
   line-height: 1.5;
 }
 
-/* 画面共通のレイアウト枠(要望: 全体的に余白を詰めて1画面の情報量を増やす)。
-   個別ページで inline style の padding:24 等を置き換えて使う。 */
+/* 画面共通のレイアウト枠(要望: 余白を詰めて1画面の情報量を増やす)。 */
 .page {
-  padding: 10px 14px;
+  padding: 12px 16px 20px;
+  max-width: 1720px;
 }
 .page-header {
   display: flex;
@@ -220,19 +296,95 @@ table {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .page-title {
   font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.page-subtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ============ モーダル(全画面で意匠を統一) ============ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 20, 28, 0.34);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 2000;
+  animation: fade-in 0.12s ease;
+}
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 420px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  animation: pop-in 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.modal-head {
+  padding: 16px 18px 10px;
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.modal-body {
+  padding: 4px 18px 8px;
+}
+.modal-foot {
+  padding: 12px 18px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ============ ポップオーバー(通知・フィルター等) ============ */
+.popover {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-strong);
   border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+  background-clip: padding-box;
+  border: 3px solid transparent;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
