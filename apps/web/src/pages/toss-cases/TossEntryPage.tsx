@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '../../components/AppLayout';
@@ -17,15 +17,13 @@ export function TossEntryPage() {
   const [done, setDone] = useState(false);
 
   // トス担当者は既定でログインユーザー
-  const initialized = useMemo(() => {
-    if (!fields || !me) return false;
+  useEffect(() => {
+    if (!fields || !me) return;
     const staff = fields.find((f) => f.targetKey === 'tossUserName');
-    if (staff && answers.tossUserName === undefined && staff.options.includes(me.name)) {
-      setAnswers((a) => ({ ...a, tossUserName: me.name }));
+    if (staff && staff.options.includes(me.name)) {
+      setAnswers((a) => (a.tossUserName === undefined ? { ...a, tossUserName: me.name } : a));
     }
-    return true;
-  }, [fields, me]); // eslint-disable-line react-hooks/exhaustive-deps
-  void initialized;
+  }, [fields, me]);
 
   const submitMutation = useMutation({
     mutationFn: () => api.post('/toss-form/submit', { answers }),
@@ -33,6 +31,7 @@ export function TossEntryPage() {
       setDone(true);
       setError(null);
       setAnswers({});
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : '登録に失敗しました'),
   });
@@ -51,25 +50,55 @@ export function TossEntryPage() {
 
   return (
     <AppLayout>
-      <div className="page" style={{ maxWidth: 560 }}>
+      <div className="page" style={{ maxWidth: 640 }}>
         <div className="page-header">
           <h1 className="page-title">トス登録</h1>
           <button onClick={() => navigate('/toss-cases')} style={{ fontSize: 12 }}>
-            トス実績一覧へ
+            トス実績一覧へ →
           </button>
         </div>
 
-        {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 10 }}>{error}</p>}
+        {error && (
+          <div
+            style={{
+              background: 'var(--color-danger-soft)',
+              color: 'var(--color-danger)',
+              borderRadius: 6,
+              padding: '8px 12px',
+              fontSize: 13,
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
         {done && (
-          <p style={{ color: 'var(--color-success)', fontSize: 13, marginBottom: 10 }}>
-            登録しました。続けて入力できます。
-          </p>
+          <div
+            style={{
+              background: 'var(--color-success-soft)',
+              color: 'var(--color-success)',
+              borderRadius: 6,
+              padding: '8px 12px',
+              fontSize: 13,
+              marginBottom: 12,
+            }}
+          >
+            トスを登録しました。続けて入力できます。
+          </div>
         )}
 
         {isLoading ? (
-          <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>
+          <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>
         ) : (
-          <div className="card" style={{ padding: 16 }}>
+          <div
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 10,
+              boxShadow: 'var(--shadow-sm)',
+              padding: '18px 20px',
+            }}
+          >
             {(fields ?? []).map((f) => (
               <FieldInput
                 key={f.id}
@@ -83,7 +112,7 @@ export function TossEntryPage() {
               className="btn-primary"
               disabled={submitMutation.isPending}
               onClick={() => submitMutation.mutate()}
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 16, width: '100%', padding: '9px 0', fontSize: 13 }}
             >
               {submitMutation.isPending ? '登録中...' : 'トスを登録する'}
             </button>
@@ -91,6 +120,37 @@ export function TossEntryPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--color-text)',
+  display: 'block',
+  marginBottom: 5,
+};
+const inputStyle: React.CSSProperties = { width: '100%', fontSize: 13, padding: '7px 10px' };
+
+/** チェック/ラジオの選択肢をタップしやすいピルとして描画 */
+function OptionPill({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        fontSize: 13,
+        padding: '6px 12px',
+        borderRadius: 999,
+        border: `1px solid ${checked ? 'var(--color-primary)' : 'var(--color-border-strong)'}`,
+        background: checked ? 'var(--color-primary)' : 'var(--color-surface)',
+        color: checked ? '#fff' : 'var(--color-text)',
+        cursor: 'pointer',
+        fontWeight: checked ? 700 : 500,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -105,17 +165,14 @@ function FieldInput({
   onText: (v: string) => void;
   onToggle: (opt: string) => void;
 }) {
-  const label = (
-    <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 3 }}>
-      {f.label}
-      {f.required && <span style={{ color: 'var(--color-danger)' }}> *</span>}
-    </label>
-  );
   const wrap = (child: React.ReactNode) => (
-    <div style={{ marginBottom: 12 }}>
-      {label}
+    <div style={{ marginBottom: 16 }}>
+      <label style={labelStyle}>
+        {f.label}
+        {f.required && <span style={{ color: 'var(--color-danger)', marginLeft: 4 }}>必須</span>}
+      </label>
       {child}
-      {f.helpText && <p style={{ fontSize: 11, color: 'var(--color-text-faint)', margin: '2px 0 0' }}>{f.helpText}</p>}
+      {f.helpText && <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: '4px 0 0' }}>{f.helpText}</p>}
     </div>
   );
 
@@ -124,7 +181,7 @@ function FieldInput({
       <textarea
         value={(value as string) ?? ''}
         onChange={(e) => onText(e.target.value)}
-        style={{ width: '100%', minHeight: 80 }}
+        style={{ ...inputStyle, minHeight: 90, lineHeight: 1.5 }}
       />,
     );
   }
@@ -134,13 +191,13 @@ function FieldInput({
         type={f.fieldType === 'DATE' ? 'date' : 'datetime-local'}
         value={(value as string) ?? ''}
         onChange={(e) => onText(e.target.value)}
-        style={{ width: '100%' }}
+        style={inputStyle}
       />,
     );
   }
   if (f.fieldType === 'SELECT') {
     return wrap(
-      <select value={(value as string) ?? ''} onChange={(e) => onText(e.target.value)} style={{ width: '100%' }}>
+      <select value={(value as string) ?? ''} onChange={(e) => onText(e.target.value)} style={inputStyle}>
         <option value="">選択してください</option>
         {f.options.map((o) => (
           <option key={o} value={o}>
@@ -152,12 +209,9 @@ function FieldInput({
   }
   if (f.fieldType === 'RADIO') {
     return wrap(
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {f.options.map((o) => (
-          <label key={o} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="radio" checked={value === o} onChange={() => onText(o)} />
-            {o}
-          </label>
+          <OptionPill key={o} label={o} checked={value === o} onClick={() => onText(value === o ? '' : o)} />
         ))}
       </div>,
     );
@@ -165,18 +219,12 @@ function FieldInput({
   if (f.fieldType === 'MULTISELECT') {
     const arr = Array.isArray(value) ? value : [];
     return wrap(
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {f.options.map((o) => (
-          <label key={o} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="checkbox" checked={arr.includes(o)} onChange={() => onToggle(o)} />
-            {o}
-          </label>
+          <OptionPill key={o} label={o} checked={arr.includes(o)} onClick={() => onToggle(o)} />
         ))}
       </div>,
     );
   }
-  // TEXT
-  return wrap(
-    <input value={(value as string) ?? ''} onChange={(e) => onText(e.target.value)} style={{ width: '100%' }} />,
-  );
+  return wrap(<input value={(value as string) ?? ''} onChange={(e) => onText(e.target.value)} style={inputStyle} />);
 }
