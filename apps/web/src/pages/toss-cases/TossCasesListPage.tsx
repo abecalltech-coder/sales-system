@@ -530,9 +530,11 @@ export function TossCasesListPage() {
             }}
             style={{ width: 280 }}
           />
-          <button onClick={manualSort.toggle} className={manualSort.manual ? 'btn-primary' : undefined} style={{ fontSize: 12 }}>
-            {manualSort.manual ? '✓ 手動並び替え中' : '手動並び替え'}
-          </button>
+          {manualSort.manual && (
+            <button onClick={manualSort.resetToAuto} style={{ fontSize: 12 }}>
+              自動並びに戻す
+            </button>
+          )}
         </div>
 
         <DataTable
@@ -549,7 +551,7 @@ export function TossCasesListPage() {
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
-          onReorder={manualSort.manual ? manualSort.reorder : undefined}
+          onReorder={manualSort.reorder}
         />
       </div>
 

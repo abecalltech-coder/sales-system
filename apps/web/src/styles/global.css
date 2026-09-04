@@ -138,23 +138,22 @@ select:disabled {
   opacity: 0.6;
 }
 
-/* 一覧セル内のインライン編集プルダウン(DataTable)。通常はテキストになじませ、ホバー/フォーカス時
-   だけ枠と背景を出して「操作できる」ことを示す(セル内で常時ボーダー付きだと表がうるさくなるため)。 */
+/* 一覧セル内のインライン編集プルダウン(DataTable)。セルになじませ、フォーカス時も
+   浮いた枠は出さず「セルの中で編集している」見た目にする(要望)。 */
 .inline-select {
   border: 1px solid transparent;
   background-color: transparent;
   padding: 4px 22px 4px 6px;
-  border-radius: 6px;
+  border-radius: 4px;
   background-position: right 6px center;
 }
 .inline-select:hover:not(:disabled) {
   background-color: var(--color-primary-soft);
-  border-color: var(--color-border);
 }
 .inline-select:focus {
   background-color: var(--color-surface);
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-soft);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* 進捗・NG理由等、選択肢に色を持つプルダウンをボタン風のピルとして表示する(要望: 枠付け・色付け)。
@@ -225,18 +224,6 @@ table {
 }
 .page-title {
   font-size: 16px;
-}
-
-/* セル編集ポップアップ(InlineText)がふわっと現れる程度の控えめな出現アニメーション */
-@keyframes inline-edit-pop {
-  from {
-    opacity: 0;
-    transform: translateY(-2px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
 }
 
 ::-webkit-scrollbar {

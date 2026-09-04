@@ -10,6 +10,8 @@ import { pastel, readableTextColor } from '../lib/color';
 
 const baseStyle: CSSProperties = {
   border: 'none',
+  outline: 'none',
+  boxShadow: 'none',
   background: 'transparent',
   font: 'inherit',
   color: 'inherit',
@@ -18,12 +20,10 @@ const baseStyle: CSSProperties = {
 };
 
 /**
- * 一覧セルをその場で書き換えられるようにする最小限の部品。
- * 非フォーカス時は他の列と同じ1行の高さに収まる省略表示(行の高さを常に統一するため)、
- * フォーカス時のみGoogleスプレッドシートのように実サイズのtextareaを画面固定位置で
- * セルの上に浮かせて全文を表示する(position:fixedで祖先のoverflow:hiddenによる
- * クリッピングを回避している。単純なabsoluteだと表の列幅で切れてしまうため)。
- * Enterで確定、Shift+EnterまたはCtrl+Enterで改行を挿入できる。
+ * 一覧セルをその場で書き換える部品。フォーカス時はセルいっぱいに textarea を敷き、
+ * 枠(ポップアップ)を出さず「セルの中で編集している」見た目にする(要望)。
+ * expand 指定(備考等)のときだけ、下方向に広げて全文を表示する。
+ * Enterで確定、Shift+Enterで改行。
  */
 export function InlineText({
   value,
@@ -38,47 +38,22 @@ export function InlineText({
   placeholder?: string;
   style?: CSSProperties;
   disabled?: boolean;
-  /** 長文(備考/アポ詳細)向け。クリックしたセル位置で広く開き、全文を表示・編集できる */
+  /** 長文(備考/アポ詳細)向け。フォーカス時にセル位置から下方向へ広げて全文を表示・編集できる */
   expand?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
-  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  const anchorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => setDraft(value ?? ''), [value]);
 
-  const updateRect = () => {
-    const el = anchorRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setRect({ top: r.top, left: r.left, width: r.width });
-  };
-
-  useLayoutEffect(() => {
-    if (!focused) return;
-    updateRect();
-    const onScrollOrResize = () => updateRect();
-    window.addEventListener('scroll', onScrollOrResize, true);
-    window.addEventListener('resize', onScrollOrResize);
-    return () => {
-      window.removeEventListener('scroll', onScrollOrResize, true);
-      window.removeEventListener('resize', onScrollOrResize);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused]);
-
-  // rect を依存に含めるのが重要: focused=true の初回レンダーではまだ textarea が
-  // マウントされておらず(rect が null のため)高さ計算が空振りする。rect 確定後の
-  // 再レンダーでこの effect を再実行させることで全文の高さに広げる。
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!focused || !el) return;
+    if (!expand) return;
     el.style.height = 'auto';
-    const min = expand ? 120 : 0;
-    el.style.height = `${Math.max(el.scrollHeight, min)}px`;
-  }, [focused, draft, rect, expand]);
+    el.style.height = `${Math.max(el.scrollHeight, 120)}px`;
+  }, [focused, draft, expand]);
 
   const commit = () => {
     setFocused(false);
@@ -89,7 +64,6 @@ export function InlineText({
 
   return (
     <div
-      ref={anchorRef}
       onClick={(e) => {
         e.stopPropagation();
         if (!disabled) setFocused(true);
@@ -97,6 +71,7 @@ export function InlineText({
       style={{
         ...baseStyle,
         ...style,
+        position: 'relative',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
@@ -105,7 +80,7 @@ export function InlineText({
       }}
     >
       {previewText || (placeholder && <span style={{ color: 'var(--color-text-faint)' }}>{placeholder}</span>)}
-      {focused && rect && (
+      {focused && (
         <textarea
           ref={textareaRef}
           autoFocus
@@ -124,33 +99,49 @@ export function InlineText({
               setDraft(value ?? '');
               (e.target as HTMLTextAreaElement).blur();
             }
-            // Shift+Enter・Ctrl+Enter・Alt+Enterはデフォルト動作(改行挿入)に任せる
           }}
-          style={{
-            position: 'fixed',
-            top: rect.top - 6,
-            left: rect.left - 9,
-            width: expand
-              ? Math.min(Math.max(rect.width + 48, 460), Math.round(window.innerWidth * 0.7))
-              : Math.min(Math.max(rect.width + 48, 220), 440),
-            maxHeight: expand ? '65vh' : undefined,
-            zIndex: 1000,
-            resize: 'none',
-            overflowY: expand ? 'auto' : 'hidden',
-            overflowX: 'hidden',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            font: 'inherit',
-            fontWeight: style?.fontWeight,
-            color: 'inherit',
-            lineHeight: 1.5,
-            padding: '7px 10px',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-primary)',
-            borderRadius: 10,
-            boxShadow: '0 12px 28px rgba(16, 24, 40, 0.16), 0 2px 8px rgba(16, 24, 40, 0.08)',
-            animation: 'inline-edit-pop 0.1s ease-out',
-          }}
+          style={
+            expand
+              ? {
+                  position: 'absolute',
+                  top: -3,
+                  left: -8,
+                  width: 'max(100%, 360px)',
+                  minHeight: 120,
+                  maxHeight: '60vh',
+                  overflowY: 'auto',
+                  zIndex: 30,
+                  resize: 'none',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  font: 'inherit',
+                  color: 'var(--color-text)',
+                  lineHeight: 1.5,
+                  padding: '3px 8px',
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-primary)',
+                  borderRadius: 4,
+                }
+              : {
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  zIndex: 30,
+                  resize: 'none',
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  font: 'inherit',
+                  color: 'var(--color-text)',
+                  lineHeight: 'inherit',
+                  padding: 'inherit',
+                  margin: 0,
+                  background: 'var(--color-surface)',
+                  border: 'none',
+                  outline: 'none',
+                  borderRadius: 0,
+                }
+          }
         />
       )}
     </div>

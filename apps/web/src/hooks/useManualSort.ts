@@ -3,9 +3,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
 /**
- * 一覧の「手動並び替え」モード(要望)。
- * ON のとき rows を manualOrder 昇順で並べ、DataTable に onReorder を渡してドラッグ並び替えを有効にする。
- * モードの ON/OFF は端末に記憶する(サーバーには保存しない)。並び順自体はサーバーの manualOrder に保存。
+ * 一覧の並び替え。既定は各画面の自動ソート。行番号(⠿)をドラッグして並び替えると
+ * 自動的に「手動並び」モードになり、以降は manualOrder 昇順で表示する。
+ * 「自動並びに戻す」で解除。モードのON/OFFは端末に記憶(サーバーには保存しない)。
  */
 export function useManualSort(tableKey: string, reorderPath: string, invalidateKey: string) {
   const storageKey = `manualSort:${tableKey}`;
@@ -18,24 +18,31 @@ export function useManualSort(tableKey: string, reorderPath: string, invalidateK
   });
   const queryClient = useQueryClient();
 
-  const toggle = useCallback(() => {
-    setManual((v) => {
-      const next = !v;
+  const setMode = useCallback(
+    (on: boolean) => {
+      setManual(on);
       try {
-        localStorage.setItem(storageKey, next ? '1' : '0');
+        localStorage.setItem(storageKey, on ? '1' : '0');
       } catch {
         /* private mode */
       }
-      return next;
-    });
-  }, [storageKey]);
+    },
+    [storageKey],
+  );
 
   const reorderMutation = useMutation({
     mutationFn: (ids: string[]) => api.post(reorderPath, { ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [invalidateKey] }),
   });
 
-  /** manualOrder 昇順(未設定は末尾)で安定ソートした配列を返す。manualモードでないときは入力をそのまま返す。 */
+  const reorder = useCallback(
+    (ids: string[]) => {
+      setMode(true); // 並び替えたら手動モードに入る
+      reorderMutation.mutate(ids);
+    },
+    [reorderMutation, setMode],
+  );
+
   const applySort = useCallback(
     <T extends { id: string; manualOrder?: number | null }>(rows: T[]): T[] => {
       if (!manual) return rows;
@@ -51,5 +58,5 @@ export function useManualSort(tableKey: string, reorderPath: string, invalidateK
     [manual],
   );
 
-  return { manual, toggle, applySort, reorder: reorderMutation.mutate };
+  return { manual, applySort, reorder, resetToAuto: () => setMode(false) };
 }
