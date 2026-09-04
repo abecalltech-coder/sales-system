@@ -38,22 +38,45 @@ export function InlineText({
   placeholder?: string;
   style?: CSSProperties;
   disabled?: boolean;
-  /** 長文(備考/アポ詳細)向け。フォーカス時にセル位置から下方向へ広げて全文を表示・編集できる */
+  /** 長文(備考/アポ詳細)向け。フォーカス時にセル位置から広げて全文を表示・編集する */
   expand?: boolean;
 }) {
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
+  // expand時: セルの overflow:hidden を抜けるため position:fixed でセル位置に貼り付ける
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => setDraft(value ?? ''), [value]);
 
+  const updateRect = () => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect({ top: r.top, left: r.left, width: r.width });
+  };
+
+  useLayoutEffect(() => {
+    if (!focused || !expand) return;
+    updateRect();
+    const on = () => updateRect();
+    window.addEventListener('scroll', on, true);
+    window.addEventListener('resize', on);
+    return () => {
+      window.removeEventListener('scroll', on, true);
+      window.removeEventListener('resize', on);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, expand]);
+
+  // rect 確定後に textarea 高さを内容に合わせる(初回は rect=null で空振りするため rect も依存に入れる)
   useLayoutEffect(() => {
     const el = textareaRef.current;
-    if (!focused || !el) return;
-    if (!expand) return;
+    if (!focused || !expand || !el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.max(el.scrollHeight, 120)}px`;
-  }, [focused, draft, expand]);
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 140), Math.round(window.innerHeight * 0.6))}px`;
+  }, [focused, expand, draft, rect]);
 
   const commit = () => {
     setFocused(false);
@@ -64,6 +87,7 @@ export function InlineText({
 
   return (
     <div
+      ref={anchorRef}
       onClick={(e) => {
         e.stopPropagation();
         if (!disabled) setFocused(true);
@@ -80,7 +104,7 @@ export function InlineText({
       }}
     >
       {previewText || (placeholder && <span style={{ color: 'var(--color-text-faint)' }}>{placeholder}</span>)}
-      {focused && (
+      {focused && (!expand || rect) && (
         <textarea
           ref={textareaRef}
           autoFocus
@@ -101,26 +125,30 @@ export function InlineText({
             }
           }}
           style={
-            expand
+            expand && rect
               ? {
-                  position: 'absolute',
-                  top: -3,
-                  left: -8,
-                  width: 'max(100%, 360px)',
-                  minHeight: 120,
+                  // セルの位置に固定表示し、内容に合わせて下方向へ広げて全文を見せる。
+                  // 画面下端で見切れないよう上方向に寄せる
+                  position: 'fixed',
+                  top: Math.min(rect.top, Math.max(8, window.innerHeight - 240)),
+                  left: Math.min(rect.left, window.innerWidth - Math.max(rect.width, 380) - 12),
+                  width: Math.max(rect.width, 380),
+                  minHeight: 140,
                   maxHeight: '60vh',
                   overflowY: 'auto',
-                  zIndex: 30,
+                  zIndex: 1000,
                   resize: 'none',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   font: 'inherit',
+                  fontSize: 12,
                   color: 'var(--color-text)',
-                  lineHeight: 1.5,
-                  padding: '3px 8px',
+                  lineHeight: 1.55,
+                  padding: '4px 8px',
                   background: 'var(--color-surface)',
                   border: '1px solid var(--color-primary)',
                   borderRadius: 4,
+                  boxShadow: '0 4px 16px rgba(16,24,40,0.14)',
                 }
               : {
                   position: 'absolute',
