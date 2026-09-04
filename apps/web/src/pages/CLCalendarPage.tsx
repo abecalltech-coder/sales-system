@@ -353,6 +353,63 @@ interface CalendarEvent {
   appointment: AppointmentListItem;
 }
 
+/** 週/日表示で時間が重なる予定を横に並べるためのレーン割り当て結果 */
+interface PositionedEvent {
+  ev: CalendarEvent;
+  /** 左からの列番号(0始まり) */
+  lane: number;
+  /** その予定が属する重なりグループの列数。多いほど各予定の幅が狭くなる */
+  cols: number;
+}
+
+/**
+ * Googleカレンダーのように、時間が重なる予定を左から順に別レーンへ振り分ける。
+ * 連鎖して重なる予定を1グループとしてまとめ、グループ内の最大レーン数で幅を等分する
+ * (重なりが増えるほど幅が狭くなる)。
+ */
+function layoutOverlaps(events: CalendarEvent[]): PositionedEvent[] {
+  const minutesOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
+  const items = events
+    .map((ev) => {
+      const s = minutesOf(ev.start);
+      const e = ev.end ? minutesOf(ev.end) : s + 60;
+      return { ev, s, e: Math.max(e, s + 15) };
+    })
+    .sort((a, b) => a.s - b.s || a.e - b.e);
+
+  const result: PositionedEvent[] = [];
+  let group: typeof items = [];
+  let groupEnd = -1;
+
+  const flush = () => {
+    if (group.length === 0) return;
+    const laneEnds: number[] = [];
+    const laneByItem = new Map<(typeof group)[number], number>();
+    for (const it of group) {
+      let lane = laneEnds.findIndex((end) => end <= it.s);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(it.e);
+      } else {
+        laneEnds[lane] = it.e;
+      }
+      laneByItem.set(it, lane);
+    }
+    const cols = laneEnds.length;
+    for (const it of group) result.push({ ev: it.ev, lane: laneByItem.get(it) ?? 0, cols });
+    group = [];
+    groupEnd = -1;
+  };
+
+  for (const it of items) {
+    if (group.length > 0 && it.s >= groupEnd) flush();
+    group.push(it);
+    groupEnd = Math.max(groupEnd, it.e);
+  }
+  flush();
+  return result;
+}
+
 /**
  * Appointmentごとに、商談予定(メイン)に加えて前連日時が入力されている場合は
  * 30分の前連予定を表示用に合成する(DBには保存しない派生イベント)。
@@ -580,12 +637,13 @@ function TimeGrid({
                 {hours.map((h, hi) => (
                   <div key={h} style={{ position: 'absolute', top: hi * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderBottom: '1px solid var(--color-border)' }} />
                 ))}
-                {dayEvents.map((ev) => {
+                {layoutOverlaps(dayEvents).map(({ ev, lane, cols }) => {
                   const start = ev.start;
                   const startMin = start.getHours() * 60 + start.getMinutes() - DAY_START_HOUR * 60;
                   const durationMin = ev.end ? (ev.end.getTime() - start.getTime()) / 60000 : 60;
                   const top = (Math.max(startMin, 0) / 60) * HOUR_HEIGHT;
                   const height = Math.max((durationMin / 60) * HOUR_HEIGHT, 16);
+                  const widthPct = 100 / cols;
                   return (
                     <div
                       key={ev.key}
@@ -597,16 +655,20 @@ function TimeGrid({
                       style={{
                         position: 'absolute',
                         top,
-                        left: 2,
-                        right: 2,
+                        left: `calc(${lane * widthPct}% + 1px)`,
+                        width: `calc(${widthPct}% - 2px)`,
                         height,
                         background: ev.color,
                         color: '#fff',
                         borderRadius: 4,
                         padding: '2px 4px',
                         fontSize: 10,
+                        lineHeight: 1.25,
                         overflow: 'hidden',
                         cursor: 'pointer',
+                        // 隣り合う予定どうしが同系色でも境目が分かるよう白フチを付ける
+                        boxShadow: cols > 1 ? '0 0 0 1px var(--color-surface)' : undefined,
+                        zIndex: 1,
                       }}
                     >
                       {ev.title}
