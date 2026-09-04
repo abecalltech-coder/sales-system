@@ -21,6 +21,12 @@ export class PushNotificationsController {
     return this.service.subscribe(user.id, dto);
   }
 
+  /** 自分の端末へテスト通知を送る(通知が届くか確認する用) */
+  @Post('test')
+  async test(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.sendTest(user.id);
+  }
+
   @Delete('subscribe')
   unsubscribe(@Body() dto: UnsubscribePushDto) {
     return this.service.unsubscribe(dto.endpoint);

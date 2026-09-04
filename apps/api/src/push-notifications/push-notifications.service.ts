@@ -49,6 +49,28 @@ export class PushNotificationsService {
     return { ok: true };
   }
 
+  /** テスト通知。結果を返して原因切り分けに使う。 */
+  async sendTest(userId: string) {
+    if (!this.enabled) {
+      return { ok: false, reason: 'VAPID_PRIVATE_KEY が未設定のためサーバーから送信できません' };
+    }
+    const subs = await this.prisma.pushSubscription.findMany({ where: { userId } });
+    if (subs.length === 0) {
+      return { ok: false, reason: 'この端末の購読が見つかりません。もう一度「通知を有効にする」を押してください' };
+    }
+    await Promise.all(
+      subs.map((sub) =>
+        this.sendToSubscription(sub, {
+          title: 'テスト通知',
+          body: '通知は正常に届いています',
+          url: '/',
+          tag: 'push-test',
+        }),
+      ),
+    );
+    return { ok: true, sent: subs.length };
+  }
+
   /** 指定ユーザーの全購読先へ送信する。期限切れ購読(410/404)は自動的に削除する */
   async sendToUser(userId: string, payload: PushPayload) {
     if (!this.enabled) return;

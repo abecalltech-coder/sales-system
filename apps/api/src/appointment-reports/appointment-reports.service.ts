@@ -30,7 +30,10 @@ export class AppointmentReportsService {
    * 追記した分だけAppointmentのversionもインクリメントする。
    */
   async report(dto: CreateAppointmentReportDto, userId: string) {
-    const appointment = await this.prisma.appointment.findUniqueOrThrow({ where: { id: dto.appointmentId } });
+    const appointment = await this.prisma.appointment.findUniqueOrThrow({
+      where: { id: dto.appointmentId },
+      include: { customer: { select: { corporateName: true } } },
+    });
     const reporter = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
     const label = CHECKPOINT_LABELS[dto.checkpoint] ?? dto.checkpoint;
     const timestamp = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
@@ -69,25 +72,29 @@ export class AppointmentReportsService {
       },
     );
 
-    if (appointment.snapshotDepartmentId) {
-      const managers = await this.prisma.user.findMany({
-        where: {
-          departmentId: appointment.snapshotDepartmentId,
-          deletedAt: null,
-          roles: { some: { role: { code: 'MANAGER' } } },
-        },
-        select: { id: true },
-      });
-      await this.push.sendToUsers(
-        managers.map((m) => m.id),
-        {
-          title: `実施報告: ${label}`,
-          body: `${appointment.caseName ?? ''} ${dto.reportText}`.trim(),
-          url: '/cl-calendar',
-          tag: `report:${appointment.id}:${dto.checkpoint}`,
-        },
-      );
-    }
+    // 実施報告の通知先: 該当部署のMANAGER + 全ADMIN/SUPER_ADMIN。
+    // 部署が未設定のアポでも通知が消えないよう、部署一致は「あれば追加」の扱いにする。
+    const recipients = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        OR: [
+          { roles: { some: { role: { code: { in: ['ADMIN', 'SUPER_ADMIN'] } } } } },
+          {
+            roles: { some: { role: { code: 'MANAGER' } } },
+            ...(appointment.snapshotDepartmentId ? { departmentId: appointment.snapshotDepartmentId } : {}),
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    // 自分自身(報告者)には通知しない
+    const targetIds = recipients.map((m) => m.id).filter((id) => id !== userId);
+    await this.push.sendToUsers(targetIds, {
+      title: `実施報告: ${label}`,
+      body: `${appointment.caseName ?? appointment.customer?.corporateName ?? ''} ${dto.reportText}`.trim(),
+      url: '/cl-calendar',
+      tag: `report:${appointment.id}:${dto.checkpoint}`,
+    });
 
     return reportEvent;
   }
