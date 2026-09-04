@@ -13,7 +13,7 @@
 9. マスタ管理(ステータス/商材/流入元) `/admin/masters`
 10. トスフォーム設定 `/admin/toss-form`
 11. カスタム項目管理 `/admin/custom-fields`
-12. 連携設定(Googleフォーム/カレンダー) `/admin/integrations`
+12. 連携設定(Googleカレンダー・Meet) `/admin/integrations`
 13. 操作ログ `/admin/audit-logs`
 14. システム設定 `/admin/system-settings`
 15. ログイン `/login`

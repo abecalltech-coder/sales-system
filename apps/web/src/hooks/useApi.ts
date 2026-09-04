@@ -434,37 +434,6 @@ export function useSystemSettings() {
   return useQuery({ queryKey: ['system-settings'], queryFn: () => api.get<SystemSettingItem[]>('/system-settings') });
 }
 
-// ============================================================
-// Googleフォーム連携
-// ============================================================
-export interface GoogleFormConfig {
-  formUrl: string;
-  webhookSecret: string;
-  fieldNames: string[];
-}
-
-export interface GoogleFormWebhookLogItem {
-  id: string;
-  responseId: string | null;
-  rawPayload: Record<string, string>;
-  status: string;
-  tossCaseId: string | null;
-  errorMessage: string | null;
-  createdAt: string;
-}
-
-export function useGoogleFormConfig() {
-  return useQuery({ queryKey: ['google-form-config'], queryFn: () => api.get<GoogleFormConfig>('/integrations/google-forms/config') });
-}
-
-export function useGoogleFormLogs() {
-  return useQuery({
-    queryKey: ['google-form-logs'],
-    queryFn: () => api.get<GoogleFormWebhookLogItem[]>('/integrations/google-forms/logs'),
-    refetchInterval: 15000,
-  });
-}
-
 export interface GoogleCalendarStatus {
   configured: boolean;
   connected: boolean;

@@ -49,7 +49,9 @@ GET :key / PUT :key(body `{ value }`) — ログインユーザー本人のUI設
 一覧の列幅は `tableWidths:<画面key>`(例 `tableWidths:toss-cases`)、valueは `{ "<列key>": <px> }`。
 
 ## Google連携
-POST /integrations/google-forms/webhook (署名検証必須、認証はSecretベース)
+
+Googleフォーム連携(webhook)はバックエンドに残っているが、アプリ内「トス登録」フォームへ移行したため
+連携設定ページからは非表示。`/integrations/google-forms/webhook` は当面残置。
 
 ### Googleカレンダー / Meet `/integrations/google-calendar`
 GET status(connected/accountEmail/configured) / GET auth-url / GET callback(Public、?google=connected|errorでフロントへ戻す) /
