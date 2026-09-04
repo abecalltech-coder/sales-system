@@ -8,12 +8,14 @@ import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, 
 import { buildCalendarTitle, buildPreContactTitle, closerSurname } from '../lib/calendarTitle';
 
 const COLOR_PALETTE = [
-  '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
+  '#ff887c', '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
   '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4', '#14b8a6', '#10b981',
   '#22c55e', '#84cc16', '#eab308', '#f59e0b', '#f97316', '#78716c',
   '#6b7280', '#1f2937',
 ];
 const DEFAULT_COLOR = '#3b82f6';
+// 前連(30分ブロック)の予定は常にフラミンゴ色(Googleカレンダーのフラミンゴ)にする(要望)
+const PRECONTACT_COLOR = '#ff887c';
 const HOUR_HEIGHT = 48; // 週/日表示: 1時間あたりの高さ(px)
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 24;
@@ -69,7 +71,8 @@ function eventToDraft(ev: AppointmentListItem, titlePreview: string): DraftEvent
     closerStatusId: ev.closerStatusId ?? '',
     snapshotDepartmentId: '',
     meetingUserId: '',
-    calendarColor: ev.calendarColor ?? DEFAULT_COLOR,
+    // 空文字 = 未設定(部署色を使う)。案件ごとに色を持てる。
+    calendarColor: ev.calendarColor ?? '',
     memo: ev.memo ?? '',
     reminderEnabled: ev.reminderEnabled,
     reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
@@ -370,7 +373,8 @@ function buildDisplayEvents(
         start: new Date(ev.meetingStartAt),
         end: ev.meetingEndAt ? new Date(ev.meetingEndAt) : null,
         title: eventLabel(ev, branchLabel, closerName),
-        color: ev.calendarColor ?? departmentStatus?.color ?? DEFAULT_COLOR,
+        // 商談予定の色は案件ごとに設定した calendarColor を優先(未設定時のみ部署色)
+        color: ev.calendarColor || departmentStatus?.color || DEFAULT_COLOR,
         appointment: ev,
       });
     }
@@ -386,7 +390,8 @@ function buildDisplayEvents(
           prefecture: ev.prefecture,
           storeName: ev.storeName ?? '',
         }),
-        color: departmentStatus?.color ?? ev.calendarColor ?? DEFAULT_COLOR,
+        // 前連は常にフラミンゴ色(要望)
+        color: PRECONTACT_COLOR,
         appointment: ev,
       });
     }
@@ -736,11 +741,15 @@ function EventFormModal({
           style={{ width: '100%', minHeight: 320, marginBottom: 10, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontSize: 13 }}
         />
 
-        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>色</label>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 4 }}>
+          この予定の色（案件ごとに設定できます）
+        </label>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {COLOR_PALETTE.map((c) => (
             <button
               key={c}
+              type="button"
+              title={c === '#ff887c' ? 'フラミンゴ' : undefined}
               onClick={() => set({ calendarColor: c })}
               style={{
                 width: 22,
@@ -748,12 +757,23 @@ function EventFormModal({
                 borderRadius: '50%',
                 background: c,
                 border: draft.calendarColor === c ? '2px solid var(--color-text)' : '2px solid transparent',
+                boxShadow: draft.calendarColor === c ? '0 0 0 2px var(--color-surface) inset' : 'none',
                 padding: 0,
                 cursor: 'pointer',
               }}
             />
           ))}
+          <button
+            type="button"
+            onClick={() => set({ calendarColor: '' })}
+            style={{ fontSize: 11, padding: '2px 8px', marginLeft: 4 }}
+          >
+            部署色に戻す
+          </button>
         </div>
+        <p style={{ fontSize: 11, color: 'var(--color-text-faint)', margin: '0 0 16px' }}>
+          ※ 前連（30分）の予定は常にフラミンゴ色で表示されます。
+        </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: draft.reminderEnabled ? 8 : 16 }}>
           <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
