@@ -7,8 +7,9 @@ import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../
 import { PresenceBar } from '../../components/PresenceBar';
 import { useContracts, useStatuses, useMe, ContractListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { isoToDateInput, isoToTimeInput } from '../../lib/dateInput';
+import { isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
+import { useManualSort } from '../../hooks/useManualSort';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -23,6 +24,7 @@ export function ContractsListPage() {
   const pageSize = 100;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const manualSort = useManualSort('contracts', '/contracts/reorder', 'contracts');
 
   const { data, isLoading } = useContracts({ page, pageSize, statusId: statusId || undefined, keyword: keyword || undefined });
   const { data: me } = useMe();
@@ -76,6 +78,61 @@ export function ContractsListPage() {
         />
       );
     },
+    copyValue: (r) => (r[key] as string | null) ?? '',
+    pasteValue: (r, text) => {
+      const t = text.trim();
+      if (!t) return save(r, { [key]: null });
+      const num = Number(t.replace(/,/g, ''));
+      if (Number.isFinite(num)) save(r, { [key]: num });
+    },
+  });
+
+  const dateColumn = (colKey: string, isoField: keyof ContractListItem, label: string, width = 100): Column<ContractListItem> => ({
+    key: colKey,
+    label,
+    width,
+    renderHeader: filterHeaderFor(colKey, label),
+    render: (r) => (
+      <InlineFlexDate iso={r[isoField] as string | null} label={label} onSave={(iso) => save(r, { [isoField]: iso })} onInvalid={setError} />
+    ),
+    copyValue: (r) => isoToDateInput(r[isoField] as string | null),
+    pasteValue: (r, text) => {
+      const t = text.trim();
+      if (!t) return save(r, { [isoField]: null });
+      const p = parseDateText(t);
+      if (p) save(r, { [isoField]: new Date(`${p}T${isoToTimeInput(r[isoField] as string | null) || '00:00'}`).toISOString() });
+    },
+  });
+
+  const timeColumn = (colKey: string, isoField: keyof ContractListItem, label: string, width = 84): Column<ContractListItem> => ({
+    key: colKey,
+    label,
+    width,
+    renderHeader: filterHeaderFor(colKey, label),
+    render: (r) => (
+      <InlineFlexTime iso={r[isoField] as string | null} label={label} onSave={(iso) => save(r, { [isoField]: iso })} onInvalid={setError} />
+    ),
+    copyValue: (r) => isoToTimeInput(r[isoField] as string | null),
+    pasteValue: (r, text) => {
+      const p = parseTimeText(text.trim());
+      if (p && r[isoField]) save(r, { [isoField]: new Date(`${isoToDateInput(r[isoField] as string | null)}T${p}`).toISOString() });
+    },
+  });
+
+  const textColumn = (
+    colKey: string,
+    label: string,
+    get: (r: ContractListItem) => string | null,
+    patch: (v: string) => Record<string, unknown>,
+    width = 140,
+  ): Column<ContractListItem> => ({
+    key: colKey,
+    label,
+    width,
+    renderHeader: filterHeaderFor(colKey, label),
+    render: (r) => <InlineText value={get(r)} onSave={(v) => save(r, patch(v))} />,
+    copyValue: (r) => get(r) ?? '',
+    pasteValue: (r, text) => save(r, patch(text)),
   });
 
   // 列フィルター(トス・アポと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
@@ -122,34 +179,21 @@ export function ContractsListPage() {
     );
   }
 
-  const rows = useMemo(
-    () =>
-      rawRows.filter((r) =>
-        Object.entries(filters).every(([key, sel]) => {
-          if (!sel) return true;
-          const fn = filterValueFns[key];
-          return fn ? sel.has(fn(r)) : true;
-        }),
-      ),
+  const rows = useMemo(() => {
+    const filtered = rawRows.filter((r) =>
+      Object.entries(filters).every(([key, sel]) => {
+        if (!sel) return true;
+        const fn = filterValueFns[key];
+        return fn ? sel.has(fn(r)) : true;
+      }),
+    );
+    return manualSort.manual ? manualSort.applySort(filtered) : filtered;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rawRows, filters],
-  );
+  }, [rawRows, filters, manualSort.manual]);
 
   const columns: Column<ContractListItem>[] = [
-    {
-      key: 'storeName',
-      label: '店舗名',
-      width: 160,
-      renderHeader: filterHeaderFor('storeName', '店舗名'),
-      render: (r) => <InlineText value={r.storeName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
-    },
-    {
-      key: 'contractedAt',
-      label: '成約日',
-      width: 92,
-      renderHeader: filterHeaderFor('contractedAt', '成約日'),
-      render: (r) => <InlineFlexDate iso={r.contractedAt} label="成約日" onSave={(iso) => save(r, { contractedAt: iso })} onInvalid={setError} />,
-    },
+    textColumn('storeName', '店舗名', (r) => r.storeName, (v) => ({ corporateName: v }), 160),
+    dateColumn('contractedAt', 'contractedAt', '成約日', 92),
     numberColumn('contractAmount', '契約金額', 110),
     {
       key: 'status',
@@ -165,108 +209,31 @@ export function ContractsListPage() {
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
         />
       ),
+      copyValue: (r) => statusLabel(r.matchingStatusId),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        const m = statuses?.find((s) => s.displayName === t || s.displayName.toLowerCase() === t.toLowerCase());
+        if (m) save(r, { matchingStatusId: m.id });
+      },
     },
-    {
-      key: 'matchingDate',
-      label: 'マッチング日',
-      width: 92,
-      renderHeader: filterHeaderFor('matchingDate', 'マッチング日'),
-      render: (r) => <InlineFlexDate iso={r.matchingAt} label="マッチング日" onSave={(iso) => save(r, { matchingAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'matchingTime',
-      label: 'マッチング時間',
-      width: 84,
-      renderHeader: filterHeaderFor('matchingTime', 'マッチング時間'),
-      render: (r) => <InlineFlexTime iso={r.matchingAt} label="マッチング時間" onSave={(iso) => save(r, { matchingAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'switchingScheduledAt',
-      label: 'スイッチング予定日',
-      width: 110,
-      renderHeader: filterHeaderFor('switchingScheduledAt', 'スイッチング予定日'),
-      render: (r) => (
-        <InlineFlexDate iso={r.switchingScheduledAt} label="スイッチング予定日" onSave={(iso) => save(r, { switchingScheduledAt: iso })} onInvalid={setError} />
-      ),
-    },
-    {
-      key: 'switchingDate',
-      label: 'スイッチング日',
-      width: 100,
-      renderHeader: filterHeaderFor('switchingDate', 'スイッチング日'),
-      render: (r) => <InlineFlexDate iso={r.switchingAt} label="スイッチング日" onSave={(iso) => save(r, { switchingAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'switchingTime',
-      label: 'スイッチング時間',
-      width: 84,
-      renderHeader: filterHeaderFor('switchingTime', 'スイッチング時間'),
-      render: (r) => <InlineFlexTime iso={r.switchingAt} label="スイッチング時間" onSave={(iso) => save(r, { switchingAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'cancelledDate',
-      label: 'キャンセル日',
-      width: 96,
-      renderHeader: filterHeaderFor('cancelledDate', 'キャンセル日'),
-      render: (r) => <InlineFlexDate iso={r.cancelledAt} label="キャンセル日" onSave={(iso) => save(r, { cancelledAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'cancelledTime',
-      label: 'キャンセル時間',
-      width: 84,
-      renderHeader: filterHeaderFor('cancelledTime', 'キャンセル時間'),
-      render: (r) => <InlineFlexTime iso={r.cancelledAt} label="キャンセル時間" onSave={(iso) => save(r, { cancelledAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'terminatedDate',
-      label: '解約日',
-      width: 92,
-      renderHeader: filterHeaderFor('terminatedDate', '解約日'),
-      render: (r) => <InlineFlexDate iso={r.terminatedAt} label="解約日" onSave={(iso) => save(r, { terminatedAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'terminatedTime',
-      label: '解約時間',
-      width: 84,
-      renderHeader: filterHeaderFor('terminatedTime', '解約時間'),
-      render: (r) => <InlineFlexTime iso={r.terminatedAt} label="解約時間" onSave={(iso) => save(r, { terminatedAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'contractNumber',
-      label: '契約書番号',
-      width: 110,
-      renderHeader: filterHeaderFor('contractNumber', '契約書番号'),
-      render: (r) => <InlineText value={r.contractNumber} onSave={(v) => save(r, { contractNumber: v })} />,
-    },
-    {
-      key: 'applicationNumber',
-      label: '申込番号',
-      width: 110,
-      renderHeader: filterHeaderFor('applicationNumber', '申込番号'),
-      render: (r) => <InlineText value={r.applicationNumber} onSave={(v) => save(r, { applicationNumber: v })} />,
-    },
+    dateColumn('matchingDate', 'matchingAt', 'マッチング日', 92),
+    timeColumn('matchingTime', 'matchingAt', 'マッチング時間'),
+    dateColumn('switchingScheduledAt', 'switchingScheduledAt', 'スイッチング予定日', 110),
+    dateColumn('switchingDate', 'switchingAt', 'スイッチング日', 100),
+    timeColumn('switchingTime', 'switchingAt', 'スイッチング時間'),
+    dateColumn('cancelledDate', 'cancelledAt', 'キャンセル日', 96),
+    timeColumn('cancelledTime', 'cancelledAt', 'キャンセル時間'),
+    dateColumn('terminatedDate', 'terminatedAt', '解約日', 92),
+    timeColumn('terminatedTime', 'terminatedAt', '解約時間'),
+    textColumn('contractNumber', '契約書番号', (r) => r.contractNumber, (v) => ({ contractNumber: v }), 110),
+    textColumn('applicationNumber', '申込番号', (r) => r.applicationNumber, (v) => ({ applicationNumber: v }), 110),
     numberColumn('revenueForecast', '売上予測', 100),
     numberColumn('feeForecast', '手数料予測', 100),
+    textColumn('deficiencyNote', '不備内容', (r) => r.deficiencyNote, (v) => ({ deficiencyNote: v }), 140),
+    dateColumn('nextActionAt', 'nextActionAt', '次回対応日', 92),
     {
-      key: 'deficiencyNote',
-      label: '不備内容',
-      width: 140,
-      renderHeader: filterHeaderFor('deficiencyNote', '不備内容'),
-      render: (r) => <InlineText value={r.deficiencyNote} onSave={(v) => save(r, { deficiencyNote: v })} />,
-    },
-    {
-      key: 'nextActionAt',
-      label: '次回対応日',
-      width: 92,
-      renderHeader: filterHeaderFor('nextActionAt', '次回対応日'),
-      render: (r) => <InlineFlexDate iso={r.nextActionAt} label="次回対応日" onSave={(iso) => save(r, { nextActionAt: iso })} onInvalid={setError} />,
-    },
-    {
-      key: 'memo',
-      label: '備考',
-      width: 220,
-      renderHeader: filterHeaderFor('memo', '備考'),
-      render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} />,
+      ...textColumn('memo', '備考', (r) => r.memo, (v) => ({ memo: v }), 220),
+      render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
     },
   ];
 
@@ -309,6 +276,9 @@ export function ContractsListPage() {
               </option>
             ))}
           </select>
+          <button onClick={manualSort.toggle} className={manualSort.manual ? 'btn-primary' : undefined} style={{ fontSize: 12 }}>
+            {manualSort.manual ? '✓ 手動並び替え中' : '手動並び替え'}
+          </button>
         </div>
 
         <DataTable
@@ -324,6 +294,7 @@ export function ContractsListPage() {
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
+          onReorder={manualSort.manual ? manualSort.reorder : undefined}
         />
       </div>
     </AppLayout>

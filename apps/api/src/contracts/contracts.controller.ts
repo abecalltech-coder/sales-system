@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { ContractsService } from './contracts.service';
 import { UpdateContractDto } from './dto/contract.dto';
+import { ReorderDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -70,6 +71,12 @@ export class ContractsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.contractsService.findOne(id);
+  }
+
+  @RequirePermissions({ resource: 'contract', action: 'edit' })
+  @Post('reorder')
+  reorder(@Body() dto: ReorderDto) {
+    return this.contractsService.reorder(dto.ids);
   }
 
   @RequirePermissions({ resource: 'contract', action: 'edit' })

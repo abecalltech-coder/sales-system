@@ -445,6 +445,14 @@ export class AppointmentsService {
     return updated;
   }
 
+  /** 手動並び替え: 渡されたID配列の順で manualOrder を10刻みで振り直す(要望) */
+  async reorder(ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, i) => this.prisma.appointment.update({ where: { id }, data: { manualOrder: (i + 1) * 10 } })),
+    );
+    return { ok: true, count: ids.length };
+  }
+
   /** Googleカレンダー連携の再実行(Phase5でWorkerジョブとして実装。ここではステータスのみ更新可能にしておく) */
   async retryCalendarSync(id: string) {
     await this.findOne(id);

@@ -15,10 +15,12 @@ Base: `/api`。認証はHttpOnly CookieのAccess Token(JWT)。Swagger UIを`/api
 
 ## トス `/toss-cases`
 GET(一覧,検索/フィルター/ページング) / POST(作成) / GET :id / PATCH :id(version必須,楽観ロック) /
-DELETE :id(論理削除) / POST bulk-update / POST import(CSVストリーミング) / GET export
+DELETE :id(論理削除) / POST bulk-update / POST reorder(body {ids:[]}で手動並び順=manualOrderを更新) /
+POST import(CSVストリーミング) / GET export
 
 ## アポ `/appointments`
-GET / POST / GET :id / PATCH :id / POST :id/retry-calendar(カレンダー連携再実行)
+GET / POST / GET :id / PATCH :id / POST :id/retry-calendar(カレンダー連携再実行) /
+POST reorder(body {ids:[]}で手動並び順=manualOrderを更新)
 
 ## 訪問・モバイル
 GET /mobile/home, /mobile/today-visits, /mobile/upcoming-visits,
@@ -26,7 +28,8 @@ GET /visits/:id, POST /visits/:id/depart|arrive|start-meeting|end-meeting|report
 GET /visits/:id/history, POST /offline-actions/sync(冪等性キーで重複無視)
 
 ## 成約 `/contracts`, エントリー `/entries`
-GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日付処理をサーバー側で実施)
+GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日付処理をサーバー側で実施) /
+POST reorder(body {ids:[]}で手動並び順=manualOrderを更新)
 
 ## サマリー(自由編集表) `/summary-sheets`
 GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /

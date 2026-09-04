@@ -313,6 +313,14 @@ export class TossCasesService {
     return { ok: true };
   }
 
+  /** 手動並び替え: 渡されたID配列の順で manualOrder を10刻みで振り直す(要望) */
+  async reorder(ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, i) => this.prisma.tossCase.update({ where: { id }, data: { manualOrder: (i + 1) * 10 } })),
+    );
+    return { ok: true, count: ids.length };
+  }
+
   /**
    * 対応中フラグ(架電中ボタン)の切替。二重架電防止のための全員共有フラグであり、
    * 他フィールドの編集とは独立させるため楽観ロック(version)の対象にはしない。

@@ -60,6 +60,14 @@ export class ContractsService {
     return { ...contract, storeName: contract.appointment?.customer?.corporateName ?? null };
   }
 
+  /** 手動並び替え: 渡されたID配列の順で manualOrder を10刻みで振り直す(要望) */
+  async reorder(ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, i) => this.prisma.contract.update({ where: { id }, data: { manualOrder: (i + 1) * 10 } })),
+    );
+    return { ok: true, count: ids.length };
+  }
+
   /** アポ案件の商談結果が成約になった際の自動移行(セクション25)。appointmentIdのunique制約で二重作成防止。 */
   async createFromAppointmentAutomation(appointmentId: string, actorUserId?: string) {
     const existing = await this.prisma.contract.findUnique({ where: { appointmentId } });

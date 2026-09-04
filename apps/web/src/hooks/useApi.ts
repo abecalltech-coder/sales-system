@@ -58,6 +58,7 @@ export interface TossCaseListItem {
   ngReasonStatusId: string | null;
   isCallingInProgress: boolean;
   callingByUserId: string | null;
+  manualOrder: number | null;
   version: number;
   appointment: { id: string; caseNumber: string } | null;
 }
@@ -94,6 +95,7 @@ export interface AppointmentListItem {
   calendarSyncStatus: string;
   calendarSyncError: string | null;
   memo: string | null;
+  manualOrder: number | null;
   version: number;
   contract: { id: string; caseNumber: string } | null;
 
@@ -224,6 +226,7 @@ export interface ContractListItem {
   deficiencyNote: string | null;
   nextActionAt: string | null;
   memo: string | null;
+  manualOrder: number | null;
   version: number;
 }
 

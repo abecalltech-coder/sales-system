@@ -7,9 +7,10 @@ import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../
 import { PresenceBar } from '../../components/PresenceBar';
 import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, isoToDateInput } from '../../lib/dateInput';
+import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { pastel } from '../../lib/color';
+import { useManualSort } from '../../hooks/useManualSort';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -28,6 +29,7 @@ export function AppointmentsListPage() {
   const pageSize = 100;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const manualSort = useManualSort('appointments', '/appointments/reorder', 'appointments');
 
   const { data, isLoading } = useAppointments({ page, pageSize, statusId: statusId || undefined });
   const { data: me } = useMe();
@@ -105,6 +107,13 @@ export function AppointmentsListPage() {
         const value = r[key] as string | null;
         return <InlineFlexDate iso={value} label={label} onSave={(iso) => save(r, { [key]: iso })} onInvalid={setError} />;
       },
+      copyValue: (r) => isoToDateInput(r[key] as string | null),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t) return save(r, { [key]: null });
+        const parsed = parseDateText(t);
+        if (parsed) save(r, { [key]: new Date(`${parsed}T${isoToTimeInput(r[key] as string | null) || '00:00'}`).toISOString() });
+      },
     };
   };
 
@@ -118,6 +127,8 @@ export function AppointmentsListPage() {
       render: (r) => (
         <input type="checkbox" checked={Boolean(r[key])} onClick={stop} onChange={(e) => save(r, { [key]: e.target.checked })} />
       ),
+      copyValue: (r) => (r[key] ? '済' : ''),
+      pasteValue: (r, text) => save(r, { [key]: /^(済|✓|1|true|yes|○|◯)$/i.test(text.trim()) }),
     };
   };
 
@@ -134,6 +145,13 @@ export function AppointmentsListPage() {
       width,
       renderHeader: filterHeader(key as string, label),
       render: (r) => <InlineSelect value={r[key] as string | null} options={toOptions(options)} onSave={(v) => save(r, { [key]: v })} />,
+      copyValue: (r) => options?.find((s) => s.id === r[key])?.displayName ?? '',
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t) return save(r, { [key]: null });
+        const match = options?.find((s) => s.displayName === t || s.displayName.toLowerCase() === t.toLowerCase());
+        if (match) save(r, { [key]: match.id });
+      },
     };
   };
 
@@ -145,6 +163,8 @@ export function AppointmentsListPage() {
       width,
       renderHeader: filterHeader(key as string, label),
       render: (r) => <InlineText value={r[key] as string | null} onSave={(v) => save(r, { [key]: v })} />,
+      copyValue: (r) => (r[key] as string | null) ?? '',
+      pasteValue: (r, text) => save(r, { [key]: text }),
     };
   };
 
@@ -168,6 +188,8 @@ export function AppointmentsListPage() {
           onSave={(v) => save(r, { [key]: v })}
         />
       ),
+      copyValue: (r) => (r[key] as string | null) ?? '',
+      pasteValue: (r, text) => save(r, { [key]: text.trim() || null }),
     };
   };
 
@@ -184,8 +206,22 @@ export function AppointmentsListPage() {
   filterValueFns.status = (r) => statusLabel(r.meetingStatusId);
   filterValueFns.memo = (r) => r.memo ?? '';
 
+  const optLabel = (opts: StatusMasterItem[] | undefined, id: string | null | undefined) =>
+    opts?.find((s) => s.id === id)?.displayName ?? '';
+  const optByLabel = (opts: StatusMasterItem[] | undefined, text: string) => {
+    const t = text.trim();
+    return opts?.find((s) => s.displayName === t || s.displayName.toLowerCase() === t.toLowerCase());
+  };
+
   const columns: Column<AppointmentListItem>[] = [
-    { key: 'apoDate', label: 'アポ日', render: (r) => formatDate(r.createdAt), width: 90, renderHeader: filterHeader('apoDate', 'アポ日') },
+    {
+      key: 'apoDate',
+      label: 'アポ日',
+      render: (r) => formatDate(r.createdAt),
+      width: 90,
+      renderHeader: filterHeader('apoDate', 'アポ日'),
+      copyValue: (r) => formatDate(r.createdAt),
+    },
     {
       key: 'meetingDate',
       label: '商談日',
@@ -194,6 +230,13 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineFlexDate iso={r.meetingStartAt} label="商談日" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
+      copyValue: (r) => isoToDateInput(r.meetingStartAt),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t) return save(r, { meetingStartAt: null });
+        const parsed = parseDateText(t);
+        if (parsed) save(r, { meetingStartAt: new Date(`${parsed}T${isoToTimeInput(r.meetingStartAt) || '00:00'}`).toISOString() });
+      },
     },
     {
       key: 'meetingTime',
@@ -203,6 +246,12 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineFlexTime iso={r.meetingStartAt} label="商談時間" onSave={(iso) => save(r, { meetingStartAt: iso })} onInvalid={setError} />
       ),
+      copyValue: (r) => isoToTimeInput(r.meetingStartAt),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        const parsed = parseTimeText(t);
+        if (parsed && r.meetingStartAt) save(r, { meetingStartAt: new Date(`${isoToDateInput(r.meetingStartAt)}T${parsed}`).toISOString() });
+      },
     },
     textColumn('apStaffName', 'AP', 80),
     selectColumn('preConfirmStatusId', '前確', preConfirmOptions, 90),
@@ -221,6 +270,8 @@ export function AppointmentsListPage() {
           onSave={(v) => save(r, { hook: v })}
         />
       ),
+      copyValue: (r) => r.hook ?? '',
+      pasteValue: (r, text) => save(r, { hook: text.trim() || null }),
     },
     selectColumn('department', '部署', departmentOptions, 84),
     {
@@ -229,6 +280,8 @@ export function AppointmentsListPage() {
       width: 120,
       renderHeader: filterHeader('storeName', '店舗名'),
       render: (r) => <InlineText value={r.storeName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
+      copyValue: (r) => r.storeName ?? '',
+      pasteValue: (r, text) => save(r, { corporateName: text }),
     },
     {
       key: 'memo',
@@ -236,6 +289,8 @@ export function AppointmentsListPage() {
       width: 180,
       renderHeader: filterHeader('memo', '備考'),
       render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
+      copyValue: (r) => r.memo ?? '',
+      pasteValue: (r, text) => save(r, { memo: text }),
     },
     {
       key: 'status',
@@ -251,6 +306,11 @@ export function AppointmentsListPage() {
         />
       ),
       width: 120,
+      copyValue: (r) => optLabel(statuses, r.meetingStatusId),
+      pasteValue: (r, text) => {
+        const m = optByLabel(statuses, text);
+        if (m) save(r, { meetingStatusId: m.id });
+      },
     },
     labelColumn('industry', '業種', industryOptions, 96),
     dateColumn('importantMattersOkAt', '重説OK日'),
@@ -262,6 +322,8 @@ export function AppointmentsListPage() {
       width: 96,
       renderHeader: filterHeader('contactName', '担当者名'),
       render: (r) => <InlineText value={r.customer?.contactName ?? null} onSave={(v) => save(r, { contactName: v })} />,
+      copyValue: (r) => r.customer?.contactName ?? '',
+      pasteValue: (r, text) => save(r, { contactName: text }),
     },
     {
       key: 'phone',
@@ -269,14 +331,25 @@ export function AppointmentsListPage() {
       width: 108,
       renderHeader: filterHeader('phone', '店舗連絡先'),
       render: (r) => <InlineText value={r.customer?.phone ?? null} onSave={(v) => save(r, { phone: v })} />,
+      copyValue: (r) => r.customer?.phone ?? '',
+      pasteValue: (r, text) => save(r, { phone: text }),
     },
-    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72, renderHeader: filterHeader('prefecture', '地域') },
+    {
+      key: 'prefecture',
+      label: '地域',
+      render: (r) => r.prefecture ?? '-',
+      width: 72,
+      renderHeader: filterHeader('prefecture', '地域'),
+      copyValue: (r) => r.prefecture ?? '',
+    },
     {
       key: 'address',
       label: '住所',
       width: 160,
       renderHeader: filterHeader('address', '住所'),
       render: (r) => <InlineText value={r.customer?.address ?? null} onSave={(v) => save(r, { address: v })} />,
+      copyValue: (r) => r.customer?.address ?? '',
+      pasteValue: (r, text) => save(r, { address: text }),
     },
     selectColumn('hpProgressStatusId', 'HP進捗', hpProgressOptions, 100),
     selectColumn('typeStatusId', '種別', typeOptions, 90),
@@ -318,6 +391,13 @@ export function AppointmentsListPage() {
           style={inlineInputStyle}
         />
       ),
+      copyValue: (r) => (r.anshinBizPoints != null ? String(r.anshinBizPoints) : ''),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t) return save(r, { anshinBizPoints: null });
+        const num = Number(t);
+        if (Number.isFinite(num)) save(r, { anshinBizPoints: num });
+      },
     },
     checkboxColumn('mobileProposed', 'モバイル（提案）', 90),
     selectColumn('mobileStatusId', 'モバイル', mobileStatusOptions, 100),
@@ -337,11 +417,14 @@ export function AppointmentsListPage() {
       width: 150,
       renderHeader: filterHeader('email', 'メールアドレス'),
       render: (r) => <InlineText value={r.customer?.email ?? null} onSave={(v) => save(r, { email: v })} />,
+      copyValue: (r) => r.customer?.email ?? '',
+      pasteValue: (r, text) => save(r, { email: text }),
     },
     textColumn('specialNotes', 'メモ・特記事項', 150),
   ];
 
-  // 進捗のグループ(ET→成約→保留→失注→リスケ→新規訪問等)順に並べ、グループ内は商談日時昇順(要望)
+  // 進捗のグループ(ET→成約→保留→失注→リスケ→新規訪問等)順に並べ、グループ内は商談日時昇順(要望)。
+  // 手動並び替えモード時は manualOrder 昇順にする。
   const rows = useMemo(() => {
     const filtered = rawRows.filter((r) =>
       Object.entries(filters).every(([key, sel]) => {
@@ -350,6 +433,7 @@ export function AppointmentsListPage() {
         return fn ? sel.has(fn(r)) : true;
       }),
     );
+    if (manualSort.manual) return manualSort.applySort(filtered);
     return [...filtered].sort((a, b) => {
       const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
       if (groupDiff !== 0) return groupDiff;
@@ -358,7 +442,7 @@ export function AppointmentsListPage() {
       return at - bt;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, filters, progressOptions]);
+  }, [rawRows, filters, progressOptions, manualSort.manual]);
 
   return (
     <AppLayout>
@@ -374,7 +458,7 @@ export function AppointmentsListPage() {
 
         <PresenceBar viewers={presence.viewers} />
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
           <select
             value={statusId}
             onChange={(e) => {
@@ -390,6 +474,9 @@ export function AppointmentsListPage() {
               </option>
             ))}
           </select>
+          <button onClick={manualSort.toggle} className={manualSort.manual ? 'btn-primary' : undefined} style={{ fontSize: 12 }}>
+            {manualSort.manual ? '✓ 手動並び替え中' : '手動並び替え'}
+          </button>
         </div>
 
         <DataTable
@@ -406,6 +493,7 @@ export function AppointmentsListPage() {
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
+          onReorder={manualSort.manual ? manualSort.reorder : undefined}
         />
       </div>
     </AppLayout>

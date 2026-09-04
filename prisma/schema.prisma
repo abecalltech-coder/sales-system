@@ -326,6 +326,9 @@ model TossCase {
   callingByUserId      String?
   callingStartedAt     DateTime?
 
+  // 一覧の手動並び替え順(要望)。null=未設定。手動並びモードのときこの昇順で表示する。
+  manualOrder          Int?
+
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   createdBy            String?
@@ -421,6 +424,9 @@ model Appointment {
   deliveryStatusStatusId             String? // 交付状況(StatusMaster category=APPOINTMENT_DELIVERY_STATUS)
   deliveredAt                        DateTime? // 交付日
   specialNotes                       String? // メモ・特記事項(備考=memoとは別項目)
+
+  // 一覧の手動並び替え順(要望)
+  manualOrder            Int?
 
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
@@ -555,6 +561,8 @@ model Contract {
   deficiencyNote         String?
   nextActionAt           DateTime?
   memo                   String?
+  // 一覧の手動並び替え順(要望)
+  manualOrder            Int?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   createdBy              String?

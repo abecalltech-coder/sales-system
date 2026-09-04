@@ -7,9 +7,10 @@ import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, formatTime, isoToDateInput, isoToTimeInput } from '../../lib/dateInput';
+import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { pastel } from '../../lib/color';
+import { useManualSort } from '../../hooks/useManualSort';
 
 const CALL_DIRECTION_OPTIONS = [
   { id: '架電', label: '架電' },
@@ -27,6 +28,7 @@ export function TossCasesListPage() {
   // 一覧APIの許容上限(ListQueryDto: 最大100件)いっぱいまで1ページで取得する
   const pageSize = 100;
   const queryClient = useQueryClient();
+  const manualSort = useManualSort('toss-cases', '/toss-cases/reorder', 'toss-cases');
 
   const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined });
   const { data: me } = useMe();
@@ -41,6 +43,13 @@ export function TossCasesListPage() {
   const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
   const labelOpts = (rows?: { displayName: string }[]) => (rows ?? []).map((o) => ({ id: o.displayName, label: o.displayName }));
   const hookSelectOptions = labelOpts(meetingFormatOptions);
+  // コピー/貼り付け用: id→表示名、表示名→id
+  const idOptLabel = (opts: { id: string; displayName: string }[] | undefined, id: string | null | undefined) =>
+    opts?.find((s) => s.id === id)?.displayName ?? '';
+  const idOptByLabel = (opts: { id: string; displayName: string }[] | undefined, text: string) => {
+    const t = text.trim();
+    return opts?.find((s) => s.displayName === t || s.displayName.toLowerCase() === t.toLowerCase())?.id ?? null;
+  };
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ corporateName: '', contactName: '', phone: '', memo: '' });
@@ -165,6 +174,7 @@ export function TossCasesListPage() {
         return sel.has(filterValueFns[key](r));
       }),
     );
+    if (manualSort.manual) return manualSort.applySort(filtered);
     return [...filtered].sort((a, b) => {
       const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
       if (groupDiff !== 0) return groupDiff;
@@ -173,11 +183,25 @@ export function TossCasesListPage() {
       return at - bt;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, filters, progressOptions]);
+  }, [rawRows, filters, progressOptions, manualSort.manual]);
 
   const columns: Column<TossCaseListItem>[] = [
-    { key: 'tossDate', label: 'トス日', render: (r) => formatDate(r.receivedAt), width: 86, renderHeader: filterHeader('tossDate', 'トス日') },
-    { key: 'tossTime', label: 'トス時間', render: (r) => formatTime(r.receivedAt), width: 68, renderHeader: filterHeader('tossTime', 'トス時間') },
+    {
+      key: 'tossDate',
+      label: 'トス日',
+      render: (r) => formatDate(r.receivedAt),
+      width: 86,
+      renderHeader: filterHeader('tossDate', 'トス日'),
+      copyValue: (r) => formatDate(r.receivedAt),
+    },
+    {
+      key: 'tossTime',
+      label: 'トス時間',
+      render: (r) => formatTime(r.receivedAt),
+      width: 68,
+      renderHeader: filterHeader('tossTime', 'トス時間'),
+      copyValue: (r) => formatTime(r.receivedAt),
+    },
     {
       key: 'nextActionDate',
       label: '次回対応日',
@@ -186,6 +210,13 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineFlexDate iso={r.nextActionAt} label="次回対応日" onSave={(iso) => save(r, { nextActionAt: iso })} onInvalid={setError} />
       ),
+      copyValue: (r) => isoToDateInput(r.nextActionAt),
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t) return save(r, { nextActionAt: null });
+        const p = parseDateText(t);
+        if (p) save(r, { nextActionAt: new Date(`${p}T${isoToTimeInput(r.nextActionAt) || '00:00'}`).toISOString() });
+      },
     },
     {
       key: 'nextActionTime',
@@ -195,6 +226,11 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineFlexTime iso={r.nextActionAt} label="対応時間" onSave={(iso) => save(r, { nextActionAt: iso })} onInvalid={setError} />
       ),
+      copyValue: (r) => isoToTimeInput(r.nextActionAt),
+      pasteValue: (r, text) => {
+        const p = parseTimeText(text.trim());
+        if (p && r.nextActionAt) save(r, { nextActionAt: new Date(`${isoToDateInput(r.nextActionAt)}T${p}`).toISOString() });
+      },
     },
     {
       key: 'apStaffName',
@@ -202,6 +238,8 @@ export function TossCasesListPage() {
       width: 80,
       renderHeader: filterHeader('apStaffName', 'AP'),
       render: (r) => <InlineText value={r.apStaffName} onSave={(v) => save(r, { apStaffName: v })} />,
+      copyValue: (r) => r.apStaffName ?? '',
+      pasteValue: (r, text) => save(r, { apStaffName: text }),
     },
     {
       key: 'preConfirm',
@@ -215,6 +253,8 @@ export function TossCasesListPage() {
           onSave={(v) => save(r, { preConfirmStatusId: v })}
         />
       ),
+      copyValue: (r) => idOptLabel(preConfirmOptions, r.preConfirmStatusId),
+      pasteValue: (r, text) => save(r, { preConfirmStatusId: idOptByLabel(preConfirmOptions, text) }),
     },
     {
       key: 'department',
@@ -228,6 +268,8 @@ export function TossCasesListPage() {
           onSave={(v) => save(r, { department: v })}
         />
       ),
+      copyValue: (r) => idOptLabel(departmentOptions, r.department),
+      pasteValue: (r, text) => save(r, { department: idOptByLabel(departmentOptions, text) }),
     },
     {
       key: 'calling',
@@ -263,6 +305,8 @@ export function TossCasesListPage() {
       width: 170,
       renderHeader: filterHeader('corporateName', '店舗名'),
       render: (r) => <InlineText value={r.customer?.corporateName} onSave={(v) => save(r, { corporateName: v })} style={{ fontWeight: 600 }} />,
+      copyValue: (r) => r.customer?.corporateName ?? '',
+      pasteValue: (r, text) => save(r, { corporateName: text }),
     },
     {
       key: 'memo',
@@ -270,6 +314,8 @@ export function TossCasesListPage() {
       width: 320,
       renderHeader: filterHeader('memo', '備考'),
       render: (r) => <InlineText value={r.memo} onSave={(v) => save(r, { memo: v })} expand />,
+      copyValue: (r) => r.memo ?? '',
+      pasteValue: (r, text) => save(r, { memo: text }),
     },
     {
       key: 'contactName',
@@ -277,6 +323,8 @@ export function TossCasesListPage() {
       width: 96,
       renderHeader: filterHeader('contactName', '担当者名'),
       render: (r) => <InlineText value={r.customer?.contactName} onSave={(v) => save(r, { contactName: v })} />,
+      copyValue: (r) => r.customer?.contactName ?? '',
+      pasteValue: (r, text) => save(r, { contactName: text }),
     },
     {
       key: 'phone',
@@ -284,14 +332,25 @@ export function TossCasesListPage() {
       width: 108,
       renderHeader: filterHeader('phone', '店舗連絡先'),
       render: (r) => <InlineText value={r.customer?.phone} onSave={(v) => save(r, { phone: v })} />,
+      copyValue: (r) => r.customer?.phone ?? '',
+      pasteValue: (r, text) => save(r, { phone: text }),
     },
-    { key: 'prefecture', label: '地域', render: (r) => r.prefecture ?? '-', width: 72, renderHeader: filterHeader('prefecture', '地域') },
+    {
+      key: 'prefecture',
+      label: '地域',
+      render: (r) => r.prefecture ?? '-',
+      width: 72,
+      renderHeader: filterHeader('prefecture', '地域'),
+      copyValue: (r) => r.prefecture ?? '',
+    },
     {
       key: 'address',
       label: '住所(都道府県から)',
       width: 170,
       renderHeader: filterHeader('address', '住所'),
       render: (r) => <InlineText value={r.customer?.address} onSave={(v) => save(r, { address: v })} />,
+      copyValue: (r) => r.customer?.address ?? '',
+      pasteValue: (r, text) => save(r, { address: text }),
     },
     {
       key: 'proposal',
@@ -299,6 +358,8 @@ export function TossCasesListPage() {
       width: 110,
       renderHeader: filterHeader('proposal', '提案'),
       render: (r) => <InlineSelect value={r.proposal} options={labelOpts(proposalOptions)} onSave={(v) => save(r, { proposal: v })} />,
+      copyValue: (r) => r.proposal ?? '',
+      pasteValue: (r, text) => save(r, { proposal: text.trim() || null }),
     },
     {
       key: 'progress',
@@ -324,6 +385,12 @@ export function TossCasesListPage() {
           colored
         />
       ),
+      copyValue: (r) => idOptLabel(progressOptions, r.progressStatusId),
+      pasteValue: (r, text) => {
+        const id = idOptByLabel(progressOptions, text);
+        // 貼り付けでアポイントに変えると詳細フォーマット入力を挟めないため、アポイントへの一括変更は無視する
+        if (id && progressInternalCode(id) !== 'PROGRESS_APPOINTMENT') save(r, { progressStatusId: id });
+      },
     },
     {
       key: 'ngReason',
@@ -338,6 +405,8 @@ export function TossCasesListPage() {
           colored
         />
       ),
+      copyValue: (r) => idOptLabel(ngReasonOptions, r.ngReasonStatusId),
+      pasteValue: (r, text) => save(r, { ngReasonStatusId: idOptByLabel(ngReasonOptions, text) }),
     },
     {
       key: 'listName',
@@ -345,6 +414,8 @@ export function TossCasesListPage() {
       width: 96,
       renderHeader: filterHeader('listName', 'リスト'),
       render: (r) => <InlineText value={r.listName} onSave={(v) => save(r, { listName: v })} />,
+      copyValue: (r) => r.listName ?? '',
+      pasteValue: (r, text) => save(r, { listName: text }),
     },
     {
       key: 'callDirection',
@@ -352,6 +423,11 @@ export function TossCasesListPage() {
       width: 90,
       renderHeader: filterHeader('callDirection', '架電or入電'),
       render: (r) => <InlineSelect value={r.callDirection} options={CALL_DIRECTION_OPTIONS} onSave={(v) => save(r, { callDirection: v })} />,
+      copyValue: (r) => r.callDirection ?? '',
+      pasteValue: (r, text) => {
+        const t = text.trim();
+        if (!t || t === '架電' || t === '入電') save(r, { callDirection: t || null });
+      },
     },
     {
       key: 'industry',
@@ -359,6 +435,8 @@ export function TossCasesListPage() {
       width: 96,
       renderHeader: filterHeader('industry', '業種'),
       render: (r) => <InlineSelect value={r.industry} options={labelOpts(industryOptions)} onSave={(v) => save(r, { industry: v })} />,
+      copyValue: (r) => r.industry ?? '',
+      pasteValue: (r, text) => save(r, { industry: text.trim() || null }),
     },
     {
       key: 'hook',
@@ -366,6 +444,8 @@ export function TossCasesListPage() {
       width: 110,
       renderHeader: filterHeader('hook', 'フック'),
       render: (r) => <InlineSelect value={r.hook} options={hookSelectOptions} onSave={(v) => save(r, { hook: v })} />,
+      copyValue: (r) => r.hook ?? '',
+      pasteValue: (r, text) => save(r, { hook: text.trim() || null }),
     },
     {
       key: 'existingContract',
@@ -375,6 +455,8 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineSelect value={r.existingContract} options={labelOpts(existingContractOptions)} onSave={(v) => save(r, { existingContract: v })} />
       ),
+      copyValue: (r) => r.existingContract ?? '',
+      pasteValue: (r, text) => save(r, { existingContract: text.trim() || null }),
     },
   ];
 
@@ -438,7 +520,7 @@ export function TossCasesListPage() {
 
         <PresenceBar viewers={presence.viewers} />
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
           <input
             placeholder="店舗名・備考で検索"
             value={keyword}
@@ -448,6 +530,9 @@ export function TossCasesListPage() {
             }}
             style={{ width: 280 }}
           />
+          <button onClick={manualSort.toggle} className={manualSort.manual ? 'btn-primary' : undefined} style={{ fontSize: 12 }}>
+            {manualSort.manual ? '✓ 手動並び替え中' : '手動並び替え'}
+          </button>
         </div>
 
         <DataTable
@@ -464,6 +549,7 @@ export function TossCasesListPage() {
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}
+          onReorder={manualSort.manual ? manualSort.reorder : undefined}
         />
       </div>
 

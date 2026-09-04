@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/c
 import { Response } from 'express';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
+import { ReorderDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -183,5 +184,11 @@ export class AppointmentsController {
   @Post(':id/retry-calendar')
   retryCalendar(@Param('id') id: string) {
     return this.appointmentsService.retryCalendarSync(id);
+  }
+
+  @RequirePermissions({ resource: 'appointment', action: 'edit' })
+  @Post('reorder')
+  reorder(@Body() dto: ReorderDto) {
+    return this.appointmentsService.reorder(dto.ids);
   }
 }
