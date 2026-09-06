@@ -176,6 +176,113 @@ export function InlineText({
   );
 }
 
+/**
+ * 数値セル。空欄可。フォーカスで生値を編集、確定時に onSave(number | null)。
+ * 右寄せ・3桁区切り表示。月次サマリー/シフト表向け。
+ */
+export function InlineNumber({
+  value,
+  onSave,
+  placeholder,
+  disabled,
+  align = 'right',
+  overridden,
+  title,
+}: {
+  value: number | null | undefined;
+  onSave: (next: number | null) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  align?: 'right' | 'center' | 'left';
+  /** 自動集計値を手入力で上書きしている場合に印を付ける */
+  overridden?: boolean;
+  title?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [draft, setDraft] = useState(value == null ? '' : String(value));
+
+  useEffect(() => {
+    if (!focused) setDraft(value == null ? '' : String(value));
+  }, [value, focused]);
+
+  const commit = () => {
+    setFocused(false);
+    const raw = draft.trim().replace(/,/g, '');
+    if (raw === '') {
+      if (value != null) onSave(null);
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      setDraft(value == null ? '' : String(value));
+      return;
+    }
+    if (n !== value) onSave(n);
+  };
+
+  const display = value == null ? '' : value.toLocaleString('ja-JP');
+
+  return (
+    <div
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!disabled) setFocused(true);
+      }}
+      style={{
+        ...baseStyle,
+        position: 'relative',
+        textAlign: align,
+        cursor: disabled ? 'default' : 'text',
+        minHeight: '1.2em',
+        fontVariantNumeric: 'tabular-nums',
+        color: overridden ? 'var(--color-primary)' : 'inherit',
+        fontWeight: overridden ? 700 : undefined,
+      }}
+    >
+      {display || (placeholder && <span style={{ color: 'var(--color-text-faint)' }}>{placeholder}</span>)}
+      {overridden && !focused && (
+        <span aria-hidden style={{ position: 'absolute', top: 1, right: 1, width: 4, height: 4, borderRadius: '50%', background: 'var(--color-primary)' }} />
+      )}
+      {focused && (
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={draft}
+          disabled={disabled}
+          placeholder={placeholder}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            else if (e.key === 'Escape') {
+              setDraft(value == null ? '' : String(value));
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 30,
+            font: 'inherit',
+            textAlign: align,
+            color: 'var(--color-text)',
+            padding: 'inherit',
+            margin: 0,
+            background: 'var(--color-surface)',
+            border: 'none',
+            outline: 'none',
+            borderRadius: 0,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 export function InlineSelect({
   value,
   options,

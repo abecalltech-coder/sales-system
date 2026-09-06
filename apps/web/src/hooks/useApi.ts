@@ -426,6 +426,106 @@ export function useSummarySheet(id: string | undefined) {
 }
 
 // ============================================================
+// 月次サマリー実績表 / ロスター
+// ============================================================
+export interface UserOption {
+  id: string;
+  name: string;
+  employeeCode: string | null;
+  departmentId: string | null;
+  teamId: string | null;
+}
+
+export function useUserOptions() {
+  return useQuery({
+    queryKey: ['user-options'],
+    queryFn: () => api.get<UserOption[]>('/users/options'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export interface SummaryColumnDef {
+  code: string;
+  label: string;
+  kind: 'manual' | 'auto' | 'computed';
+  formula?: string;
+  percent?: boolean;
+}
+
+export interface MonthlySummaryRow {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  role: string | null;
+  order: number;
+  values: Record<string, number | string | null>;
+  auto: Record<string, number> | null;
+}
+
+export interface MonthlySummaryResponse {
+  period: string;
+  departmentId: string;
+  columns: SummaryColumnDef[];
+  rows: MonthlySummaryRow[];
+}
+
+export interface MonthlySummaryDepartment {
+  id: string;
+  displayName: string;
+  color: string | null;
+}
+
+export function useMonthlySummaryDepartments() {
+  return useQuery({
+    queryKey: ['monthly-summary-departments'],
+    queryFn: () => api.get<MonthlySummaryDepartment[]>('/monthly-summary/departments'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useMonthlySummary(period: string, departmentId: string | undefined) {
+  return useQuery({
+    queryKey: ['monthly-summary', period, departmentId],
+    queryFn: () =>
+      api.get<MonthlySummaryResponse>(`/monthly-summary?period=${period}&departmentId=${departmentId}`),
+    enabled: !!period && !!departmentId,
+  });
+}
+
+// ============================================================
+// 月次シフト表
+// ============================================================
+export interface ShiftAttributeDef {
+  code: string;
+  label: string;
+}
+
+export interface MonthlyShiftRow {
+  id: string;
+  no: number;
+  userId: string | null;
+  userName: string | null;
+  order: number;
+  attributes: Record<string, string | number | null>;
+  days: Record<string, number>;
+}
+
+export interface MonthlyShiftResponse {
+  period: string;
+  days: string[];
+  attributeDefs: ShiftAttributeDef[];
+  rows: MonthlyShiftRow[];
+}
+
+export function useMonthlyShift(period: string) {
+  return useQuery({
+    queryKey: ['monthly-shift', period],
+    queryFn: () => api.get<MonthlyShiftResponse>(`/monthly-shift?period=${period}`),
+    enabled: !!period,
+  });
+}
+
+// ============================================================
 // 操作ログ・システム設定
 // ============================================================
 export interface AuditLogItem {

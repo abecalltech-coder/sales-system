@@ -51,6 +51,8 @@ interface DataTableProps<T> {
   onDeleteRows?: (ids: string[]) => void;
   /** 右クリックメニューへ追加する任意の操作(選択行に対して実行) */
   extraRowMenuItems?: { label: (count: number) => string; onClick: (ids: string[]) => void; danger?: boolean }[];
+  /** 合計行など。<tr> をそのまま渡す(セル数は 行番号ガター + columns.length に合わせる) */
+  footerRow?: ReactNode;
 }
 
 const DEFAULT_COLUMN_WIDTH = 120;
@@ -109,6 +111,7 @@ export function DataTable<T>({
   onReorder,
   onDeleteRows,
   extraRowMenuItems,
+  footerRow,
 }: DataTableProps<T>) {
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
@@ -836,6 +839,21 @@ export function DataTable<T>({
               })
             )}
           </tbody>
+          {footerRow && (
+            <tfoot>
+              <tr
+                style={{
+                  position: 'sticky',
+                  bottom: 0,
+                  background: 'var(--color-subtle)',
+                  borderTop: '2px solid var(--color-border-strong)',
+                  fontWeight: 700,
+                }}
+              >
+                {footerRow}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
       <div

@@ -29,6 +29,8 @@ import { GoogleFormsModule } from './integrations/google-forms/google-forms.modu
 import { GoogleCalendarModule } from './integrations/google-calendar/google-calendar.module';
 import { PreferencesModule } from './preferences/preferences.module';
 import { TossFormModule } from './toss-form/toss-form.module';
+import { MonthlySummaryModule } from './monthly-summary/monthly-summary.module';
+import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
 
 @Module({
   imports: [
@@ -59,6 +61,8 @@ import { TossFormModule } from './toss-form/toss-form.module';
     CustomFieldsModule,
     AutomationRulesModule,
     SummarySheetsModule,
+    MonthlySummaryModule,
+    MonthlyShiftModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

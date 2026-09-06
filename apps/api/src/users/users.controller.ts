@@ -27,6 +27,12 @@ export class UsersController {
     });
   }
 
+  /** 軽量ロスター(サマリー/シフトの行追加用)。権限デコレータ無し = 認証ユーザーなら可。 */
+  @Get('options')
+  options() {
+    return this.usersService.options();
+  }
+
   @RequirePermissions({ resource: 'user', action: 'view' })
   @Get(':id')
   findOne(@Param('id') id: string) {

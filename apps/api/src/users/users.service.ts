@@ -50,6 +50,15 @@ export class UsersService {
     return { items, total, page, pageSize };
   }
 
+  /** 行追加のユーザー選択などで使う軽量なロスター。認証ユーザーなら誰でも取得できる。 */
+  async options() {
+    return this.prisma.user.findMany({
+      where: { deletedAt: null, status: { not: 'RETIRED' } },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, employeeCode: true, departmentId: true, teamId: true },
+    });
+  }
+
   async findOne(id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
