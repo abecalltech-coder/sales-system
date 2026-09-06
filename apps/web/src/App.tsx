@@ -16,6 +16,8 @@ import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { SystemSettingsPage } from './pages/admin/SystemSettingsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { TossFormAdminPage } from './pages/admin/TossFormAdminPage';
+import { FinalReportPage } from './pages/FinalReportPage';
+import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
 
@@ -42,11 +44,13 @@ export function App() {
         <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
         <Route path="/summary" element={protect(<SummarySheetsPage />)} />
+        <Route path="/final-report" element={protect(<FinalReportPage />)} />
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
         <Route path="/admin/custom-fields" element={protectAdmin(<CustomFieldsAdminPage />)} />
         <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
+        <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
         <Route path="/m" element={protect(<MobileHomePage />)} />
         <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />

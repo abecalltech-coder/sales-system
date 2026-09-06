@@ -16,7 +16,8 @@ export type IconName =
   | 'puzzle'
   | 'link'
   | 'list'
-  | 'gear';
+  | 'gear'
+  | 'clipboard';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -94,6 +95,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <path d="M8 6h13M8 12h13M8 18h13" />
       <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+    </>
+  ),
+  clipboard: (
+    <>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4a3 3 0 0 1 6 0M8.5 11h7M8.5 15h7" />
     </>
   ),
   gear: (

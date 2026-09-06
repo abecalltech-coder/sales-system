@@ -879,3 +879,37 @@ model MonthlyShiftRow {
 
   @@index([sheetId])
 }
+
+// ============================================================
+// 最終報告(ユーザーが日々入力する数値レポート。セクション追加要望)
+// ============================================================
+
+// 報告項目(行)の定義。管理者が「最終報告項目」タブで編集する。
+model FinalReportField {
+  id        String   @id @default(uuid())
+  code      String?  @unique // 自動計算の参照用の安定キー(seed項目のみ付与)
+  label     String
+  fieldType String   @default("NUMBER") // NUMBER | TEXT
+  computed  String? // 自動計算キー(例: "callSf+callBlank")。設定時は手入力不可
+  unit      String? // 表示用の単位(任意)
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+// ユーザー × 日付(JST)ごとの入力。全項目を values(JSON)で保持する。
+model FinalReportEntry {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String // "YYYY-MM-DD" (JST)
+  values    Json     @default("{}") // { "<fieldId>": number | string }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}

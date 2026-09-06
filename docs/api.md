@@ -60,6 +60,14 @@ GET — 認証ユーザーなら誰でも取得できる軽量な在籍者一覧
 ## 月次ロールオーバー
 毎月1日 00:05(JST)cron で当月分のサマリー実績表(全 DEPARTMENT_BRANCH)・シフト表を未生成なら生成する(遅延生成の保険)。
 
+## 最終報告 `/final-reports`
+GET fields(有効項目、入力画面用) / GET entries?period=YYYY-MM(&userId= は責任者/管理者のみ) /
+POST entries(body {date:"YYYY-MM-DD", valuesPatch:{<fieldId>:値}, userId?}) /
+GET admin/fields / POST,PATCH,DELETE admin/fields(/:id)(master:view/edit)
+- FinalReportField: label / fieldType(NUMBER|TEXT) / computed("callSf+callBlank"等、自動計算) / unit / order / active。code付きの初期13項目は削除=非表示。
+- FinalReportEntry: userId×date、values(JSON、fieldId→値)。
+- 毎日19:00(JST)cron: シフト表で当日の稼働時間>0(出勤日)かつ当日の最終報告が未入力(values空)のユーザーを検出 → 責任者(MANAGER)+管理者(ADMIN/SUPER_ADMIN)へまとめてWebPush(本人には送らない)。
+
 ## トス登録フォーム `/toss-form`
 GET fields(?all=1で無効項目も。アポインターの登録画面用、選択肢を解決して返す) /
 POST submit(body {answers}、トス案件を作成) /

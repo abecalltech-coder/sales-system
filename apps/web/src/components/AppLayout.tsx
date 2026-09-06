@@ -23,6 +23,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/appointments', label: 'アポ実績管理', icon: 'calendarCheck' },
       { to: '/contracts', label: 'エントリー管理', icon: 'document' },
       { to: '/cl-calendar', label: 'CLカレンダー', icon: 'calendar' },
+      { to: '/final-report', label: '最終報告', icon: 'clipboard' },
     ],
   },
 ];
@@ -34,6 +35,7 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/organizations', label: '組織管理', icon: 'building' },
     { to: '/admin/masters', label: 'マスタ管理', icon: 'sliders' },
     { to: '/admin/toss-form', label: 'トスフォーム設定', icon: 'form' },
+    { to: '/admin/final-report-fields', label: '最終報告項目', icon: 'clipboard' },
     { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: 'puzzle' },
     { to: '/admin/integrations', label: '連携設定', icon: 'link' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },

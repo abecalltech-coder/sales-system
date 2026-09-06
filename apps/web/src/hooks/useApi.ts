@@ -526,6 +526,53 @@ export function useMonthlyShift(period: string) {
 }
 
 // ============================================================
+// 最終報告
+// ============================================================
+export interface FinalReportField {
+  id: string;
+  code: string | null;
+  label: string;
+  fieldType: 'NUMBER' | 'TEXT';
+  computed: string | null;
+  unit: string | null;
+  order: number;
+  active: boolean;
+}
+
+export interface FinalReportMonth {
+  period: string;
+  userId: string;
+  userName: string | null;
+  days: string[];
+  fields: FinalReportField[];
+  entries: Record<string, Record<string, number | string>>;
+}
+
+export function useFinalReportFields() {
+  return useQuery({
+    queryKey: ['final-report-fields'],
+    queryFn: () => api.get<FinalReportField[]>('/final-reports/fields'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useFinalReportMonth(period: string, userId?: string) {
+  const q = userId ? `&userId=${userId}` : '';
+  return useQuery({
+    queryKey: ['final-report-month', period, userId ?? 'me'],
+    queryFn: () => api.get<FinalReportMonth>(`/final-reports/entries?period=${period}${q}`),
+    enabled: !!period,
+  });
+}
+
+export function useFinalReportAdminFields() {
+  return useQuery({
+    queryKey: ['final-report-admin-fields'],
+    queryFn: () => api.get<FinalReportField[]>('/final-reports/admin/fields'),
+  });
+}
+
+// ============================================================
 // 操作ログ・システム設定
 // ============================================================
 export interface AuditLogItem {

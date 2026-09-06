@@ -8,10 +8,12 @@
 4. CLカレンダー `/cl-calendar`
 5. エントリー管理 一覧/詳細 `/contracts`
 6. サマリー `/summary` — 3タブ: 実績(部署別×月の31列実績管理表、実績列は自動集計) / シフト(月別の日別稼働時間表) / フリーシート(従来の自由編集表)
+6b. 最終報告 `/final-report` — 全ユーザーが日々の数値を入力(列=日付+曜日、行=管理者設定の項目、1行目=アカウント名)。19:00にシフト上の出勤日で未入力なら責任者・管理者へ通知。
 7. ユーザー管理 `/admin/users`
 8. 組織管理(部署/チーム) `/admin/organizations`
 9. マスタ管理(ステータス/商材/流入元) `/admin/masters`
 10. トスフォーム設定 `/admin/toss-form`
+10b. 最終報告 項目設定 `/admin/final-report-fields`
 11. カスタム項目管理 `/admin/custom-fields`
 12. 連携設定(Googleカレンダー・Meet) `/admin/integrations`
 13. 操作ログ `/admin/audit-logs`
