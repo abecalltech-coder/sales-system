@@ -62,6 +62,27 @@ export class MonthlySummaryService {
     };
   }
 
+  /** 対象月の全部署(DEPARTMENT_BRANCH)分のシートを(無ければ)生成する。月次ロールオーバーcron用。 */
+  async ensureForMonth(period: string) {
+    if (!isValidPeriodMonth(period)) return { created: 0 };
+    const depts = await this.prisma.statusMaster.findMany({
+      where: { category: 'DEPARTMENT_BRANCH', active: true },
+      select: { id: true },
+    });
+    let created = 0;
+    for (const d of depts) {
+      const exists = await this.prisma.monthlySummarySheet.findUnique({
+        where: { periodMonth_departmentId: { periodMonth: period, departmentId: d.id } },
+        select: { id: true },
+      });
+      if (!exists) {
+        await this.lazyCreate(period, d.id);
+        created++;
+      }
+    }
+    return { created };
+  }
+
   private async lazyCreate(period: string, departmentId: string) {
     const prev = await this.prisma.monthlySummarySheet.findUnique({
       where: { periodMonth_departmentId: { periodMonth: previousPeriodMonth(period), departmentId } },

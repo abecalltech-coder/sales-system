@@ -31,6 +31,7 @@ import { PreferencesModule } from './preferences/preferences.module';
 import { TossFormModule } from './toss-form/toss-form.module';
 import { MonthlySummaryModule } from './monthly-summary/monthly-summary.module';
 import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
+import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
     SummarySheetsModule,
     MonthlySummaryModule,
     MonthlyShiftModule,
+    MonthlyRolloverModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

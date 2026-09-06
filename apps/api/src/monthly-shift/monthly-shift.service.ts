@@ -55,6 +55,18 @@ export class MonthlyShiftService {
     };
   }
 
+  /** 対象月のシートを(無ければ)生成する。月次ロールオーバーcron用。 */
+  async ensureForMonth(period: string) {
+    if (!isValidPeriodMonth(period)) return { created: 0 };
+    const exists = await this.prisma.monthlyShiftSheet.findUnique({
+      where: { periodMonth: period },
+      select: { id: true },
+    });
+    if (exists) return { created: 0 };
+    await this.lazyCreate(period);
+    return { created: 1 };
+  }
+
   private async lazyCreate(period: string) {
     const prev = await this.prisma.monthlyShiftSheet.findUnique({
       where: { periodMonth: previousPeriodMonth(period) },
