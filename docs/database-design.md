@@ -313,6 +313,23 @@ model SystemSetting { key String @id value Json }
 model SavedFilter { id String @id @default(uuid()) userId String screen String name String query Json }
 ```
 
+### 月単位運用(サマリー実績表・シフト表)
+
+```
+// トス/アポ/エントリーに periodMonth("YYYY-MM", JST暦月)を追加。作成時確定・period-moveでのみ変更。
+TossCase.periodMonth / Appointment.periodMonth / Contract.periodMonth : String? @@index
+
+model MonthlySummarySheet { id String @id periodMonth String departmentId String rows MonthlySummaryRow[]
+  @@unique([periodMonth, departmentId]) } // departmentId = StatusMaster(DEPARTMENT_BRANCH).id
+model MonthlySummaryRow { id String @id sheetId String userId String? role String? order Int values Json }
+  // values = 手入力値 + 自動集計の上書き。比率/合計/DPHは非保存
+
+model MonthlyShiftSheet { id String @id periodMonth String @unique rows MonthlyShiftRow[] }
+model MonthlyShiftRow { id String @id sheetId String userId String? order Int attributes Json days Json }
+  // days = { "2026-09-01": 8, ... } 日別稼働時間。実稼働時間/稼働人数は非保存(集計)
+```
+シートは初回アクセス時に遅延生成し、前月シートから行(ユーザー・役割・一部属性)を引き継ぐ。毎月1日 00:05(JST)cron で当月分をまとめて生成(保険)。
+
 ## 3. インデックス方針(初期)
 
 `caseNumber`(unique), `statusId`, 各`*UserId`, `snapshotDepartmentId`, `snapshotTeamId`,

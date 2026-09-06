@@ -3,6 +3,11 @@
 Base: `/api`。認証はHttpOnly CookieのAccess Token(JWT)。Swagger UIを`/api/docs`で提供。
 一覧系は必ずクエリパラメータ`page,pageSize,sort,filter[...]`を要求し、全件取得エンドポイントは提供しない。
 
+## 対象月(月単位運用)
+- トス/アポ/エントリーは `periodMonth`("YYYY-MM"、JST暦月)を持つ。作成時に主要日付から確定し、以後は period-move でのみ変更。
+- 一覧の共通クエリに `periodMonth`(その月のみ) / `includePrevMonth=true`(前月の未完了を合流)を追加。
+- `POST /toss-cases|/appointments|/contracts/period-move` body `{ ids:[], periodMonth }` — 選択レコードの対象月を移動(監査ログ記録、`*.period_move`)。
+
 ## 認証
 | Method | Path | 備考 |
 |---|---|---|
@@ -32,9 +37,28 @@ GET /visits/:id/history, POST /offline-actions/sync(冪等性キーで重複無�
 GET / POST / GET :id / PATCH :id (成約はmatchingStatus変更時の自動日付処理をサーバー側で実施) /
 POST reorder(body {ids:[]}で手動並び順=manualOrderを更新) / POST bulk-delete(body {ids:[]})
 
-## サマリー(自由編集表) `/summary-sheets`
+## サマリー `/summary`(画面)= 3タブ
+
+### 実績表 `/monthly-summary`
+GET `?period=YYYY-MM&departmentId=<DEPARTMENT_BRANCH id>` — 対象月×部署のシート(無ければ遅延生成・前月から行引き継ぎ)。各行に自動集計値 `auto` を同梱。
+GET departments(部署選択肢) / POST rows(body {period,departmentId,userId?,role?}) / PATCH rows/:id(body {valuesPatch?,role?,userId?,order?}) /
+POST rows/reorder(body {ids:[]}) / POST rows/bulk-delete(body {ids:[]})
+- 31列。自動集計= トスアップ/アポ/商談実施数/成約拠点数/ET数/リスケ(`monthly-summary/aggregation.constants.ts`)。セルに数値=上書き、空=自動値へ復帰。比率・合計・DPH・残訪問はフロントで計算。予算・コール数・稼働時間・前確OK・直転送トス・前連失注は手入力。
+
+### シフト表 `/monthly-shift`
+GET `?period=YYYY-MM`(遅延生成・前月から属性引き継ぎ) / POST rows(body {period,userId?}) / PATCH rows/:id(body {attributesPatch?,daysPatch?,userId?,order?}) /
+POST rows/reorder / POST rows/bulk-delete
+- 日別セル= 稼働時間数。稼働人数(稼働>0の日数)・実稼働時間(日別合計)は自動。日数・曜日は対象月から動的生成。
+
+### フリーシート(従来の自由編集表) `/summary-sheets`
 GET(シート一覧) / POST(シート作成) / GET :id(セル一覧含む) / PATCH :id(名称変更) / DELETE :id(論理削除) /
 PUT :id/cells(セル1件upsert) / POST,DELETE :id/rows(/:row) / POST,DELETE :id/columns(/:col)
+
+### ロスター `/users/options`
+GET — 認証ユーザーなら誰でも取得できる軽量な在籍者一覧(サマリー/シフトの行追加用)。
+
+## 月次ロールオーバー
+毎月1日 00:05(JST)cron で当月分のサマリー実績表(全 DEPARTMENT_BRANCH)・シフト表を未生成なら生成する(遅延生成の保険)。
 
 ## トス登録フォーム `/toss-form`
 GET fields(?all=1で無効項目も。アポインターの登録画面用、選択肢を解決して返す) /
