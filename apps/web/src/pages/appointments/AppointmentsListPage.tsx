@@ -11,6 +11,8 @@ import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeTex
 import { usePresence } from '../../lib/usePresence';
 import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
+import { MonthSwitcher } from '../../components/MonthSwitcher';
+import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -24,6 +26,8 @@ type FilterValueFn = (r: AppointmentListItem) => string;
 export function AppointmentsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
+  const [periodMonth] = usePeriodMonth();
+  const [includePrevMonth, setIncludePrevMonth] = useState(false);
   // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const pageSize = 100;
@@ -31,7 +35,7 @@ export function AppointmentsListPage() {
   const [error, setError] = useState<string | null>(null);
   const manualSort = useManualSort('appointments', '/appointments/reorder', 'appointments');
 
-  const { data, isLoading } = useAppointments({ page, pageSize, statusId: statusId || undefined });
+  const { data, isLoading } = useAppointments({ page, pageSize, statusId: statusId || undefined, periodMonth, includePrevMonth });
   const { data: me } = useMe();
   const presence = usePresence('APPOINTMENT', me?.id);
   const { data: statuses } = useStatuses('APPOINTMENT');
@@ -80,6 +84,12 @@ export function AppointmentsListPage() {
     mutationFn: (ids: string[]) => api.post('/appointments/bulk-delete', { ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
+  const periodMoveMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/appointments/period-move', { ids, periodMonth }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '対象月の移動に失敗しました'),
   });
 
   // 列ごとの絞り込み用の値抽出関数。各列ヘルパーが自身の列を作る際に登録する。
@@ -454,7 +464,10 @@ export function AppointmentsListPage() {
     <AppLayout>
       <div className="page">
         <div className="page-header">
-          <h1 className="page-title">アポ実績管理</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="page-title">アポ実績管理</h1>
+            <MonthSwitcher />
+          </div>
           <a href="/api/appointments/export" style={{ fontSize: 13 }}>
             CSV出力
           </a>
@@ -485,6 +498,10 @@ export function AppointmentsListPage() {
               自動並びに戻す
             </button>
           )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+            <input type="checkbox" checked={includePrevMonth} onChange={(e) => setIncludePrevMonth(e.target.checked)} />
+            前月の未完了も表示
+          </label>
         </div>
 
         <DataTable
@@ -503,6 +520,12 @@ export function AppointmentsListPage() {
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
           onDeleteRows={(ids) => deleteMutation.mutate(ids)}
+          extraRowMenuItems={[
+            {
+              label: (n) => `選択した ${n} 行を${formatPeriodMonth(periodMonth)}へ移動`,
+              onClick: (ids) => periodMoveMutation.mutate(ids),
+            },
+          ]}
         />
       </div>
     </AppLayout>

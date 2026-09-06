@@ -9,6 +9,7 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { extractPrefecture } from '../common/utils/prefecture.util';
 import { toDateOrUndefined } from '../common/utils/date.util';
+import { previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
 
 @Injectable()
 export class TossCasesService {
@@ -29,6 +30,8 @@ export class TossCasesService {
     departmentId?: string;
     teamId?: string;
     userId?: string;
+    periodMonth?: string;
+    includePrevMonth?: boolean;
     dateFrom?: string;
     dateTo?: string;
   }) {
@@ -39,6 +42,17 @@ export class TossCasesService {
       ...(params.teamId ? { snapshotTeamId: params.teamId } : {}),
       ...(params.userId
         ? { OR: [{ tossUserId: params.userId }, { salesUserId: params.userId }, { fieldSalesUserId: params.userId }] }
+        : {}),
+      ...(params.periodMonth
+        ? params.includePrevMonth
+          ? {
+              // 当月分 + 前月の未完了(まだアポ詳細が作られていない)分を合流表示する(繰越)
+              OR: [
+                { periodMonth: params.periodMonth },
+                { periodMonth: previousPeriodMonth(params.periodMonth), appointment: { is: null } },
+              ],
+            }
+          : { periodMonth: params.periodMonth }
         : {}),
       ...(params.dateFrom || params.dateTo
         ? {
@@ -148,6 +162,8 @@ export class TossCasesService {
         progressStatusId,
         ngReasonStatusId: dto.ngReasonStatusId,
         nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : undefined,
+        // 対象月はトス受領日(=作成時のJST暦月)で確定。以後は「当月へ移動」でのみ変更。
+        periodMonth: toPeriodMonth(new Date()),
         createdBy: actorUserId,
         updatedBy: actorUserId,
       },
@@ -311,6 +327,30 @@ export class TossCasesService {
   async softDelete(id: string, userId: string) {
     await this.prisma.tossCase.update({ where: { id }, data: { deletedAt: new Date(), updatedBy: userId } });
     return { ok: true };
+  }
+
+  /** 選択したトス案件の対象月(periodMonth)を移動する(前月案件の繰越操作) */
+  async periodMove(ids: string[], periodMonth: string, userId: string) {
+    const before = await this.prisma.tossCase.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true, periodMonth: true },
+    });
+    const result = await this.prisma.tossCase.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { periodMonth, updatedBy: userId, version: { increment: 1 } },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: userId,
+        action: 'toss_case.period_move',
+        targetType: 'TOSS_CASE',
+        targetId: ids.join(','),
+        before: { rows: before },
+        after: { periodMonth },
+        success: true,
+      },
+    });
+    return { ok: true, moved: result.count };
   }
 
   /** 複数のトス案件を論理削除する(一覧の右クリックメニューから) */

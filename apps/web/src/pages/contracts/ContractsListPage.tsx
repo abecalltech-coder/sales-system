@@ -10,6 +10,8 @@ import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { useManualSort } from '../../hooks/useManualSort';
+import { MonthSwitcher } from '../../components/MonthSwitcher';
+import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -20,13 +22,22 @@ export function ContractsListPage() {
   const [page, setPage] = useState(1);
   const [statusId, setStatusId] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [periodMonth] = usePeriodMonth();
+  const [includePrevMonth, setIncludePrevMonth] = useState(false);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const pageSize = 100;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const manualSort = useManualSort('contracts', '/contracts/reorder', 'contracts');
 
-  const { data, isLoading } = useContracts({ page, pageSize, statusId: statusId || undefined, keyword: keyword || undefined });
+  const { data, isLoading } = useContracts({
+    page,
+    pageSize,
+    statusId: statusId || undefined,
+    keyword: keyword || undefined,
+    periodMonth,
+    includePrevMonth,
+  });
   const { data: me } = useMe();
   const presence = usePresence('CONTRACT', me?.id);
   const { data: statuses } = useStatuses('MATCHING');
@@ -49,6 +60,12 @@ export function ContractsListPage() {
     mutationFn: (ids: string[]) => api.post('/contracts/bulk-delete', { ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contracts'] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
+  const periodMoveMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/contracts/period-move', { ids, periodMonth }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contracts'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '対象月の移動に失敗しました'),
   });
 
   const numberColumn = (key: keyof ContractListItem, label: string, width = 110): Column<ContractListItem> => ({
@@ -247,11 +264,15 @@ export function ContractsListPage() {
     <AppLayout>
       <div className="page">
         <div className="page-header">
-          <h1 className="page-title">エントリー管理</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="page-title">エントリー管理</h1>
+            <MonthSwitcher />
+          </div>
           <a href="/api/contracts/export" style={{ fontSize: 13 }}>
             CSV出力
           </a>
         </div>
+
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
 
@@ -287,6 +308,10 @@ export function ContractsListPage() {
               自動並びに戻す
             </button>
           )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+            <input type="checkbox" checked={includePrevMonth} onChange={(e) => setIncludePrevMonth(e.target.checked)} />
+            前月の未完了も表示
+          </label>
         </div>
 
         <DataTable
@@ -304,6 +329,12 @@ export function ContractsListPage() {
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
           onDeleteRows={(ids) => deleteMutation.mutate(ids)}
+          extraRowMenuItems={[
+            {
+              label: (n) => `選択した ${n} 行を${formatPeriodMonth(periodMonth)}へ移動`,
+              onClick: (ids) => periodMoveMutation.mutate(ids),
+            },
+          ]}
         />
       </div>
     </AppLayout>

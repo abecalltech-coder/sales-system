@@ -351,6 +351,9 @@ model TossCase {
   // 一覧の手動並び替え順(要望)。null=未設定。手動並びモードのときこの昇順で表示する。
   manualOrder          Int?
 
+  // 対象月("YYYY-MM"、JST暦月)。作成時に receivedAt から確定。以後は「当月へ移動」操作でのみ変更。
+  periodMonth          String?
+
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   createdBy            String?
@@ -366,6 +369,7 @@ model TossCase {
   @@index([snapshotDepartmentId])
   @@index([snapshotTeamId])
   @@index([receivedAt])
+  @@index([periodMonth])
 }
 
 model Appointment {
@@ -450,6 +454,9 @@ model Appointment {
   // 一覧の手動並び替え順(要望)
   manualOrder            Int?
 
+  // 対象月("YYYY-MM"、JST暦月)。作成時に preContactAt/meetingStartAt/createdAt から確定。
+  periodMonth            String?
+
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
   createdBy              String?
@@ -465,6 +472,7 @@ model Appointment {
   @@index([meetingStartAt])
   @@index([snapshotDepartmentId])
   @@index([snapshotTeamId])
+  @@index([periodMonth])
 }
 
 // CLカレンダーの商談(訪問/オンライン)ごとの実施報告(セクション追加要望)。
@@ -585,6 +593,8 @@ model Contract {
   memo                   String?
   // 一覧の手動並び替え順(要望)
   manualOrder            Int?
+  // 対象月("YYYY-MM"、JST暦月)。作成時に contractedAt/matchingAt/createdAt から確定。
+  periodMonth            String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   createdBy              String?
@@ -595,6 +605,7 @@ model Contract {
   @@index([matchingStatusId])
   @@index([contractUserId])
   @@index([contractedAt])
+  @@index([periodMonth])
 }
 
 model CaseComment {
@@ -804,5 +815,67 @@ model SummarySheetCell {
   updatedBy String?
 
   @@unique([sheetId, row, col])
+  @@index([sheetId])
+}
+
+// ============================================================
+// 月次サマリー実績表 / 月次シフト表(セクション追加要望)
+// 「対象月(periodMonth = "YYYY-MM")」ごとに1枚。初回アクセス時に遅延生成し、
+// 前月のシートから行(対象ユーザー・役割・属性)を引き継ぐ。実績値・日別値・予算は空で開始。
+// ============================================================
+
+// 部署(StatusMaster category=DEPARTMENT_BRANCH)×月ごとの実績管理表。
+model MonthlySummarySheet {
+  id           String   @id @default(uuid())
+  periodMonth  String // "YYYY-MM"
+  departmentId String // StatusMaster(DEPARTMENT_BRANCH).id
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rows MonthlySummaryRow[]
+
+  @@unique([periodMonth, departmentId])
+  @@index([periodMonth])
+}
+
+model MonthlySummaryRow {
+  id      String              @id @default(uuid())
+  sheetId String
+  sheet   MonthlySummarySheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  userId  String? // 対象ユーザー(集計に使用)
+  role    String? // 役割ラベル(アポインター/クローザー/管理 等)
+  order   Int                 @default(0)
+  // 手入力値 + 自動集計の上書き値。キー=列コード(例: tossUpBudget, sfCalls, tossUp)。
+  // 計算列(比率・合計・DPH)は保存しない。
+  values  Json                @default("{}")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([sheetId])
+}
+
+// 月ごとのシフト表(全部署共通で1枚)。
+model MonthlyShiftSheet {
+  id          String   @id @default(uuid())
+  periodMonth String   @unique // "YYYY-MM"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rows MonthlyShiftRow[]
+}
+
+model MonthlyShiftRow {
+  id      String            @id @default(uuid())
+  sheetId String
+  sheet   MonthlyShiftSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  userId  String?
+  order   Int               @default(0)
+  // 属性列: 役職/氏名/所属会社/事業部/コスト/管轄/配属月/Lコード/席数/累計時間 等
+  attributes Json           @default("{}")
+  // 日別稼働時間: { "2026-09-01": 8, "2026-09-02": 0, ... }
+  days       Json           @default("{}")
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
   @@index([sheetId])
 }

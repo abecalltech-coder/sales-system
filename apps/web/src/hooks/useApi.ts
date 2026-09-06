@@ -63,12 +63,21 @@ export interface TossCaseListItem {
   appointment: { id: string; caseNumber: string } | null;
 }
 
-export function useTossCases(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
+export function useTossCases(params: {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  statusId?: string;
+  periodMonth?: string;
+  includePrevMonth?: boolean;
+}) {
   const query = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
     ...(params.keyword ? { keyword: params.keyword } : {}),
     ...(params.statusId ? { statusId: params.statusId } : {}),
+    ...(params.periodMonth ? { periodMonth: params.periodMonth } : {}),
+    ...(params.includePrevMonth ? { includePrevMonth: 'true' } : {}),
   });
   return useQuery({
     queryKey: ['toss-cases', params],
@@ -149,6 +158,8 @@ export function useAppointments(params: {
   userId?: string;
   departmentId?: string;
   closerStatusId?: string;
+  periodMonth?: string;
+  includePrevMonth?: boolean;
   dateFrom?: string;
   dateTo?: string;
 }) {
@@ -160,6 +171,8 @@ export function useAppointments(params: {
     ...(params.userId ? { userId: params.userId } : {}),
     ...(params.departmentId ? { departmentId: params.departmentId } : {}),
     ...(params.closerStatusId ? { closerStatusId: params.closerStatusId } : {}),
+    ...(params.periodMonth ? { periodMonth: params.periodMonth } : {}),
+    ...(params.includePrevMonth ? { includePrevMonth: 'true' } : {}),
     ...(params.dateFrom ? { dateFrom: params.dateFrom } : {}),
     ...(params.dateTo ? { dateTo: params.dateTo } : {}),
   });
@@ -230,12 +243,21 @@ export interface ContractListItem {
   version: number;
 }
 
-export function useContracts(params: { page: number; pageSize: number; statusId?: string; keyword?: string }) {
+export function useContracts(params: {
+  page: number;
+  pageSize: number;
+  statusId?: string;
+  keyword?: string;
+  periodMonth?: string;
+  includePrevMonth?: boolean;
+}) {
   const query = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
     ...(params.statusId ? { statusId: params.statusId } : {}),
     ...(params.keyword ? { keyword: params.keyword } : {}),
+    ...(params.periodMonth ? { periodMonth: params.periodMonth } : {}),
+    ...(params.includePrevMonth ? { includePrevMonth: 'true' } : {}),
   });
   return useQuery({
     queryKey: ['contracts', params],

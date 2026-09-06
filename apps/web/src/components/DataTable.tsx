@@ -49,6 +49,8 @@ interface DataTableProps<T> {
   onReorder?: (orderedIds: string[]) => void;
   /** 指定すると右クリックメニューに「選択行を削除」が出る */
   onDeleteRows?: (ids: string[]) => void;
+  /** 右クリックメニューへ追加する任意の操作(選択行に対して実行) */
+  extraRowMenuItems?: { label: (count: number) => string; onClick: (ids: string[]) => void; danger?: boolean }[];
 }
 
 const DEFAULT_COLUMN_WIDTH = 120;
@@ -106,6 +108,7 @@ export function DataTable<T>({
   tableKey,
   onReorder,
   onDeleteRows,
+  extraRowMenuItems,
 }: DataTableProps<T>) {
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
@@ -598,6 +601,18 @@ export function DataTable<T>({
               setMenu(null);
             }}
           />
+          {extraRowMenuItems?.map((item, i) => (
+            <MenuItem
+              key={i}
+              danger={item.danger}
+              label={item.label(menuIds.length)}
+              onClick={() => {
+                item.onClick(menuIds);
+                setSel(null);
+                setMenu(null);
+              }}
+            />
+          ))}
           {onDeleteRows && (
             <MenuItem
               danger

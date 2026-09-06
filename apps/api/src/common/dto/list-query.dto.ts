@@ -1,5 +1,5 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class ListQueryDto {
   @IsOptional()
@@ -38,6 +38,18 @@ export class ListQueryDto {
   @IsOptional()
   @IsString()
   closerStatusId?: string;
+
+  /** 対象月フィルタ("YYYY-MM")。指定時はその月のレコードのみ返す。 */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'periodMonthは"YYYY-MM"形式で指定してください' })
+  periodMonth?: string;
+
+  /** periodMonth 指定時、前月の「未完了」レコードも合流表示する(繰越)。 */
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true' || value === '1')
+  @IsBoolean()
+  includePrevMonth?: boolean;
 
   @IsOptional()
   @IsString()

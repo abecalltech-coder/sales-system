@@ -11,6 +11,8 @@ import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, 
 import { usePresence } from '../../lib/usePresence';
 import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
+import { MonthSwitcher } from '../../components/MonthSwitcher';
+import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
 
 const CALL_DIRECTION_OPTIONS = [
   { id: '架電', label: '架電' },
@@ -22,6 +24,8 @@ type FilterValueFn = (r: TossCaseListItem) => string;
 export function TossCasesListPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
+  const [periodMonth] = usePeriodMonth();
+  const [includePrevMonth, setIncludePrevMonth] = useState(false);
   // 列フィルター(Googleスプレッドシート風)。自分の画面だけのローカルstateで、他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   // 進捗ごとのグループ化・列フィルターをページ内で完結させるため、
@@ -30,7 +34,7 @@ export function TossCasesListPage() {
   const queryClient = useQueryClient();
   const manualSort = useManualSort('toss-cases', '/toss-cases/reorder', 'toss-cases');
 
-  const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined });
+  const { data, isLoading } = useTossCases({ page, pageSize, keyword: keyword || undefined, periodMonth, includePrevMonth });
   const { data: me } = useMe();
   const presence = usePresence('TOSS_CASE', me?.id);
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
@@ -122,6 +126,12 @@ export function TossCasesListPage() {
     mutationFn: (ids: string[]) => api.post('/toss-cases/bulk-delete', { ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['toss-cases'] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
+  });
+
+  const periodMoveMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/toss-cases/period-move', { ids, periodMonth }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['toss-cases'] }),
+    onError: (err) => setError(err instanceof ApiError ? err.message : '対象月の移動に失敗しました'),
   });
 
   // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
@@ -470,7 +480,10 @@ export function TossCasesListPage() {
     <AppLayout>
       <div className="page">
         <div className="page-header">
-          <h1 className="page-title">トス実績</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h1 className="page-title">トス実績</h1>
+            <MonthSwitcher />
+          </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <a href="/api/toss-cases/export" style={{ fontSize: 13 }}>
               CSV出力
@@ -541,6 +554,10 @@ export function TossCasesListPage() {
               自動並びに戻す
             </button>
           )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer', color: 'var(--color-text-muted)' }}>
+            <input type="checkbox" checked={includePrevMonth} onChange={(e) => setIncludePrevMonth(e.target.checked)} />
+            前月の未完了も表示
+          </label>
         </div>
 
         <DataTable
@@ -559,6 +576,12 @@ export function TossCasesListPage() {
           cellCursor={presence.cellCursor}
           onReorder={manualSort.reorder}
           onDeleteRows={(ids) => deleteMutation.mutate(ids)}
+          extraRowMenuItems={[
+            {
+              label: (n) => `選択した ${n} 行を${formatPeriodMonth(periodMonth)}へ移動`,
+              onClick: (ids) => periodMoveMutation.mutate(ids),
+            },
+          ]}
         />
       </div>
 

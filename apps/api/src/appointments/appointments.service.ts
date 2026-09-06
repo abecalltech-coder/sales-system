@@ -12,6 +12,7 @@ import { SystemSettingsService } from '../system-settings/system-settings.module
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { toDateOrUndefined } from '../common/utils/date.util';
 import { extractPrefecture } from '../common/utils/prefecture.util';
+import { previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
 import { buildCalendarTitle, closerSurname, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
 
 @Injectable()
@@ -37,6 +38,8 @@ export class AppointmentsService {
     userId?: string;
     departmentId?: string;
     closerStatusId?: string;
+    periodMonth?: string;
+    includePrevMonth?: boolean;
     dateFrom?: string;
     dateTo?: string;
   }) {
@@ -44,6 +47,19 @@ export class AppointmentsService {
     // 同じwhereオブジェクトに複数のORキーを直接spreadすると後勝ちで上書きされてしまう)。
     const andConditions: Prisma.AppointmentWhereInput[] = [];
     if (params.statusId) andConditions.push({ meetingStatusId: params.statusId });
+    if (params.periodMonth) {
+      if (params.includePrevMonth) {
+        // 当月分 + 前月の未完了(まだエントリー(Contract)が作られていない)分を合流表示する(繰越)
+        andConditions.push({
+          OR: [
+            { periodMonth: params.periodMonth },
+            { periodMonth: previousPeriodMonth(params.periodMonth), contract: { is: null } },
+          ],
+        });
+      } else {
+        andConditions.push({ periodMonth: params.periodMonth });
+      }
+    }
     if (params.departmentId) andConditions.push({ snapshotDepartmentId: params.departmentId });
     if (params.closerStatusId) andConditions.push({ closerStatusId: params.closerStatusId });
     if (params.userId) {
@@ -185,6 +201,8 @@ export class AppointmentsService {
           progressStatusId,
           idempotencyKey: tossCaseId,
           preContactAt,
+          // 対象月は前連日時 → 商談日時 → 現在 の順で確定
+          periodMonth: toPeriodMonth(preContactAt ?? tossCase.confirmedStartAt ?? new Date()),
           calendarTitle,
           calendarColor,
           memo,
@@ -276,6 +294,7 @@ export class AppointmentsService {
         memo: dto.memo,
         meetingStatusId,
         idempotencyKey: randomUUID(),
+        periodMonth: toPeriodMonth(dto.meetingStartAt ? new Date(dto.meetingStartAt) : new Date()),
         createdBy: userId,
         updatedBy: userId,
       },
@@ -451,6 +470,30 @@ export class AppointmentsService {
       ids.map((id, i) => this.prisma.appointment.update({ where: { id }, data: { manualOrder: (i + 1) * 10 } })),
     );
     return { ok: true, count: ids.length };
+  }
+
+  /** 選択したアポ詳細の対象月(periodMonth)を移動する(前月案件の繰越操作) */
+  async periodMove(ids: string[], periodMonth: string, userId: string) {
+    const before = await this.prisma.appointment.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true, periodMonth: true },
+    });
+    const result = await this.prisma.appointment.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { periodMonth, updatedBy: userId, version: { increment: 1 } },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: userId,
+        action: 'appointment.period_move',
+        targetType: 'APPOINTMENT',
+        targetId: ids.join(','),
+        before: { rows: before },
+        after: { periodMonth },
+        success: true,
+      },
+    });
+    return { ok: true, moved: result.count };
   }
 
   /** 複数のアポ詳細を論理削除する(一覧の右クリックメニューから) */

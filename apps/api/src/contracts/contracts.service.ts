@@ -7,6 +7,7 @@ import { StatusResolverService } from '../common/services/status-resolver.servic
 import { CaseHistoryService } from '../common/services/case-history.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { toDateOrUndefined } from '../common/utils/date.util';
+import { previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
 
 @Injectable()
 export class ContractsService {
@@ -20,18 +21,39 @@ export class ContractsService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  async list(params: { page: number; pageSize: number; keyword?: string; statusId?: string }) {
+  async list(params: {
+    page: number;
+    pageSize: number;
+    keyword?: string;
+    statusId?: string;
+    periodMonth?: string;
+    includePrevMonth?: boolean;
+  }) {
+    const andConditions: Prisma.ContractWhereInput[] = [];
+    if (params.periodMonth) {
+      if (params.includePrevMonth) {
+        andConditions.push({
+          OR: [
+            { periodMonth: params.periodMonth },
+            { periodMonth: previousPeriodMonth(params.periodMonth), terminatedAt: null, cancelledAt: null },
+          ],
+        });
+      } else {
+        andConditions.push({ periodMonth: params.periodMonth });
+      }
+    }
+    if (params.keyword) {
+      andConditions.push({
+        OR: [
+          { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
+          { appointment: { is: { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } } } },
+        ],
+      });
+    }
     const where: Prisma.ContractWhereInput = {
       deletedAt: null,
       ...(params.statusId ? { matchingStatusId: params.statusId } : {}),
-      ...(params.keyword
-        ? {
-            OR: [
-              { caseNumber: { contains: params.keyword, mode: 'insensitive' } },
-              { appointment: { is: { customer: { is: { corporateName: { contains: params.keyword, mode: 'insensitive' } } } } } },
-            ],
-          }
-        : {}),
+      ...(andConditions.length ? { AND: andConditions } : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.contract.findMany({
@@ -68,6 +90,30 @@ export class ContractsService {
     return { ok: true, count: ids.length };
   }
 
+  /** 選択したエントリー案件の対象月(periodMonth)を移動する(前月案件の繰越操作) */
+  async periodMove(ids: string[], periodMonth: string, userId: string) {
+    const before = await this.prisma.contract.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true, periodMonth: true },
+    });
+    const result = await this.prisma.contract.updateMany({
+      where: { id: { in: ids }, deletedAt: null },
+      data: { periodMonth, updatedBy: userId, version: { increment: 1 } },
+    });
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: userId,
+        action: 'contract.period_move',
+        targetType: 'CONTRACT',
+        targetId: ids.join(','),
+        before: { rows: before },
+        after: { periodMonth },
+        success: true,
+      },
+    });
+    return { ok: true, moved: result.count };
+  }
+
   /** 複数のエントリー案件を論理削除する(一覧の右クリックメニューから) */
   async bulkDelete(ids: string[], userId: string) {
     const result = await this.prisma.contract.updateMany({
@@ -95,6 +141,7 @@ export class ContractsService {
           tossCaseId: appointment.tossCaseId,
           contractUserId: appointment.meetingUserId ?? appointment.fieldSalesUserId,
           matchingStatusId,
+          periodMonth: toPeriodMonth(new Date()),
           createdBy: actorUserId,
           updatedBy: actorUserId,
         },
