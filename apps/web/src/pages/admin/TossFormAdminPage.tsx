@@ -26,7 +26,7 @@ const TARGET_KEYS: { id: string; label: string }[] = [
   { id: 'industry', label: '業種' },
   { id: 'proposal', label: '提案' },
   { id: 'callDirection', label: '架電or入電' },
-  { id: 'tossUserName', label: 'トス担当者名' },
+  { id: 'tossUserName', label: 'AP(トス担当者)' },
   { id: 'preConfirmStaffName', label: '前確担当者名' },
   { id: 'preferredCallAt', label: '架電希望日時' },
   { id: 'memo', label: '備考' },

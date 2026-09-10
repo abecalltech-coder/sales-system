@@ -148,7 +148,7 @@ export class TossFormService {
       return s || undefined;
     };
 
-    // トス担当者名 → tossUserId
+    // AP(旧「トス担当者名」) → tossUserId + トス実績の AP 欄(apStaffName)へ反映
     let tossUserId: string | undefined;
     const tossUserName = val('tossUserName');
     if (tossUserName) {
@@ -183,6 +183,7 @@ export class TossFormService {
         industry: val('industry'),
         memo: val('memo'),
         nextActionAt: preferredCallAt ? new Date(preferredCallAt).toISOString() : undefined,
+        ...(tossUserName ? { apStaffName: tossUserName } : {}),
         ...(tossUserId ? { tossUserId } : {}),
         ...(preConfirmStatusId ? { preConfirmStatusId } : {}),
       },

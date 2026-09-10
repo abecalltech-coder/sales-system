@@ -40,7 +40,6 @@ export function TossCasesListPage() {
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
-  const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
   const { data: industryOptions } = useStatuses('INDUSTRY');
   const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
@@ -147,7 +146,7 @@ export function TossCasesListPage() {
     nextActionTime: (r) => isoToTimeInput(r.nextActionAt),
     apStaffName: (r) => r.apStaffName ?? '',
     preConfirm: (r) => preConfirmOptions?.find((s) => s.id === r.preConfirmStatusId)?.displayName ?? '',
-    department: (r) => departmentOptions?.find((s) => s.id === r.department)?.displayName ?? '',
+    department: (r) => r.department ?? '',
     calling: (r) => (r.isCallingInProgress ? '架電中' : ''),
     corporateName: (r) => r.customer?.corporateName ?? '',
     memo: (r) => r.memo ?? '',
@@ -273,19 +272,14 @@ export function TossCasesListPage() {
       pasteValue: (r, text) => save(r, { preConfirmStatusId: idOptByLabel(preConfirmOptions, text) }),
     },
     {
+      // 部署はトスフォームの内容をそのまま反映する自由記述(プルダウンにしない)
       key: 'department',
       label: '部署',
-      width: 84,
+      width: 96,
       renderHeader: filterHeader('department', '部署'),
-      render: (r) => (
-        <InlineSelect
-          value={r.department}
-          options={departmentOptions?.map((s) => ({ id: s.id, label: s.displayName })) ?? []}
-          onSave={(v) => save(r, { department: v })}
-        />
-      ),
-      copyValue: (r) => idOptLabel(departmentOptions, r.department),
-      pasteValue: (r, text) => save(r, { department: idOptByLabel(departmentOptions, text) }),
+      render: (r) => <InlineText value={r.department} onSave={(v) => save(r, { department: v })} />,
+      copyValue: (r) => r.department ?? '',
+      pasteValue: (r, text) => save(r, { department: text }),
     },
     {
       key: 'calling',

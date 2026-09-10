@@ -246,19 +246,19 @@ function CategoryCard({
   });
 
   const updateMutation = useMutation({
-    mutationFn: (vars: { id: string; displayName?: string; color?: string; active?: boolean }) =>
-      api.patch(`/status-master/${vars.id}`, vars),
+    // id はURLに載せる。bodyへ入れると forbidNonWhitelisted で弾かれる(「property id should not exist」)。
+    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; active?: boolean }) =>
+      api.patch(`/status-master/${id}`, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
+  const genCode = () =>
+    simpleLabel ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode;
+
   const createMutation = useMutation({
     mutationFn: () =>
-      api.post('/status-master', {
-        category,
-        internalCode: simpleLabel ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode,
-        displayName: newLabel,
-      }),
+      api.post('/status-master', { category, internalCode: genCode(), displayName: newLabel }),
     onSuccess: () => {
       setNewCode('');
       setNewLabel('');
@@ -266,6 +266,26 @@ function CategoryCard({
       queryClient.invalidateQueries({ queryKey: ['status-master', category] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
+  });
+
+  // 複数行/タブ区切りの貼り付けで一括追加(スプレッドシートからのコピペ対応)。
+  // 一括追加分の内部コードは自動採番(表示名で参照する運用)。
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (labels: string[]) => {
+      for (const displayName of labels) {
+        await api.post('/status-master', {
+          category,
+          internalCode: `${category}_${crypto.randomUUID().slice(0, 8)}`,
+          displayName,
+        });
+      }
+    },
+    onSuccess: () => {
+      setNewLabel('');
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['status-master', category] });
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : '一括追加に失敗しました'),
   });
 
   const deleteMutation = useMutation({
@@ -354,11 +374,22 @@ function CategoryCard({
           />
         )}
         <input
-          placeholder={simpleLabel ? '名前を追加' : '表示名'}
+          placeholder={simpleLabel ? '名前を追加(複数行の貼り付けで一括追加)' : '表示名'}
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && newLabel && (simpleLabel || newCode)) createMutation.mutate();
+          }}
+          onPaste={(e) => {
+            const raw = e.clipboardData.getData('text');
+            const items = raw
+              .split(/[\r\n\t]+/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (items.length > 1) {
+              e.preventDefault();
+              bulkCreateMutation.mutate(items);
+            }
           }}
           style={{ flex: 1, padding: 5, fontSize: 12, minWidth: 0 }}
         />
@@ -367,7 +398,7 @@ function CategoryCard({
           disabled={(!simpleLabel && !newCode) || !newLabel}
           style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}
         >
-          追加
+          {bulkCreateMutation.isPending ? '追加中…' : '追加'}
         </button>
       </div>
     </div>

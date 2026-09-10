@@ -140,7 +140,17 @@ export class AppointmentsService {
 
     const [customer, departmentStatus, preConfirmStatus, zoomTemplate, visitTemplate] = await Promise.all([
       tossCase.customerId ? this.prisma.customer.findUnique({ where: { id: tossCase.customerId } }) : Promise.resolve(null),
-      tossCase.department ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.department } }) : Promise.resolve(null),
+      // トスの部署は自由記述になったため、id / 表示名 の両方で DEPARTMENT_BRANCH を照合する
+      tossCase.department
+        ? this.prisma.statusMaster.findFirst({
+            where: {
+              OR: [
+                { id: tossCase.department },
+                { category: 'DEPARTMENT_BRANCH', displayName: tossCase.department },
+              ],
+            },
+          })
+        : Promise.resolve(null),
       tossCase.preConfirmStatusId ? this.prisma.statusMaster.findUnique({ where: { id: tossCase.preConfirmStatusId } }) : Promise.resolve(null),
       this.systemSettings.getOne('tossAppointmentMemoTemplate'),
       this.systemSettings.getOne('tossAppointmentMemoTemplateVisit'),
