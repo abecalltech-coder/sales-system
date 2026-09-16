@@ -16,7 +16,7 @@ const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: 'char
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: '営業',
+    title: '営業(案件管理)',
     items: [
       { to: '/toss/new', label: 'トス登録', icon: 'edit' },
       { to: '/toss-cases', label: 'トス実績管理', icon: 'inbox' },
