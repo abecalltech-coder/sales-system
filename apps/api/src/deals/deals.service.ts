@@ -130,11 +130,12 @@ export class DealsService {
   }
 
   async create(dto: CreateDealDto, userId: string) {
-    const max = await this.prisma.deal.aggregate({ _max: { manualOrder: true } });
+    // 新規行は一覧の先頭に出す(末尾追加だと気づかれにくいため)
+    const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
     return this.prisma.deal.create({
       data: {
-        values: (dto.values ?? {}) as Prisma.InputJsonValue,
-        manualOrder: (max._max.manualOrder ?? 0) + 10,
+        values: clean((dto.values ?? {}) as Record<string, unknown>) as Prisma.InputJsonValue,
+        manualOrder: (min._min.manualOrder ?? 0) - 10,
         createdBy: userId,
         updatedBy: userId,
       },

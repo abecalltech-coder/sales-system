@@ -7,6 +7,7 @@ import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions } 
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
+import { QuickAddDealModal } from './QuickAddDealModal';
 
 const MANAGE_OPTIONS = '__manage_options__';
 const ADD_COLUMN_KEY = '__add_column__';
@@ -17,6 +18,7 @@ export function DealsListPage() {
   const [error, setError] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const pageSize = 100;
   const queryClient = useQueryClient();
 
@@ -44,9 +46,13 @@ export function DealsListPage() {
     updateMutation.mutate({ id: row.id, version: row.version, patch });
 
   const createMutation = useMutation({
-    mutationFn: () => api.post('/deals', {}),
-    onSuccess: invalidate,
-    onError: (err) => setError(err instanceof ApiError ? err.message : '行の追加に失敗しました'),
+    mutationFn: (values: Record<string, unknown>) => api.post('/deals', { values }),
+    onSuccess: () => {
+      setError(null);
+      setAddOpen(false);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : '案件の追加に失敗しました'),
   });
 
   const deleteMutation = useMutation({
@@ -180,8 +186,8 @@ export function DealsListPage() {
             <button onClick={() => openPanel()} style={{ fontSize: 13 }}>
               列を管理
             </button>
-            <button className="btn-primary" onClick={() => createMutation.mutate()} style={{ fontSize: 13 }}>
-              ＋ 行を追加
+            <button className="btn-primary" onClick={() => setAddOpen(true)} style={{ fontSize: 13 }}>
+              ＋ 案件追加
             </button>
           </div>
         </div>
@@ -216,6 +222,15 @@ export function DealsListPage() {
       </div>
 
       {panelOpen && <DealFieldsPanel onClose={() => setPanelOpen(false)} focusFieldId={focusFieldId} />}
+
+      {addOpen && (
+        <QuickAddDealModal
+          fields={fields ?? []}
+          submitting={createMutation.isPending}
+          onCancel={() => setAddOpen(false)}
+          onSubmit={(values) => createMutation.mutate(values)}
+        />
+      )}
     </AppLayout>
   );
 }
