@@ -1,14 +1,17 @@
 import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 const DATA_TYPES = ['TEXT', 'DATE', 'SELECT', 'USER'] as const;
 
 export class ListDealsQueryDto {
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   pageSize?: number = 100;

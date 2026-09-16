@@ -22,9 +22,11 @@ export function DealsListPage() {
   const pageSize = 100;
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useDeals({ page, pageSize, keyword: keyword || undefined });
+  const { data, isLoading, error: listError } = useDeals({ page, pageSize, keyword: keyword || undefined });
   const { data: fields } = useDealFields();
   const { data: userOptions } = useUserOptions();
+
+  const displayedError = error ?? (listError instanceof ApiError ? listError.message : listError ? '一覧の取得に失敗しました' : null);
 
   const openPanel = (fieldId?: string) => {
     setFocusFieldId(fieldId ?? null);
@@ -192,7 +194,7 @@ export function DealsListPage() {
           </div>
         </div>
 
-        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+        {displayedError && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{displayedError}</p>}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <input
