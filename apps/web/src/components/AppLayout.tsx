@@ -16,12 +16,13 @@ const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: 'char
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    title: '営業(案件管理)',
+    title: '営業',
     items: [
       { to: '/toss/new', label: 'トス登録', icon: 'edit' },
       { to: '/toss-cases', label: 'トス実績管理', icon: 'inbox' },
       { to: '/appointments', label: 'アポ実績管理', icon: 'calendarCheck' },
       { to: '/contracts', label: 'エントリー管理', icon: 'document' },
+      { to: '/deals', label: '案件管理', icon: 'folder' },
       { to: '/cl-calendar', label: 'CLカレンダー', icon: 'calendar' },
       { to: '/final-report', label: '最終報告', icon: 'clipboard' },
     ],

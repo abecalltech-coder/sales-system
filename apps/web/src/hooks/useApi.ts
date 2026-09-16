@@ -573,6 +573,56 @@ export function useFinalReportAdminFields() {
 }
 
 // ============================================================
+// 案件管理(契約中案件の進捗管理)
+// ============================================================
+export interface DealFieldOptionItem {
+  id: string;
+  fieldId: string;
+  label: string;
+  color: string | null;
+  order: number;
+}
+
+export interface DealFieldItem {
+  id: string;
+  fieldKey: string;
+  label: string;
+  dataType: 'TEXT' | 'DATE' | 'SELECT' | 'USER';
+  order: number;
+  active: boolean;
+  options: DealFieldOptionItem[];
+}
+
+export function useDealFields() {
+  return useQuery({ queryKey: ['deal-fields'], queryFn: () => api.get<DealFieldItem[]>('/deals/fields') });
+}
+
+export function useDealFieldsAll() {
+  return useQuery({ queryKey: ['deal-fields', 'all'], queryFn: () => api.get<DealFieldItem[]>('/deals/fields/all') });
+}
+
+export interface DealListItem {
+  id: string;
+  values: Record<string, unknown>;
+  manualOrder: number;
+  version: number;
+}
+
+export function useDeals(params: { page: number; pageSize: number; keyword?: string }) {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    ...(params.keyword ? { keyword: params.keyword } : {}),
+  });
+  return useQuery({
+    queryKey: ['deals', params],
+    queryFn: () => api.get<{ items: DealListItem[]; total: number; page: number; pageSize: number }>(
+      `/deals?${query.toString()}`,
+    ),
+  });
+}
+
+// ============================================================
 // 操作ログ・システム設定
 // ============================================================
 export interface AuditLogItem {

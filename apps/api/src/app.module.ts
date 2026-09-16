@@ -33,6 +33,7 @@ import { MonthlySummaryModule } from './monthly-summary/monthly-summary.module';
 import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
 import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.module';
 import { FinalReportsModule } from './final-reports/final-reports.module';
+import { DealsModule } from './deals/deals.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { FinalReportsModule } from './final-reports/final-reports.module';
     MonthlyShiftModule,
     MonthlyRolloverModule,
     FinalReportsModule,
+    DealsModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

@@ -17,7 +17,8 @@ export type IconName =
   | 'link'
   | 'list'
   | 'gear'
-  | 'clipboard';
+  | 'clipboard'
+  | 'folder';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -102,6 +103,9 @@ const PATHS: Record<IconName, JSX.Element> = {
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 4a3 3 0 0 1 6 0M8.5 11h7M8.5 15h7" />
     </>
+  ),
+  folder: (
+    <path d="M3 6a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.2V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z" />
   ),
   gear: (
     <>

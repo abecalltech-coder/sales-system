@@ -913,3 +913,52 @@ model FinalReportEntry {
   @@index([userId])
   @@index([date])
 }
+
+// ============================================================
+// 案件管理(契約中案件の進捗管理。列はこの画面から追加/削除/名称変更可能)
+// ============================================================
+
+// 列(項目)定義。fieldKeyはDeal.valuesの保存キーで不変。dataTypeにより入力方式が変わる。
+model DealField {
+  id        String   @id @default(uuid())
+  fieldKey  String   @unique
+  label     String
+  dataType  String   @default("TEXT") // TEXT | DATE | SELECT | USER
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options DealFieldOption[]
+
+  @@index([order])
+}
+
+// SELECT型の列の選択肢。「+」から画面右側のパネルで追加・名前変更・削除・並び替えができる。
+model DealFieldOption {
+  id      String  @id @default(uuid())
+  fieldId String
+  label   String
+  color   String?
+  order   Int     @default(0)
+
+  field DealField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@index([fieldId])
+}
+
+// 案件(行)本体。列の値はすべてvalues(JSON)に持つため、列の増減がテーブル変更なしで行える。
+model Deal {
+  id          String    @id @default(uuid())
+  values      Json      @default("{}") // { "<fieldKey>": string | null }
+  manualOrder Int       @default(0)
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   String?
+  updatedBy   String?
+  deletedAt   DateTime?
+
+  @@index([manualOrder])
+  @@index([deletedAt])
+}

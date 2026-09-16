@@ -8,6 +8,7 @@ const RESOURCES = [
   'appointment',
   'visit',
   'contract',
+  'deal',
   'customer',
   'user',
   'master',
@@ -22,15 +23,20 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
   {
     code: 'MANAGER',
     name: '部署責任者',
-    permissions: RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
-      { resource, action: 'view', scope: 'DEPT' },
-      { resource, action: 'edit', scope: 'DEPT' },
-    ]),
+    permissions: [
+      ...RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
+        { resource, action: 'view', scope: 'DEPT' },
+        { resource, action: 'edit', scope: 'DEPT' },
+      ]),
+      // 案件管理(契約中案件の進捗管理)は部署責任者が行を追加・削除できるようにする
+      { resource: 'deal', action: 'create', scope: 'DEPT' },
+      { resource: 'deal', action: 'delete', scope: 'DEPT' },
+    ],
   },
   {
     code: 'LEADER',
     name: 'チームリーダー',
-    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'customer'].flatMap((resource) => [
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
       { resource, action: 'view', scope: 'TEAM' },
       { resource, action: 'edit', scope: 'TEAM' },
     ]),
@@ -56,15 +62,22 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
     // エントリー管理(旧ET管理、Contractデータがそのまま実体)の担当ロール
     code: 'ENTRY_OPERATOR',
     name: 'エントリー担当',
-    permissions: ['contract'].flatMap((resource) => [
-      { resource, action: 'view', scope: 'ALL' },
-      { resource, action: 'edit', scope: 'ALL' },
-    ]),
+    permissions: [
+      ...['contract'].flatMap((resource) => [
+        { resource, action: 'view', scope: 'ALL' },
+        { resource, action: 'edit', scope: 'ALL' },
+      ]),
+      // 案件管理(契約中案件の進捗管理)も同じ担当が行を追加・削除できるようにする
+      { resource: 'deal', action: 'view', scope: 'ALL' },
+      { resource: 'deal', action: 'edit', scope: 'ALL' },
+      { resource: 'deal', action: 'create', scope: 'ALL' },
+      { resource: 'deal', action: 'delete', scope: 'ALL' },
+    ],
   },
   {
     code: 'USER',
     name: '一般ユーザー',
-    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'customer'].flatMap((resource) => [
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
       { resource, action: 'view', scope: 'TEAM' },
     ]),
   },

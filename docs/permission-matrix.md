@@ -1,7 +1,7 @@
 # 権限マトリクス
 
 RoleはDB(`Role`/`Permission`)で管理し、コードにハードコードしすぎない。
-`Permission`は `resource`(例: toss_case, appointment, visit, contract, entry, user, master, system)
+`Permission`は `resource`(例: toss_case, appointment, visit, contract, deal, user, master, system)
 `action`(view/create/edit/delete/export/import)、`scope`(OWN/TEAM/DEPT/ALL) の組で表現する。
 
 ## 初期ロールと想定スコープ
