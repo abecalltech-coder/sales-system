@@ -100,7 +100,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
   const isAdmin = me ? me.roles.some((r) => ADMIN_ROLES.includes(r)) : false;
-  const navGroups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
+  const allGroups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
+
+  // 役職ごとのタブ表示設定(ユーザー管理)。visibleTabsがnullなら制限なし(全表示)。
+  const visibleTabs = me?.visibleTabs ?? null;
+  const isTabVisible = (to: string) => !visibleTabs || visibleTabs.includes(to);
+  const topNav = TOP_NAV.filter((i) => isTabVisible(i.to));
+  const navGroups = allGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => isTabVisible(i.to)) }))
+    .filter((g) => g.items.length > 0);
 
   const toggle = () => {
     setCollapsed((v) => {
@@ -194,7 +202,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          {TOP_NAV.map((item) => renderNavItem(item, collapsed))}
+          {topNav.map((item) => renderNavItem(item, collapsed))}
         </div>
 
         {navGroups.map((group) => (

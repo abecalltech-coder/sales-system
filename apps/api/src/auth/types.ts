@@ -6,6 +6,8 @@ export interface AuthenticatedUser {
   teamId: string | null;
   roles: string[]; // Role.code の配列
   permissions: { resource: string; action: string; scope: string }[];
+  // 表示できるナビタブのパス一覧。nullは制限なし(全タブ表示)。
+  visibleTabs: string[] | null;
 }
 
 export interface JwtPayload {

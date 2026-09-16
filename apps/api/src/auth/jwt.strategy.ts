@@ -10,6 +10,24 @@ function cookieExtractor(req: Request): string | null {
   return req?.cookies?.access_token ?? null;
 }
 
+/**
+ * ユーザーが持つ全ロールのvisibleTabsを合成する。いずれかのロールが未設定(null)なら
+ * そのロールは無制限を意味するため全体も無制限にする(=OR条件で「見せる」側に倒す)。
+ * SUPER_ADMINは自分自身のタブ設定を誤って絞って締め出されないよう常に無制限。
+ */
+function computeVisibleTabs(roleCodes: string[], tabSets: unknown[]): string[] | null {
+  if (roleCodes.includes('SUPER_ADMIN')) return null;
+  if (tabSets.length === 0) return null;
+  if (tabSets.some((t) => t === null || t === undefined)) return null;
+  const union = new Set<string>();
+  for (const t of tabSets) {
+    if (Array.isArray(t)) {
+      for (const key of t) if (typeof key === 'string') union.add(key);
+    }
+  }
+  return Array.from(union);
+}
+
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -48,6 +66,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       teamId: user.teamId,
       roles,
       permissions,
+      visibleTabs: computeVisibleTabs(roles, user.roles.map((ur) => ur.role.visibleTabs)),
     };
   }
 }

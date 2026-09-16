@@ -7,6 +7,7 @@ import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { RolesModule } from './roles/roles.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { HealthController } from './health.controller';
 import { TossCasesModule } from './toss-cases/toss-cases.module';
@@ -53,6 +54,7 @@ import { DealsModule } from './deals/deals.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    RolesModule,
     OrganizationsModule,
     TossCasesModule,
     AppointmentsModule,

@@ -8,10 +8,26 @@ export interface Me {
   roles: string[];
   departmentId: string | null;
   teamId: string | null;
+  /** 表示できるナビタブのパス一覧。nullは制限なし(全タブ表示)。 */
+  visibleTabs: string[] | null;
 }
 
 export function useMe() {
   return useQuery({ queryKey: ['me'], queryFn: () => api.get<Me>('/auth/me') });
+}
+
+// ============================================================
+// ロール(役職ごとのタブ表示設定)
+// ============================================================
+export interface RoleItem {
+  id: string;
+  code: string;
+  name: string;
+  visibleTabs: string[] | null;
+}
+
+export function useRoles() {
+  return useQuery({ queryKey: ['roles'], queryFn: () => api.get<RoleItem[]>('/roles') });
 }
 
 export interface StatusMasterItem {

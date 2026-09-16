@@ -82,6 +82,49 @@ const ROLE_DEFS: { code: string; name: string; permissions: { resource: string; 
     ]),
   },
   { code: 'VIEWER', name: '閲覧専用', permissions: RESOURCES.map((r) => ({ resource: r, action: 'view', scope: 'ALL' })) },
+  // 役職(要望: 各アカウントに必ず役職を付与し、役職ごとに表示タブをユーザー管理で設定できるようにする)。
+  // 権限(閲覧/編集の範囲)は既存ロールと同じ仕組みで持たせつつ、表示タブはRole.visibleTabsで別途管理する。
+  {
+    code: 'AP',
+    name: 'AP',
+    permissions: ['toss_case', 'appointment', 'customer'].flatMap((resource) => [
+      { resource, action: 'view', scope: 'OWN' },
+      { resource, action: 'edit', scope: 'OWN' },
+      { resource, action: 'create', scope: 'OWN' },
+    ]),
+  },
+  {
+    code: 'AP_LEADER',
+    name: 'APリーダー',
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
+      { resource, action: 'view', scope: 'TEAM' },
+      { resource, action: 'edit', scope: 'TEAM' },
+    ]),
+  },
+  {
+    code: 'CL',
+    name: 'CL',
+    permissions: [
+      ...['appointment', 'deal', 'customer'].flatMap((resource) => [
+        { resource, action: 'view', scope: 'TEAM' },
+        { resource, action: 'edit', scope: 'TEAM' },
+      ]),
+      { resource: 'contract', action: 'view', scope: 'ALL' },
+      { resource: 'contract', action: 'edit', scope: 'ALL' },
+    ],
+  },
+  {
+    code: 'RESPONSIBLE',
+    name: '責任者',
+    permissions: [
+      ...RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
+        { resource, action: 'view', scope: 'DEPT' },
+        { resource, action: 'edit', scope: 'DEPT' },
+      ]),
+      { resource: 'deal', action: 'create', scope: 'DEPT' },
+      { resource: 'deal', action: 'delete', scope: 'DEPT' },
+    ],
+  },
 ];
 
 const STATUS_DEFS: { category: string; internalCode: string; displayName: string; color?: string; order?: number; active?: boolean }[] = [

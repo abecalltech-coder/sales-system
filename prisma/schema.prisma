@@ -141,10 +141,13 @@ model PushSubscription {
 
 model Role {
   id          String       @id @default(uuid())
-  code        String       @unique // SUPER_ADMIN, ADMIN, MANAGER, LEADER, INSIDE_SALES, FIELD_SALES, ENTRY_OPERATOR, USER, VIEWER
+  code        String       @unique // SUPER_ADMIN, ADMIN, MANAGER, LEADER, INSIDE_SALES, FIELD_SALES, ENTRY_OPERATOR, USER, VIEWER, AP, AP_LEADER, CL, RESPONSIBLE
   name        String
   description String?
   createdAt   DateTime     @default(now())
+  // このロールで表示するナビタブ(パス)の一覧。nullは「制限なし=全タブ表示」(既定)。
+  // ユーザー管理画面の「役職ごとのタブ表示設定」から編集する。SUPER_ADMINは常に全表示扱いで対象外。
+  visibleTabs Json?
   permissions Permission[]
   users       UserRole[]
 }
