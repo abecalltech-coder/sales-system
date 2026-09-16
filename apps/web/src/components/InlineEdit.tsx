@@ -440,6 +440,46 @@ export function InlineFlexTime({
   );
 }
 
+/**
+ * ネイティブの日付ピッカー(<input type="date">)を使うセル。カレンダーアイコンからの
+ * 選択と、キーボードでの直接入力(手打ち)の両方に対応する(要望: 「日」の付く列は
+ * 手打りorカレンダー入力で)。
+ */
+export function InlineNativeDate({
+  iso,
+  onSave,
+  style,
+  disabled,
+}: {
+  iso: string | null | undefined;
+  onSave: (nextIso: string | null) => void;
+  style?: CSSProperties;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(isoToDateKey(iso ?? null));
+  useEffect(() => setDraft(isoToDateKey(iso ?? null)), [iso]);
+
+  return (
+    <input
+      type="date"
+      value={draft}
+      disabled={disabled}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const current = isoToDateKey(iso ?? null);
+        if (draft === current) return;
+        if (!draft) {
+          onSave(null);
+          return;
+        }
+        onSave(new Date(`${draft}T00:00:00`).toISOString());
+      }}
+      style={{ ...baseStyle, colorScheme: 'light', ...style }}
+    />
+  );
+}
+
 function toInputValue(iso: string | null | undefined, type: 'date' | 'datetime-local') {
   if (!iso) return '';
   const d = new Date(iso);

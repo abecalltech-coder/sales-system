@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
-import { InlineText, InlineSelect, InlineFlexDate } from '../../components/InlineEdit';
+import { InlineText, InlineSelect, InlineNativeDate } from '../../components/InlineEdit';
 import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, parseDateText } from '../../lib/dateInput';
@@ -77,13 +77,11 @@ export function DealsListPage() {
       return {
         key,
         label: field.label,
-        width: 100,
+        width: 130,
         render: (r) => (
-          <InlineFlexDate
+          <InlineNativeDate
             iso={(r.values[key] as string | null) ?? null}
-            label={field.label}
             onSave={(iso) => save(r, { [key]: iso })}
-            onInvalid={setError}
           />
         ),
         copyValue: (r) => isoToDateInput((r.values[key] as string | null) ?? null),
