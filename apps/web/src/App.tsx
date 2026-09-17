@@ -13,6 +13,7 @@ import { CustomFieldsAdminPage } from './pages/admin/CustomFieldsAdminPage';
 import { MobileHomePage } from './pages/mobile/MobileHomePage';
 import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
 import { SummarySheetsPage } from './pages/SummarySheetsPage';
+import { ShiftPage } from './pages/ShiftPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { SystemSettingsPage } from './pages/admin/SystemSettingsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
         <Route path="/deals" element={protect(<DealsListPage />)} />
         <Route path="/summary" element={protect(<SummarySheetsPage />)} />
+        <Route path="/shift" element={protect(<ShiftPage />)} />
         <Route path="/final-report" element={protect(<FinalReportPage />)} />
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />

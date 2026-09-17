@@ -29,6 +29,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const SHIFT_NAV_GROUP: NavGroup = {
+  items: [{ to: '/shift', label: 'シフト', icon: 'calendar' }],
+};
+
 const ADMIN_NAV_GROUP: NavGroup = {
   title: '管理',
   items: [
@@ -100,7 +104,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
   const isAdmin = me ? me.roles.some((r) => ADMIN_ROLES.includes(r)) : false;
-  const allGroups = isAdmin ? [...NAV_GROUPS, ADMIN_NAV_GROUP] : NAV_GROUPS;
+  const allGroups = isAdmin ? [...NAV_GROUPS, SHIFT_NAV_GROUP, ADMIN_NAV_GROUP] : [...NAV_GROUPS, SHIFT_NAV_GROUP];
 
   // 役職ごとのタブ表示設定(ユーザー管理)。visibleTabsがnullなら制限なし(全表示)。
   const visibleTabs = me?.visibleTabs ?? null;
@@ -206,7 +210,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         {navGroups.map((group) => (
-          <div key={group.title} style={{ marginBottom: 14 }}>
+          <div key={group.title ?? group.items[0]?.to} style={{ marginBottom: 14 }}>
             {!collapsed && group.title && (
               <div
                 style={{

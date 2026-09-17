@@ -17,6 +17,7 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/deals', label: '案件管理', group: '営業' },
   { key: '/cl-calendar', label: 'CLカレンダー', group: '営業' },
   { key: '/final-report', label: '最終報告', group: '営業' },
+  { key: '/shift', label: 'シフト', group: 'トップ' },
   { key: '/admin/users', label: 'ユーザー管理', group: '管理' },
   { key: '/admin/organizations', label: '組織管理', group: '管理' },
   { key: '/admin/masters', label: 'マスタ管理', group: '管理' },
