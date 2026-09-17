@@ -4,10 +4,12 @@ import {
   DragEvent as ReactDragEvent,
   Fragment,
   KeyboardEvent as ReactKeyboardEvent,
+  memo,
   MouseEvent as ReactMouseEvent,
   ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -65,6 +67,7 @@ interface DataTableProps<T> {
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
 const GUTTER_WIDTH = 34;
+const EMPTY_IDS: string[] = [];
 
 const COLUMN_SEPARATOR: CSSProperties = {
   backgroundImage: 'linear-gradient(to bottom, var(--color-border-strong) 45%, transparent 45%)',
@@ -96,6 +99,195 @@ function parseClipboard(text: string): string[][] {
 
 type UndoCell = { rowId: string; colKey: string; before: string; after: string };
 type UndoOp = { cells: UndoCell[] };
+type SelBounds = { r0: number; r1: number; c0: number; c1: number };
+
+interface RowProps<T> {
+  row: T;
+  index: number;
+  rowId: string;
+  columns: Column<T>[];
+  rowStyle?: (row: T) => CSSProperties | undefined;
+  onRowClick?: (row: T) => void;
+  cellCursor?: (rowId: string, columnKey: string) => { userName: string; color: string } | undefined;
+  reorderable: boolean;
+  isDragOver: boolean;
+  focusRow: number | undefined;
+  focusCol: number | undefined;
+  selBounds: SelBounds | null;
+  expandedRowId?: string | null;
+  renderExpanded?: (row: T) => ReactNode;
+  onRowDragStart: (e: ReactDragEvent, index: number) => void;
+  onRowDragOver: (e: ReactDragEvent, index: number) => void;
+  onRowDrop: (index: number) => void;
+  onRowDragEnd: () => void;
+  onSelectRow: (index: number, extend: boolean) => void;
+  onCellContextMenu: (e: ReactMouseEvent, index: number) => void;
+  onCellMouseDown: (e: ReactMouseEvent, r: number, c: number) => void;
+  onCellMouseEnter: (r: number, c: number) => void;
+  onCellFocus: (rowId: string, colKey: string) => void;
+  onCellBlur: (rowId: string, colKey: string) => void;
+}
+
+/**
+ * 一覧の1行分をReact.memo化したコンポーネント(要望: スクロール時に全行が再レンダリングされ
+ * 重い問題の軽減)。propsが前回と同じ参照/値であればReactが再レンダリングをスキップするため、
+ * スクロールだけ(=DataTable本体の再レンダリング)では影響を受けない行は描画コストがかからない。
+ */
+function RowInner<T>({
+  row,
+  index: i,
+  rowId,
+  columns,
+  rowStyle,
+  onRowClick,
+  cellCursor,
+  reorderable,
+  isDragOver,
+  focusRow,
+  focusCol,
+  selBounds,
+  expandedRowId,
+  renderExpanded,
+  onRowDragStart,
+  onRowDragOver,
+  onRowDrop,
+  onRowDragEnd,
+  onSelectRow,
+  onCellContextMenu,
+  onCellMouseDown,
+  onCellMouseEnter,
+  onCellFocus,
+  onCellBlur,
+}: RowProps<T>) {
+  const restingBackground: string = String(
+    rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
+  );
+  // 固定表示(sticky)セルは他列がスクロールして裏に隠れる際も不透明でないと
+  // 文字が透けて重なって見えるため、transparentの代わりに不透明な地の色を使う(要望対応の副修正)
+  const stickyBackground = i % 2 === 1 ? 'var(--color-sunken)' : 'var(--color-surface)';
+  return (
+    <Fragment>
+      <tr
+        onClick={() => onRowClick?.(row)}
+        onDragOver={reorderable ? (e) => onRowDragOver(e, i) : undefined}
+        onDrop={reorderable ? () => onRowDrop(i) : undefined}
+        style={{
+          borderBottom: '1px solid var(--color-border)',
+          borderTop: isDragOver ? '2px solid var(--color-primary)' : undefined,
+          ...rowStyle?.(row),
+          background: restingBackground,
+        }}
+      >
+        <td
+          onClick={(e) => onSelectRow(i, e.shiftKey)}
+          onContextMenu={(e) => onCellContextMenu(e, i)}
+          draggable={reorderable}
+          onDragStart={reorderable ? (e) => onRowDragStart(e, i) : undefined}
+          onDragEnd={reorderable ? onRowDragEnd : undefined}
+          title={reorderable ? 'ドラッグで並び替え / クリックで行選択(Shiftで範囲)' : 'クリックで行選択(Shiftで範囲)'}
+          style={{
+            position: 'sticky',
+            left: 0,
+            zIndex: 1,
+            textAlign: 'center',
+            fontSize: 10,
+            color: 'var(--color-text-faint)',
+            userSelect: 'none',
+            cursor: reorderable ? 'grab' : 'pointer',
+            borderRight: '1px solid var(--color-border)',
+            background:
+              selBounds && i >= selBounds.r0 && i <= selBounds.r1 ? 'var(--color-primary-soft)' : stickyBackground,
+          }}
+        >
+          {i + 1}
+        </td>
+        {columns.map((col, colIdx) => {
+          const cursor = cellCursor?.(rowId, col.key);
+          const selected = selBounds
+            ? i >= selBounds.r0 && i <= selBounds.r1 && colIdx >= selBounds.c0 && colIdx <= selBounds.c1
+            : false;
+          const isFocusCell = focusRow === i && focusCol === colIdx;
+          // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
+          const edgeBounds = selected ? selBounds : null;
+          const selEdgeShadow = edgeBounds
+            ? [
+                i === edgeBounds.r0 ? 'inset 0 1px 0 0 var(--color-primary)' : null,
+                i === edgeBounds.r1 ? 'inset 0 -1px 0 0 var(--color-primary)' : null,
+                colIdx === edgeBounds.c0 ? 'inset 1px 0 0 0 var(--color-primary)' : null,
+                colIdx === edgeBounds.c1 ? 'inset -1px 0 0 0 var(--color-primary)' : null,
+              ]
+                .filter(Boolean)
+                .join(', ') || undefined
+            : undefined;
+          return (
+            <td
+              key={col.key}
+              title={cursor ? `${cursor.userName}さんが編集中` : undefined}
+              onFocusCapture={() => onCellFocus(rowId, col.key)}
+              onBlurCapture={() => onCellBlur(rowId, col.key)}
+              onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
+              onMouseEnter={() => onCellMouseEnter(i, colIdx)}
+              onContextMenu={(e) => onCellContextMenu(e, i)}
+              style={{
+                position: colIdx === 0 ? 'sticky' : 'relative',
+                left: colIdx === 0 ? GUTTER_WIDTH : undefined,
+                zIndex: colIdx === 0 ? 1 : undefined,
+                padding: '3px 8px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
+                ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
+                boxShadow: isFocusCell
+                  ? 'inset 0 0 0 2px var(--color-primary)'
+                  : selected
+                    ? selEdgeShadow
+                    : cursor
+                      ? `inset 0 0 0 2px ${cursor.color}`
+                      : undefined,
+                backgroundColor:
+                  selected && !isFocusCell
+                    ? 'var(--color-primary-soft)'
+                    : cursor
+                      ? `${cursor.color}1a`
+                      : colIdx === 0
+                        ? stickyBackground
+                        : undefined,
+              }}
+            >
+              {cursor && (
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-block',
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: cursor.color,
+                    marginRight: 4,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {col.render(row)}
+            </td>
+          );
+        })}
+      </tr>
+      {renderExpanded && rowId === expandedRowId && (
+        <tr>
+          <td
+            colSpan={columns.length + 1}
+            style={{ padding: '10px 14px', background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border)' }}
+          >
+            {renderExpanded(row)}
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+const Row = memo(RowInner) as typeof RowInner;
 
 export function DataTable<T>({
   columns,
@@ -130,7 +322,11 @@ export function DataTable<T>({
   // 非表示行(Google Sheets の行非表示相当。端末ごとに記憶)
   const { hidden, hide, unhide, unhideAll } = useHiddenRows(tableKey ?? '_');
   const allRows = rows;
-  const rows2 = hidden.size ? allRows.filter((r) => !hidden.has(getRowId(r))) : allRows;
+  // スクロールのたびに再フィルタしないよう(モバイルでのカクつき対策)メモ化する
+  const rows2 = useMemo(
+    () => (hidden.size ? allRows.filter((r) => !hidden.has(getRowId(r))) : allRows),
+    [allRows, hidden, getRowId],
+  );
   const hiddenCount = allRows.length - rows2.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -147,6 +343,16 @@ export function DataTable<T>({
   columnsRef.current = columns;
   const selRef = useRef(sel);
   selRef.current = sel;
+  // Row を React.memo 化するため、頻繁に変わるprops(関数)はrefで最新値だけ保持し、
+  // ハンドラ自体の参照はuseCallbackで固定する(スクロールだけでは行が再レンダリングされないように)
+  const onCellFocusRef = useRef(onCellFocus);
+  onCellFocusRef.current = onCellFocus;
+  const onCellBlurRef = useRef(onCellBlur);
+  onCellBlurRef.current = onCellBlur;
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
+  const getRowIdRef = useRef(getRowId);
+  getRowIdRef.current = getRowId;
 
   // ドラッグ選択
   const dragRef = useRef<{ startR: number; startC: number } | null>(null);
@@ -513,28 +719,31 @@ export function DataTable<T>({
   };
 
   // --- セル選択のマウス操作 ----------------------------------------
-  const onCellMouseDown = (e: ReactMouseEvent, r: number, c: number) => {
+  // (Row をReact.memo化しても参照が変わらないよう、sel はstateではなくselRefから読む)
+  const onCellMouseDown = useCallback((e: ReactMouseEvent, r: number, c: number) => {
     // 右クリックは無視
     if (e.button !== 0) return;
     dragRef.current = { startR: r, startC: c };
     hoverRef.current = { r, c };
     draggingRef.current = false;
-    if (e.shiftKey && sel) {
+    const curSel = selRef.current;
+    if (e.shiftKey && curSel) {
       e.preventDefault();
-      setSel({ ...sel, fr: r, fc: c });
+      setSel({ ...curSel, fr: r, fc: c });
     } else {
       setSel({ ar: r, ac: c, fr: r, fc: c });
       // preventDefault しない → 単純クリックなら内側の入力欄がフォーカスされ編集になる
     }
     window.addEventListener('mousemove', onWindowMouseMove);
     window.addEventListener('mouseup', onWindowMouseUp);
-  };
-  const onCellMouseEnter = (r: number, c: number) => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onCellMouseEnter = useCallback((r: number, c: number) => {
     hoverRef.current = { r, c };
     if (draggingRef.current) {
       setSel((s) => (s ? { ...s, fr: r, fc: c } : s));
     }
-  };
+  }, []);
   const onWindowMouseMove = useCallback((e: MouseEvent) => {
     const start = dragRef.current;
     const hover = hoverRef.current;
@@ -563,14 +772,14 @@ export function DataTable<T>({
     gridRef.current?.focus({ preventScroll: true });
     setSel({ ar: 0, ac: c, fr: rowsRef.current.length - 1, fc: c });
   };
-  const selectRow = (r: number, extend: boolean) => {
+  const selectRow = useCallback((r: number, extend: boolean) => {
     gridRef.current?.focus({ preventScroll: true });
     setSel((s) =>
       extend && s
         ? { ...s, fr: r, fc: columnsRef.current.length - 1 }
         : { ar: r, ac: 0, fr: r, fc: columnsRef.current.length - 1 },
     );
-  };
+  }, []);
 
   // --- 右クリックメニュー(行削除・非表示) ------------------------
   const selectedRowIds = (): string[] => {
@@ -580,14 +789,15 @@ export function DataTable<T>({
     for (let r = b.r0; r <= b.r1 && r < rowsRef.current.length; r++) ids.push(getRowId(rowsRef.current[r]));
     return ids;
   };
-  const onCellContextMenu = (e: ReactMouseEvent, r: number) => {
+  const onCellContextMenu = useCallback((e: ReactMouseEvent, r: number) => {
     e.preventDefault();
     // 右クリックした行が選択範囲外なら、その行だけを行選択する
-    if (!sel || !(r >= bounds(sel).r0 && r <= bounds(sel).r1)) {
+    const curSel = selRef.current;
+    if (!curSel || !(r >= bounds(curSel).r0 && r <= bounds(curSel).r1)) {
       setSel({ ar: r, ac: 0, fr: r, fc: columnsRef.current.length - 1 });
     }
     setMenu({ x: e.clientX, y: e.clientY });
-  };
+  }, []);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -602,14 +812,15 @@ export function DataTable<T>({
   }, [menu]);
 
   // --- 単一セル編集の undo 記録 -----------------------------------
-  const handleCellFocus = (rowId: string, colKey: string) => {
-    onCellFocus?.(rowId, colKey);
+  const handleCellFocus = useCallback((rowId: string, colKey: string) => {
+    onCellFocusRef.current?.(rowId, colKey);
     const col = columnsRef.current.find((x) => x.key === colKey);
     const row = findRowById(rowId);
     if (col?.copyValue && row) pendingEditRef.current = { rowId, colKey, before: col.copyValue(row) };
-  };
-  const handleCellBlur = (rowId: string, colKey: string) => {
-    onCellBlur?.(rowId, colKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const handleCellBlur = useCallback((rowId: string, colKey: string) => {
+    onCellBlurRef.current?.(rowId, colKey);
     // 入力欄を抜けたあと何もフォーカスされていなければ、キーボード操作を続けられるよう
     // グリッドにフォーカスを戻す(Enter / Escape で編集を終えた直後など)
     window.setTimeout(() => {
@@ -626,31 +837,36 @@ export function DataTable<T>({
       const after = col.copyValue(row);
       if (after !== pending.before) pushUndo([{ rowId, colKey, before: pending.before, after }]);
     }, 400);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- 行の並び替え ------------------------------------------------
   const dragRowRef = useRef<number | null>(null);
   const [dragOverRow, setDragOverRow] = useState<number | null>(null);
   const reorderable = Boolean(onReorder);
-  const onRowDragStart = (e: ReactDragEvent, index: number) => {
+  const onRowDragStart = useCallback((e: ReactDragEvent, index: number) => {
     dragRowRef.current = index;
     e.dataTransfer.effectAllowed = 'move';
-  };
-  const onRowDragOver = (e: ReactDragEvent, index: number) => {
+  }, []);
+  const onRowDragOver = useCallback((e: ReactDragEvent, index: number) => {
     if (dragRowRef.current === null) return;
     e.preventDefault();
     setDragOverRow(index);
-  };
-  const onRowDrop = (index: number) => {
+  }, []);
+  const onRowDrop = useCallback((index: number) => {
     const from = dragRowRef.current;
     dragRowRef.current = null;
     setDragOverRow(null);
     if (from === null || from === index) return;
-    const ids = rowsRef.current.map((r) => getRowId(r));
+    const ids = rowsRef.current.map((r) => getRowIdRef.current(r));
     const [moved] = ids.splice(from, 1);
     ids.splice(index, 0, moved);
-    onReorder?.(ids);
-  };
+    onReorderRef.current?.(ids);
+  }, []);
+  const onRowDragEnd = useCallback(() => {
+    dragRowRef.current = null;
+    setDragOverRow(null);
+  }, []);
 
   // --- 列の並び替え・削除(要望: 行と同様に列も) ----------------------
   const dragColRef = useRef<number | null>(null);
@@ -698,11 +914,14 @@ export function DataTable<T>({
 
   const tableWidth = resizable ? columns.reduce((sum, col) => sum + widthOf(col), 0) + GUTTER_WIDTH : undefined;
 
-  const menuIds = selectedRowIds();
+  // 右クリックメニューを開いている時だけ必要な値なので、開いていない間(=スクロール中含む
+  // ほとんどの描画)は計算しない(要望: 表示が重い問題の軽減)
+  const menuIds = menu ? selectedRowIds() : EMPTY_IDS;
 
-  // 行数が多いとセルごとに何度もbounds(sel)を呼ぶコストが積み上がるため、描画1回につき1度だけ計算する
-  // (要望: 表示が重い問題の軽減)
-  const selBoundsOnce = sel ? bounds(sel) : null;
+  // 行数が多いとセルごとに何度もbounds(sel)を呼ぶコストが積み上がるため、描画1回につき1度だけ計算する。
+  // selが変わらない限り同じ参照を返すことで、行コンポーネントのReact.memoが効くようにする
+  // (要望: スクロール中に全行が再レンダリングされ重い問題の軽減)
+  const selBoundsOnce = useMemo(() => (sel ? bounds(sel) : null), [sel]);
 
   return (
     <div
@@ -982,148 +1201,37 @@ export function DataTable<T>({
                   </tr>
                 )}
                 {rows2.slice(rowWindowStart, rowWindowEnd).map((row, sliceIdx) => {
-                const i = rowWindowStart + sliceIdx;
-                const restingBackground: string = String(
-                  rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
-                );
-                // 固定表示(sticky)セルは他列がスクロールして裏に隠れる際も不透明でないと
-                // 文字が透けて重なって見えるため、transparentの代わりに不透明な地の色を使う(要望対応の副修正)
-                const stickyBackground = i % 2 === 1 ? 'var(--color-sunken)' : 'var(--color-surface)';
-                return (
-                  <Fragment key={getRowId(row)}>
-                    <tr
-                      onClick={() => onRowClick?.(row)}
-                      onDragOver={reorderable ? (e) => onRowDragOver(e, i) : undefined}
-                      onDrop={reorderable ? () => onRowDrop(i) : undefined}
-                      style={{
-                        borderBottom: '1px solid var(--color-border)',
-                        borderTop: dragOverRow === i ? '2px solid var(--color-primary)' : undefined,
-                        ...rowStyle?.(row),
-                        background: restingBackground,
-                      }}
-                    >
-                      <td
-                        onClick={(e) => selectRow(i, e.shiftKey)}
-                        onContextMenu={(e) => onCellContextMenu(e, i)}
-                        draggable={reorderable}
-                        onDragStart={reorderable ? (e) => onRowDragStart(e, i) : undefined}
-                        onDragEnd={
-                          reorderable
-                            ? () => {
-                                dragRowRef.current = null;
-                                setDragOverRow(null);
-                              }
-                            : undefined
-                        }
-                        title={
-                          reorderable
-                            ? 'ドラッグで並び替え / クリックで行選択(Shiftで範囲)'
-                            : 'クリックで行選択(Shiftで範囲)'
-                        }
-                        style={{
-                          position: 'sticky',
-                          left: 0,
-                          zIndex: 1,
-                          textAlign: 'center',
-                          fontSize: 10,
-                          color: 'var(--color-text-faint)',
-                          userSelect: 'none',
-                          cursor: reorderable ? 'grab' : 'pointer',
-                          borderRight: '1px solid var(--color-border)',
-                          background:
-                            selBoundsOnce && i >= selBoundsOnce.r0 && i <= selBoundsOnce.r1
-                              ? 'var(--color-primary-soft)'
-                              : stickyBackground,
-                        }}
-                      >
-                        {i + 1}
-                      </td>
-                      {columns.map((col, colIdx) => {
-                        const rowId = getRowId(row);
-                        const cursor = cellCursor?.(rowId, col.key);
-                        const selected = selBoundsOnce
-                          ? i >= selBoundsOnce.r0 && i <= selBoundsOnce.r1 && colIdx >= selBoundsOnce.c0 && colIdx <= selBoundsOnce.c1
-                          : false;
-                        const isFocusCell = sel ? sel.fr === i && sel.fc === colIdx : false;
-                        // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
-                        const selBounds = selected ? selBoundsOnce : null;
-                        const selEdgeShadow = selBounds
-                          ? [
-                              i === selBounds.r0 ? 'inset 0 1px 0 0 var(--color-primary)' : null,
-                              i === selBounds.r1 ? 'inset 0 -1px 0 0 var(--color-primary)' : null,
-                              colIdx === selBounds.c0 ? 'inset 1px 0 0 0 var(--color-primary)' : null,
-                              colIdx === selBounds.c1 ? 'inset -1px 0 0 0 var(--color-primary)' : null,
-                            ]
-                              .filter(Boolean)
-                              .join(', ') || undefined
-                          : undefined;
-                        return (
-                          <td
-                            key={col.key}
-                            title={cursor ? `${cursor.userName}さんが編集中` : undefined}
-                            onFocusCapture={() => handleCellFocus(rowId, col.key)}
-                            onBlurCapture={() => handleCellBlur(rowId, col.key)}
-                            onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
-                            onMouseEnter={() => onCellMouseEnter(i, colIdx)}
-                            onContextMenu={(e) => onCellContextMenu(e, i)}
-                            style={{
-                              position: colIdx === 0 ? 'sticky' : 'relative',
-                              left: colIdx === 0 ? GUTTER_WIDTH : undefined,
-                              zIndex: colIdx === 0 ? 1 : undefined,
-                              padding: '3px 8px',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
-                              ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
-                              boxShadow: isFocusCell
-                                ? 'inset 0 0 0 2px var(--color-primary)'
-                                : selected
-                                  ? selEdgeShadow
-                                  : cursor
-                                    ? `inset 0 0 0 2px ${cursor.color}`
-                                    : undefined,
-                              backgroundColor:
-                                selected && !isFocusCell
-                                  ? 'var(--color-primary-soft)'
-                                  : cursor
-                                    ? `${cursor.color}1a`
-                                    : colIdx === 0
-                                      ? stickyBackground
-                                      : undefined,
-                            }}
-                          >
-                            {cursor && (
-                              <span
-                                aria-hidden
-                                style={{
-                                  display: 'inline-block',
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: '50%',
-                                  background: cursor.color,
-                                  marginRight: 4,
-                                  flexShrink: 0,
-                                }}
-                              />
-                            )}
-                            {col.render(row)}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    {renderExpanded && getRowId(row) === expandedRowId && (
-                      <tr>
-                        <td
-                          colSpan={columns.length + 1}
-                          style={{ padding: '10px 14px', background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border)' }}
-                        >
-                          {renderExpanded(row)}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
+                  const i = rowWindowStart + sliceIdx;
+                  const rowId = getRowId(row);
+                  return (
+                    <Row
+                      key={rowId}
+                      row={row}
+                      index={i}
+                      rowId={rowId}
+                      columns={columns}
+                      rowStyle={rowStyle}
+                      onRowClick={onRowClick}
+                      cellCursor={cellCursor}
+                      reorderable={reorderable}
+                      isDragOver={dragOverRow === i}
+                      focusRow={sel?.fr}
+                      focusCol={sel?.fc}
+                      selBounds={selBoundsOnce}
+                      expandedRowId={expandedRowId}
+                      renderExpanded={renderExpanded}
+                      onRowDragStart={onRowDragStart}
+                      onRowDragOver={onRowDragOver}
+                      onRowDrop={onRowDrop}
+                      onRowDragEnd={onRowDragEnd}
+                      onSelectRow={selectRow}
+                      onCellContextMenu={onCellContextMenu}
+                      onCellMouseDown={onCellMouseDown}
+                      onCellMouseEnter={onCellMouseEnter}
+                      onCellFocus={handleCellFocus}
+                      onCellBlur={handleCellBlur}
+                    />
+                  );
                 })}
                 {rowWindowEnd < rows2.length && (
                   <tr aria-hidden="true">
