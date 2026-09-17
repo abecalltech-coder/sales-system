@@ -7,6 +7,7 @@ import {
   memo,
   MouseEvent as ReactMouseEvent,
   ReactNode,
+  TouchEvent as ReactTouchEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -481,16 +482,31 @@ export function DataTable<T>({
     flash('やり直しました');
   };
 
-  // --- 列幅リサイズ ---------------------------------------------------
-  const onResizeMove = useCallback((e: MouseEvent) => {
+  // --- 列幅リサイズ(要望: PC・スマホどちらでも列幅を変更できるように) --------
+  const applyResizeMove = useCallback((clientX: number) => {
     const st = resizingRef.current;
     if (!st) return;
-    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(st.startWidth + (e.clientX - st.startX)));
+    const next = Math.max(MIN_COLUMN_WIDTH, Math.round(st.startWidth + (clientX - st.startX)));
     setDraftWidths((d) => ({ ...d, [st.key]: next }));
   }, []);
+  const onResizeMove = useCallback((e: MouseEvent) => applyResizeMove(e.clientX), [applyResizeMove]);
+  // スマホはドラッグ操作がtouchイベントで来るため、マウスと同じ計算をtouchmoveでも行う。
+  // ハンドル上でのタッチはグリッドの横/縦スクロールに奪われないようpreventDefaultする。
+  const onResizeTouchMove = useCallback(
+    (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      e.preventDefault();
+      applyResizeMove(t.clientX);
+    },
+    [applyResizeMove],
+  );
   const onResizeEnd = useCallback(() => {
     window.removeEventListener('mousemove', onResizeMove);
     window.removeEventListener('mouseup', onResizeEnd);
+    window.removeEventListener('touchmove', onResizeTouchMove);
+    window.removeEventListener('touchend', onResizeEnd);
+    window.removeEventListener('touchcancel', onResizeEnd);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
     const st = resizingRef.current;
@@ -501,7 +517,7 @@ export function DataTable<T>({
       if (finalWidth != null) saveWidths({ ...savedWidths, ...d, [st.key]: finalWidth });
       return d;
     });
-  }, [onResizeMove, saveWidths, savedWidths]);
+  }, [onResizeMove, onResizeTouchMove, saveWidths, savedWidths]);
   const onResizeStart = (e: ReactMouseEvent, col: Column<T>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -509,6 +525,16 @@ export function DataTable<T>({
     window.addEventListener('mousemove', onResizeMove);
     window.addEventListener('mouseup', onResizeEnd);
     document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+  const onResizeTouchStart = (e: ReactTouchEvent, col: Column<T>) => {
+    const t = e.touches[0];
+    if (!t) return;
+    e.stopPropagation();
+    resizingRef.current = { key: col.key, startX: t.clientX, startWidth: widthOf(col) };
+    window.addEventListener('touchmove', onResizeTouchMove, { passive: false });
+    window.addEventListener('touchend', onResizeEnd);
+    window.addEventListener('touchcancel', onResizeEnd);
     document.body.style.userSelect = 'none';
   };
   const resetColumn = (col: Column<T>) => {
@@ -1166,12 +1192,22 @@ export function DataTable<T>({
                       title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
                       draggable={false}
                       onMouseDown={(e) => onResizeStart(e, col)}
+                      onTouchStart={(e) => onResizeTouchStart(e, col)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         resetColumn(col);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ position: 'absolute', top: 0, right: 0, width: 9, height: '100%', cursor: 'col-resize', zIndex: 1 }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: 14,
+                        height: '100%',
+                        cursor: 'col-resize',
+                        zIndex: 1,
+                        touchAction: 'none',
+                      }}
                     />
                   )}
                 </th>
