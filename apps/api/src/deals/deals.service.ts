@@ -75,6 +75,14 @@ export class DealsService {
     return { ok: true };
   }
 
+  // 表のヘッダーをドラッグして列の並び順を変える(要望)
+  async reorderFields(ids: string[]) {
+    await this.prisma.$transaction(
+      ids.map((id, i) => this.prisma.dealField.update({ where: { id }, data: { order: (i + 1) * 10 } })),
+    );
+    return { ok: true, count: ids.length };
+  }
+
   // ---- 選択肢(SELECT型の列) -------------------------------------------
   async createOption(fieldId: string, dto: CreateDealFieldOptionDto) {
     const field = await this.prisma.dealField.findUnique({ where: { id: fieldId } });

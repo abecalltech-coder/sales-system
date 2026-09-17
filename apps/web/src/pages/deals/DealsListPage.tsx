@@ -90,6 +90,20 @@ export function DealsListPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '並び替えに失敗しました'),
   });
 
+  const invalidateFields = () => queryClient.invalidateQueries({ queryKey: ['deal-fields'] });
+
+  // 列も行と同様に削除・並び替えできるように(要望)。列の管理パネルと同じAPIを使う。
+  const deleteFieldMutation = useMutation({
+    mutationFn: (fieldId: string) => api.delete(`/deals/fields/${fieldId}`),
+    onSuccess: invalidateFields,
+    onError: (err) => setError(err instanceof ApiError ? err.message : '列の削除に失敗しました'),
+  });
+  const reorderFieldsMutation = useMutation({
+    mutationFn: (ids: string[]) => api.post('/deals/fields/reorder', { ids }),
+    onSuccess: invalidateFields,
+    onError: (err) => setError(err instanceof ApiError ? err.message : '列の並び替えに失敗しました'),
+  });
+
   const rawRows = useMemo(() => data?.items ?? [], [data]);
 
   const fieldColumn = (field: DealFieldItem): Column<DealListItem> => {
@@ -205,6 +219,7 @@ export function DealsListPage() {
       key: ADD_COLUMN_KEY,
       label: '',
       width: 60,
+      locked: true,
       render: () => null,
       renderHeader: () => (
         <button onClick={() => openPanel()} title="列を追加・編集" style={{ fontSize: 14, padding: '1px 8px', fontWeight: 700 }}>
@@ -297,6 +312,17 @@ export function DealsListPage() {
           getRowId={(r) => r.id}
           onReorder={(ids) => reorderMutation.mutate(ids)}
           onDeleteRows={(ids) => deleteMutation.mutate(ids)}
+          onDeleteColumn={(key) => {
+            const id = fields?.find((f) => f.fieldKey === key)?.id;
+            if (id) deleteFieldMutation.mutate(id);
+          }}
+          onReorderColumns={(keys) => {
+            const ids = keys
+              .filter((k) => k !== ADD_COLUMN_KEY)
+              .map((k) => fields?.find((f) => f.fieldKey === k)?.id)
+              .filter((id): id is string => !!id);
+            reorderFieldsMutation.mutate(ids);
+          }}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

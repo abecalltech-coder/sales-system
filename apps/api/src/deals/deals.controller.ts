@@ -49,6 +49,12 @@ export class DealsController {
   }
 
   @RequirePermissions({ resource: 'master', action: 'edit' })
+  @Post('fields/reorder')
+  reorderFields(@Body() dto: BulkIdsDto) {
+    return this.service.reorderFields(dto.ids);
+  }
+
+  @RequirePermissions({ resource: 'master', action: 'edit' })
   @Post('fields/:id/options')
   createOption(@Param('id') id: string, @Body() dto: CreateDealFieldOptionDto) {
     return this.service.createOption(id, dto);

@@ -1,4 +1,4 @@
-import { CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { CSSProperties, KeyboardEvent as ReactKeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   isoToDateInput,
   isoToDateKey,
@@ -31,7 +31,8 @@ const baseStyle: CSSProperties = {
  * 一覧セルをその場で書き換える部品。フォーカス時はセルいっぱいに textarea を敷き、
  * 枠(ポップアップ)を出さず「セルの中で編集している」見た目にする(要望)。
  * expand 指定(備考等)のときだけ、下方向に広げて全文を表示する。
- * Enterは常に改行。確定はPC: Shift/Ctrl/Alt+Enter、スマホ: 「確定」ボタン(要望)。
+ * PCはEnter単体で確定、Shift/Ctrl/Alt+Enterで改行(以前の挙動に戻した・要望)。
+ * スマホはEnterは改行のまま、確定は「確定」ボタン(変更なし)。
  */
 export function InlineText({
   value,
@@ -103,6 +104,20 @@ export function InlineText({
     setDraft(value ?? '');
     setFocused(false);
   };
+  // PCはEnter単体で確定、Shift/Ctrl/Alt+Enterで改行(以前の挙動に戻した・要望)。
+  // スマホはEnterは改行のまま(確定は「確定」ボタン)。
+  const onTextareaKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      if (isCoarsePointer || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+      e.preventDefault();
+      e.currentTarget.blur();
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  };
 
   const previewText = (value ?? '').replace(/\n/g, ' ');
   // 見えている範囲(キーボードで隠れる分を除く)の下端。ここより下にはみ出さないようにする。
@@ -137,16 +152,7 @@ export function InlineText({
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
-              e.preventDefault();
-              (e.target as HTMLTextAreaElement).blur();
-            } else if (e.key === 'Escape') {
-              e.preventDefault();
-              cancel();
-            }
-            // Enter単体は既定の改行動作のまま(要望: PC・スマホ共通でEnterは改行)
-          }}
+          onKeyDown={onTextareaKeyDown}
           style={{
             position: 'absolute',
             inset: 0,
@@ -194,16 +200,7 @@ export function InlineText({
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
-                e.preventDefault();
-                (e.target as HTMLTextAreaElement).blur();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                cancel();
-              }
-              // Enter単体は既定の改行動作のまま(要望: PC・スマホ共通でEnterは改行)
-            }}
+            onKeyDown={onTextareaKeyDown}
             style={{
               flex: 1,
               minHeight: 140,

@@ -25,6 +25,8 @@ export interface Column<T> {
   copyValue?: (row: T) => string;
   /** 貼り付け時にこのセルへ値を書き込む。未指定の列は貼り付け不可(読み取り専用) */
   pasteValue?: (row: T, text: string) => void;
+  /** trueの場合、列の削除・ドラッグ並び替えの対象外にする(例: 「+列を追加」ボタン列) */
+  locked?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -50,6 +52,10 @@ interface DataTableProps<T> {
   onReorder?: (orderedIds: string[]) => void;
   /** 指定すると右クリックメニューに「選択行を削除」が出る */
   onDeleteRows?: (ids: string[]) => void;
+  /** 指定すると列見出しをドラッグで並び替えられる(要望: 行と同様に列も)。表示順のcolumnKey配列を返す */
+  onReorderColumns?: (orderedKeys: string[]) => void;
+  /** 指定すると列見出しの右クリックメニューに「この列を削除」が出る(要望: 行と同様に列も削除できるように) */
+  onDeleteColumn?: (columnKey: string) => void;
   /** 右クリックメニューへ追加する任意の操作(選択行に対して実行) */
   extraRowMenuItems?: { label: (count: number) => string; onClick: (ids: string[]) => void; danger?: boolean }[];
   /** 合計行など。<tr> をそのまま渡す(セル数は 行番号ガター + columns.length に合わせる) */
@@ -111,6 +117,8 @@ export function DataTable<T>({
   tableKey,
   onReorder,
   onDeleteRows,
+  onReorderColumns,
+  onDeleteColumn,
   extraRowMenuItems,
   footerRow,
 }: DataTableProps<T>) {
@@ -597,6 +605,50 @@ export function DataTable<T>({
     onReorder?.(ids);
   };
 
+  // --- 列の並び替え・削除(要望: 行と同様に列も) ----------------------
+  const dragColRef = useRef<number | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<number | null>(null);
+  const colReorderable = Boolean(onReorderColumns);
+  const onColDragStart = (e: ReactDragEvent, index: number) => {
+    dragColRef.current = index;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const onColDragOver = (e: ReactDragEvent, index: number) => {
+    if (dragColRef.current === null) return;
+    e.preventDefault();
+    setDragOverCol(index);
+  };
+  const onColDrop = (index: number) => {
+    const from = dragColRef.current;
+    dragColRef.current = null;
+    setDragOverCol(null);
+    if (from === null || from === index) return;
+    const keys = columnsRef.current.map((c) => c.key);
+    const [moved] = keys.splice(from, 1);
+    keys.splice(index, 0, moved);
+    onReorderColumns?.(keys);
+  };
+
+  const [colMenu, setColMenu] = useState<{ x: number; y: number; col: Column<T> } | null>(null);
+  const onColContextMenu = (e: ReactMouseEvent, col: Column<T>) => {
+    if (!onDeleteColumn || col.locked) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setColMenu({ x: e.clientX, y: e.clientY, col });
+  };
+  useEffect(() => {
+    if (!colMenu) return;
+    const close = () => setColMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [colMenu]);
+
   const tableWidth = resizable ? columns.reduce((sum, col) => sum + widthOf(col), 0) + GUTTER_WIDTH : undefined;
 
   const menuIds = selectedRowIds();
@@ -724,6 +776,37 @@ export function DataTable<T>({
         </div>
       )}
 
+      {colMenu && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: Math.min(colMenu.y, window.innerHeight - 100),
+            left: Math.min(colMenu.x, window.innerWidth - 200),
+            zIndex: 3000,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: 4,
+            minWidth: 184,
+            fontSize: 12,
+          }}
+        >
+          <MenuItem
+            danger
+            label={`「${colMenu.col.label}」列を削除`}
+            onClick={() => {
+              if (window.confirm(`「${colMenu.col.label}」列を削除します。この列のデータも失われます。よろしいですか？`)) {
+                onDeleteColumn?.(colMenu.col.key);
+                setSel(null);
+              }
+              setColMenu(null);
+            }}
+          />
+        </div>
+      )}
+
       <div ref={gridRef} tabIndex={0} onKeyDown={onGridKeyDown} style={{ overflowX: 'auto', outline: 'none' }}>
         <table style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
           <colgroup>
@@ -750,11 +833,25 @@ export function DataTable<T>({
               {columns.map((col, colIdx) => (
                 <th
                   key={col.key}
+                  draggable={colReorderable && !col.locked}
+                  onDragStart={colReorderable && !col.locked ? (e) => onColDragStart(e, colIdx) : undefined}
+                  onDragOver={colReorderable ? (e) => onColDragOver(e, colIdx) : undefined}
+                  onDrop={colReorderable ? () => onColDrop(colIdx) : undefined}
+                  onDragEnd={
+                    colReorderable
+                      ? () => {
+                          dragColRef.current = null;
+                          setDragOverCol(null);
+                        }
+                      : undefined
+                  }
+                  onContextMenu={(e) => onColContextMenu(e, col)}
                   onClick={(e) => {
                     // ヘッダー内の操作(フィルターボタン等)以外をクリックしたら列選択
                     if ((e.target as HTMLElement).closest('button')) return;
                     selectColumn(colIdx);
                   }}
+                  title={colReorderable && !col.locked ? 'ドラッグで列の並び替え / 右クリックで列メニュー' : undefined}
                   style={{
                     position: 'relative',
                     padding: '4px 8px',
@@ -765,7 +862,8 @@ export function DataTable<T>({
                     whiteSpace: 'nowrap',
                     overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
-                    cursor: 'pointer',
+                    cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
+                    borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,
                     ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                   }}
                 >
@@ -775,6 +873,7 @@ export function DataTable<T>({
                       role="separator"
                       aria-label={`${col.label}の列幅を変更`}
                       title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
+                      draggable={false}
                       onMouseDown={(e) => onResizeStart(e, col)}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
