@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { DealFieldItem, UserOption } from '../../hooks/useApi';
+import { DealFieldItem, DealListItem, UserOption } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { parseDateText } from '../../lib/dateInput';
+import { isoToDateKey, parseDateText } from '../../lib/dateInput';
 
 // 外部シートの列名 → 案件管理の項目名(要望で指定されたマッピング)
 const SOURCE_TO_TARGET_LABEL: [string, string][] = [
@@ -43,7 +43,7 @@ export function BulkImportDealsModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skippedUsers: string[] } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; duplicates: number; skippedUsers: string[] } | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -67,10 +67,24 @@ export function BulkImportDealsModal({
     }
 
     const fieldByLabel = new Map(fields.map((f) => [f.label, f]));
+    const fieldByKey = new Map(fields.map((f) => [f.fieldKey, f]));
     // SELECT列(フック・ステータス)の選択肢は貼り付け中だけローカルに保持し、
     // 同じ値が複数行にあっても選択肢を重複作成しないようにする
     const localOptions = new Map<string, { id: string; label: string }[]>();
     for (const f of fields) if (f.dataType === 'SELECT') localOptions.set(f.id, [...f.options]);
+
+    // 取り込む項目が全て一致する行は重複として除外する(要望)。日付は時刻を無視し日単位で比較する。
+    const valuesEqual = (key: string, a: unknown, b: unknown): boolean => {
+      if (fieldByKey.get(key)?.dataType === 'DATE') {
+        return isoToDateKey(typeof a === 'string' ? a : null) === isoToDateKey(typeof b === 'string' ? b : null);
+      }
+      return a === b;
+    };
+    const isSameRecord = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+      const keys = Object.keys(a);
+      if (keys.length === 0) return false;
+      return keys.every((k) => valuesEqual(k, a[k], b[k]));
+    };
 
     const resolveSelectOption = async (field: DealFieldItem, rawLabel: string): Promise<string | null> => {
       const t = rawLabel.trim();
@@ -87,7 +101,13 @@ export function BulkImportDealsModal({
     setSubmitting(true);
     const skippedUsers = new Set<string>();
     try {
+      // 重複判定のため既存の案件を全件取得しておく(取り込む項目だけを比較する)
+      const existing = await api.get<{ items: DealListItem[] }>('/deals?page=1&pageSize=5000');
+      const existingValuesList = existing.items.map((d) => d.values);
+      const batchValuesList: Record<string, unknown>[] = [];
+
       const rows: { values: Record<string, unknown> }[] = [];
+      let duplicates = 0;
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
         for (const [src, targetLabel] of SOURCE_TO_TARGET_LABEL) {
@@ -112,15 +132,23 @@ export function BulkImportDealsModal({
             values[field.fieldKey] = raw;
           }
         }
-        if (Object.keys(values).length > 0) rows.push({ values });
+        if (Object.keys(values).length === 0) continue;
+        const isDuplicate =
+          existingValuesList.some((ev) => isSameRecord(values, ev)) || batchValuesList.some((bv) => isSameRecord(values, bv));
+        if (isDuplicate) {
+          duplicates += 1;
+          continue;
+        }
+        batchValuesList.push(values);
+        rows.push({ values });
       }
       if (rows.length === 0) {
-        setError('取り込めるデータ行がありませんでした');
+        setError(duplicates > 0 ? `全て重複していたため取り込みませんでした(${duplicates}件)` : '取り込めるデータ行がありませんでした');
         setSubmitting(false);
         return;
       }
       const res = await api.post<{ count: number }>('/deals/bulk-create', { rows });
-      setSummary({ created: res.count, skippedUsers: [...skippedUsers] });
+      setSummary({ created: res.count, duplicates, skippedUsers: [...skippedUsers] });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -138,6 +166,7 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
+            取り込む項目が既存の案件・貼り付け内の他の行と完全一致する場合は重複として除外します。
           </p>
           <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
             {SOURCE_TO_TARGET_LABEL.map(([src, dst]) => `${src}→${dst}`).join(' / ')}
@@ -146,6 +175,12 @@ export function BulkImportDealsModal({
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
               {summary.created}件の案件を作成しました。
+              {summary.duplicates > 0 && (
+                <>
+                  <br />
+                  取り込み項目が完全一致する重複{summary.duplicates}件は除外しました。
+                </>
+              )}
               {summary.skippedUsers.length > 0 && (
                 <>
                   <br />
