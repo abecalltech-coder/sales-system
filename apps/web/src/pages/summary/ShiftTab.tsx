@@ -68,7 +68,13 @@ export function ShiftTab() {
     };
 
     const cols: Column<MonthlyShiftRow>[] = [
-      { key: 'no', label: 'No.', width: 40, render: (r) => <span style={{ color: 'var(--color-text-faint)' }}>{r.no}</span> },
+      {
+        key: 'no',
+        label: 'No.',
+        width: 40,
+        render: (r) => <span style={{ color: 'var(--color-text-faint)' }}>{r.no}</span>,
+        copyValue: (r) => String(r.no),
+      },
     ];
 
     for (const def of attributeDefs) {

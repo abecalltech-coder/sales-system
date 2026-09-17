@@ -389,8 +389,9 @@ export function UsersAdminPage() {
       label: '氏名',
       width: 140,
       render: (r) => <InlineText value={r.name} onSave={(v) => updateNameMutation.mutate({ id: r.id, version: r.version, name: v })} />,
+      copyValue: (r) => r.name,
     },
-    { key: 'email', label: 'メールアドレス', render: (r) => r.email },
+    { key: 'email', label: 'メールアドレス', render: (r) => r.email, copyValue: (r) => r.email },
     {
       key: 'roles',
       label: 'ロール(役職)',
@@ -402,8 +403,15 @@ export function UsersAdminPage() {
           onError={setError}
         />
       ),
+      copyValue: (r) => r.roles.map((ur) => ROLE_LABELS[ur.role.code] ?? ur.role.code).join(', '),
     },
-    { key: 'status', label: '在籍状態', render: (r) => STATUS_LABEL[r.status] ?? r.status, width: 100 },
+    {
+      key: 'status',
+      label: '在籍状態',
+      render: (r) => STATUS_LABEL[r.status] ?? r.status,
+      copyValue: (r) => STATUS_LABEL[r.status] ?? r.status,
+      width: 100,
+    },
     {
       key: 'actions',
       label: '操作',

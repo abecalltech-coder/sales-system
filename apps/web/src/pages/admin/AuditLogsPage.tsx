@@ -9,10 +9,28 @@ export function AuditLogsPage() {
   const { data, isLoading } = useAuditLogs({ page, pageSize });
 
   const columns: Column<AuditLogItem>[] = [
-    { key: 'createdAt', label: '日時', render: (r) => new Date(r.createdAt).toLocaleString('ja-JP'), width: 160 },
-    { key: 'actor', label: '操作者', render: (r) => r.actor?.name ?? 'システム', width: 140 },
-    { key: 'action', label: '操作種別', render: (r) => r.action, width: 160 },
-    { key: 'success', label: '結果', render: (r) => (r.success ? '成功' : `失敗: ${r.errorMessage ?? ''}`), width: 200 },
+    {
+      key: 'createdAt',
+      label: '日時',
+      render: (r) => new Date(r.createdAt).toLocaleString('ja-JP'),
+      copyValue: (r) => new Date(r.createdAt).toLocaleString('ja-JP'),
+      width: 160,
+    },
+    {
+      key: 'actor',
+      label: '操作者',
+      render: (r) => r.actor?.name ?? 'システム',
+      copyValue: (r) => r.actor?.name ?? 'システム',
+      width: 140,
+    },
+    { key: 'action', label: '操作種別', render: (r) => r.action, copyValue: (r) => r.action, width: 160 },
+    {
+      key: 'success',
+      label: '結果',
+      render: (r) => (r.success ? '成功' : `失敗: ${r.errorMessage ?? ''}`),
+      copyValue: (r) => (r.success ? '成功' : `失敗: ${r.errorMessage ?? ''}`),
+      width: 200,
+    },
   ];
 
   return (
