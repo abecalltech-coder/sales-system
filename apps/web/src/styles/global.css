@@ -54,6 +54,12 @@ body,
   height: 100%;
 }
 
+/* スマホでのダブルタップ拡大・ピンチ拡大を確実に無効化する(要望: 拡大縮小を含めて画角を固定)。
+   viewportのuser-scalable=noだけではブラウザによって無視されることがあるための保険。 */
+html {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   background: var(--color-bg);
