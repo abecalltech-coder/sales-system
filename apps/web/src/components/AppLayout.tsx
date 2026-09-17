@@ -4,6 +4,7 @@ import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationBell } from './NotificationBell';
 import { PushNotificationToggle } from './PushNotificationToggle';
+import { OnlineUsersWidget } from './OnlineUsersWidget';
 import { NavIcon, IconName } from './NavIcon';
 
 const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
@@ -220,6 +221,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         ))}
 
         <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
+          <OnlineUsersWidget collapsed={collapsed} />
           <PushNotificationToggle collapsed={collapsed} />
           {isManager && <NotificationBell collapsed={collapsed} />}
         </div>

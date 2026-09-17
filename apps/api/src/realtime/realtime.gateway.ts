@@ -83,6 +83,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       if (user.teamId) await client.join(`team:${user.teamId}`);
       // 会社単位のルームは単一会社構成を前提にcompany:defaultとする(セクション5参照)
       await client.join('company:default');
+
+      // 全員が繋いだ時点でcompany:defaultへ入るため、ここを「ログイン中/操作中のアカウント」
+      // 表示(要望)にそのまま使う。接続してきたクライアント自身にも現在のオンライン一覧を返す。
+      const online = this.onlineUsersSnapshot();
+      client.emit('online.snapshot', online);
+      this.broadcastOnlineUsers();
     } catch (err) {
       this.logger.warn(`Socket auth failed: ${err instanceof Error ? err.message : String(err)}`);
       client.disconnect(true);
@@ -97,6 +103,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.to(`presence:${room}`).emit('cursor.cleared', { socketId: client.id });
       this.broadcastPresence(room);
     }
+    // このクライアントがcompany:defaultから抜けた後の状態を配信する(自分の分は除外して届く)
+    this.broadcastOnlineUsers();
     this.logger.debug(`disconnected: ${client.id}`);
   }
 
@@ -146,6 +154,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
     this.cursorState.get(data.room)?.delete(client.id);
     client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
+  }
+
+  /**
+   * 現在ログイン中(=Socket.IO接続中)のユーザー一覧(要望: ログイン中/操作中のアカウント表示)。
+   * 同じ人が複数タブ/端末で開いていてもuserIdで1人にまとめる。
+   */
+  private onlineUsersSnapshot(): { userId: string; userName: string }[] {
+    const socketIds = this.server.sockets.adapter.rooms.get('company:default') ?? new Set<string>();
+    const byUserId = new Map<string, string>();
+    for (const id of socketIds) {
+      const s = this.server.sockets.sockets.get(id);
+      if (s?.data.userId) byUserId.set(s.data.userId as string, s.data.userName as string);
+    }
+    return [...byUserId.entries()].map(([userId, userName]) => ({ userId, userName }));
+  }
+
+  private broadcastOnlineUsers() {
+    this.server.to('company:default').emit('online.snapshot', this.onlineUsersSnapshot());
   }
 
   private broadcastPresence(entityType: string) {
