@@ -7,8 +7,10 @@ import { useUsers, useDepartments, useRoles, UserListItem, RoleItem } from '../.
 import { api, ApiError } from '../../lib/api';
 import { ALL_NAV_TABS } from '../../lib/navTabs';
 
-// 役職(要望: 各アカウントに必ず役職を付与する)。この4つのうち最低1つの選択を必須にする。
-const POSITION_ROLE_CODES = ['AP', 'AP_LEADER', 'CL', 'RESPONSIBLE'];
+// 役職(要望: 各アカウントに必ず役職を付与する)。ユーザー管理で選べるロールはこの5つのみ。
+// SUPER_ADMIN/ENTRY_OPERATOR等の旧ロールはDB上は残るが(既存割り当てはそのまま動く)、
+// 新規のロール選択肢としては出さない。
+const ROLE_OPTIONS = ['AP', 'AP_LEADER', 'CL', 'SUPER_ADMIN', 'RESPONSIBLE'];
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'システム管理者',
@@ -26,25 +28,10 @@ const ROLE_LABELS: Record<string, string> = {
   RESPONSIBLE: '責任者',
 };
 
-const ROLE_OPTIONS = [
-  'AP',
-  'AP_LEADER',
-  'CL',
-  'RESPONSIBLE',
-  'MANAGER',
-  'LEADER',
-  'INSIDE_SALES',
-  'FIELD_SALES',
-  'ENTRY_OPERATOR',
-  'ADMIN',
-  'USER',
-  'VIEWER',
-];
-
 const STATUS_LABEL: Record<string, string> = { PENDING: '承認待ち', ACTIVE: '在籍中', SUSPENDED: '停止中', RETIRED: '退職済み' };
 
 function hasPosition(roleCodes: string[]) {
-  return roleCodes.some((c) => POSITION_ROLE_CODES.includes(c));
+  return roleCodes.some((c) => ROLE_OPTIONS.includes(c));
 }
 
 function RoleCheckboxList({
@@ -63,9 +50,6 @@ function RoleCheckboxList({
         <label key={code} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: 'pointer' }}>
           <input type="checkbox" checked={selected.includes(code)} onChange={() => toggle(code)} />
           {ROLE_LABELS[code] ?? code}
-          {POSITION_ROLE_CODES.includes(code) && (
-            <span style={{ fontSize: 9, color: 'var(--color-primary)' }}>役職</span>
-          )}
         </label>
       ))}
     </div>
@@ -241,7 +225,7 @@ function RolesControl({
           <RoleCheckboxList selected={draft} onChange={setDraft} />
           {!hasPosition(draft) && (
             <p style={{ color: 'var(--color-danger)', fontSize: 11, marginTop: 6 }}>
-              役職(AP/APリーダー/CL/責任者)が選ばれていません
+              役職(AP/APリーダー/CL/システム管理者/責任者)が選ばれていません
             </p>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
@@ -286,8 +270,8 @@ function TabVisibilitySettings() {
     onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
   });
 
-  // 対象は表示上の全ロール(要望: 管理タブも含めて全タブ対象)。SUPER_ADMINは常に全表示のため対象外にする。
-  const configurableRoles = (roles ?? []).filter((r) => r.code !== 'SUPER_ADMIN');
+  // 対象は役職として選べる5ロールのうち、SUPER_ADMIN(常に全表示のため対象外)を除いたもの。
+  const configurableRoles = (roles ?? []).filter((r) => ROLE_OPTIONS.includes(r.code) && r.code !== 'SUPER_ADMIN');
   const groups = Array.from(new Set(ALL_NAV_TABS.map((t) => t.group)));
 
   const toggle = (role: RoleItem, tabKey: string) => {
@@ -492,7 +476,7 @@ export function UsersAdminPage() {
             </div>
             {form.roleCodes.length > 0 && !hasPosition(form.roleCodes) && (
               <p style={{ color: 'var(--color-danger)', fontSize: 11, marginBottom: 8 }}>
-                役職(AP/APリーダー/CL/責任者)が選ばれていません
+                役職(AP/APリーダー/CL/システム管理者/責任者)が選ばれていません
               </p>
             )}
             <button
