@@ -8,6 +8,7 @@ import {
 } from '../lib/dateInput';
 import { pastel, readableTextColor } from '../lib/color';
 import { useIsCoarsePointer } from '../lib/useIsCoarsePointer';
+import { NavIcon } from './NavIcon';
 
 /** キーボード表示中も隠れずに収まるよう、ソフトキーボードを差し引いた実際の可視範囲を返す。 */
 function visibleViewport() {
@@ -412,7 +413,11 @@ export function InlineSelect({
 }
 
 /**
- * 「次回対応日」等、日付だけを柔軟な書式(8/10・8-10・0810等)で手入力するセル。
+ * 「次回対応日」等の日付セル。手入力(8/10・8-10・0810等の柔軟な書式)と、
+ * カレンダーアイコンからのネイティブ日付ピッカー選択の両方に対応する(要望)。
+ * ネイティブの<input type="date">は日本語ロケールで「年/月/日」のプレースホルダーが
+ * 常時表示されて見た目が煩雑になるため、実際に見せるのは手入力用のテキスト欄だけにし、
+ * ピッカーはアイコンボタンからshowPicker()で呼び出す隠しinputに任せている。
  * 値をuseStateで持たずdefaultValueのuncontrolled inputにすると、保存成功後にDOM上の
  * 表示が更新されず入力した生の文字列のまま(例: 0909と打っても9/9に変わらない)に
  * なってしまうため、valueをpropに同期するcontrolled inputにしている。
@@ -430,33 +435,84 @@ export function InlineFlexDate({
 }) {
   const [draft, setDraft] = useState(isoToDateInput(iso));
   useEffect(() => setDraft(isoToDateInput(iso)), [iso]);
+  const pickerRef = useRef<HTMLInputElement>(null);
+
+  const commitText = (raw: string) => {
+    const current = isoToDateInput(iso);
+    if (raw === current) return;
+    if (raw === '') {
+      onSave(null);
+      return;
+    }
+    const parsed = parseFlexDateText(raw);
+    if (!parsed) {
+      onInvalid(`${label}は 8/10・8-10・0810 のような形式で入力してください`);
+      setDraft(current);
+      return;
+    }
+    const time = isoToTimeInput(iso) || '00:00';
+    onSave(new Date(`${parsed}T${time}`).toISOString());
+  };
 
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={draft}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const raw = draft.trim();
-        const current = isoToDateInput(iso);
-        if (raw === current) return;
-        if (raw === '') {
-          onSave(null);
-          return;
-        }
-        const parsed = parseFlexDateText(raw);
-        if (!parsed) {
-          onInvalid(`${label}は 8/10・8-10・0810 のような形式で入力してください`);
-          setDraft(current);
-          return;
-        }
-        const time = isoToTimeInput(iso) || '00:00';
-        onSave(new Date(`${parsed}T${time}`).toISOString());
-      }}
-      style={baseStyle}
-    />
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', gap: 2 }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={draft}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => commitText(draft.trim())}
+        style={{ ...baseStyle, flex: 1, minWidth: 0 }}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        title="カレンダーから選択"
+        onClick={(e) => {
+          e.stopPropagation();
+          try {
+            pickerRef.current?.showPicker?.();
+          } catch {
+            /* showPicker未対応ブラウザでは何もしない(手入力のみ利用可) */
+          }
+        }}
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 18,
+          height: 18,
+          padding: 0,
+          border: 'none',
+          background: 'transparent',
+          boxShadow: 'none',
+          color: 'var(--color-text-faint)',
+          cursor: 'pointer',
+        }}
+      >
+        <NavIcon name="calendar" />
+      </button>
+      <input
+        ref={pickerRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden
+        value={isoToDateKey(iso)}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) {
+            onSave(null);
+            return;
+          }
+          const time = isoToTimeInput(iso) || '00:00';
+          onSave(new Date(`${v}T${time}`).toISOString());
+        }}
+        style={{ position: 'absolute', right: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none', border: 'none', padding: 0 }}
+      />
+    </div>
   );
 }
 
@@ -500,46 +556,6 @@ export function InlineFlexTime({
         onSave(new Date(`${date}T${parsed}`).toISOString());
       }}
       style={baseStyle}
-    />
-  );
-}
-
-/**
- * ネイティブの日付ピッカー(<input type="date">)を使うセル。カレンダーアイコンからの
- * 選択と、キーボードでの直接入力(手打ち)の両方に対応する(要望: 「日」の付く列は
- * 手打りorカレンダー入力で)。
- */
-export function InlineNativeDate({
-  iso,
-  onSave,
-  style,
-  disabled,
-}: {
-  iso: string | null | undefined;
-  onSave: (nextIso: string | null) => void;
-  style?: CSSProperties;
-  disabled?: boolean;
-}) {
-  const [draft, setDraft] = useState(isoToDateKey(iso ?? null));
-  useEffect(() => setDraft(isoToDateKey(iso ?? null)), [iso]);
-
-  return (
-    <input
-      type="date"
-      value={draft}
-      disabled={disabled}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const current = isoToDateKey(iso ?? null);
-        if (draft === current) return;
-        if (!draft) {
-          onSave(null);
-          return;
-        }
-        onSave(new Date(`${draft}T00:00:00`).toISOString());
-      }}
-      style={{ ...baseStyle, colorScheme: 'light', ...style }}
     />
   );
 }

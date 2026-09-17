@@ -238,18 +238,6 @@ select:disabled {
   opacity: 0.6;
 }
 
-/* スマホでの入力・選択時に画面が勝手に拡大されないようにする(要望)。
-   iOS Safariはフォーカスした入力欄のfont-sizeが16px未満だと自動でズームインする仕様があり、
-   一覧の小さいセル(inputやselectをfont:inheritで敷いているもの含む)はどれも対象になってしまう。
-   一覧の密度(小さめフォント)はPC向けの要望のため、ここではスマホ幅のときだけ!importantで上書きする。 */
-@media (max-width: 820px) {
-  input,
-  select,
-  textarea {
-    font-size: 16px !important;
-  }
-}
-
 /* 一覧セル内のインライン編集プルダウン(DataTable)。セルになじませ、フォーカス時も
    浮いた枠は出さず「セルの中で編集している」見た目にする(要望)。 */
 .inline-select {
