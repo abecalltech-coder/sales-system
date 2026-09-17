@@ -917,6 +917,9 @@ export function DataTable<T>({
                 const restingBackground: string = String(
                   rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
                 );
+                // 固定表示(sticky)セルは他列がスクロールして裏に隠れる際も不透明でないと
+                // 文字が透けて重なって見えるため、transparentの代わりに不透明な地の色を使う(要望対応の副修正)
+                const stickyBackground = i % 2 === 1 ? 'var(--color-sunken)' : 'var(--color-surface)';
                 return (
                   <Fragment key={getRowId(row)}>
                     <tr
@@ -959,7 +962,7 @@ export function DataTable<T>({
                           cursor: reorderable ? 'grab' : 'pointer',
                           borderRight: '1px solid var(--color-border)',
                           background:
-                            sel && i >= bounds(sel).r0 && i <= bounds(sel).r1 ? 'var(--color-primary-soft)' : restingBackground,
+                            sel && i >= bounds(sel).r0 && i <= bounds(sel).r1 ? 'var(--color-primary-soft)' : stickyBackground,
                         }}
                       >
                         {i + 1}
@@ -1013,7 +1016,7 @@ export function DataTable<T>({
                                   : cursor
                                     ? `${cursor.color}1a`
                                     : colIdx === 0
-                                      ? restingBackground
+                                      ? stickyBackground
                                       : undefined,
                             }}
                           >
