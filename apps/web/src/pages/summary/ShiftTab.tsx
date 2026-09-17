@@ -8,6 +8,7 @@ import { MonthlyShiftRow, useMonthlyShift, useShiftDepartments, useUserOptions, 
 import { api, ApiError } from '../../lib/api';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
+import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const NUMERIC_ATTRS = new Set(['cost', 'cumulativeHours', 'seats']);
@@ -56,10 +57,27 @@ export function ShiftTab() {
     onError: onErr,
   });
 
+  // 複数セル貼り付け等で同じ行に複数回書き込む際、行ごとに1回のPATCHへまとめて送る
+  // (要望: 同時に複数の変更を送ると片方が後勝ちで上書きロストし、一部セルが反映されない不具合の修正)
+  const saveRow = useBatchedRowSave<MonthlyShiftRow, Record<string, unknown>>(
+    (row) => row.id,
+    (row, patch) => updateRow.mutate({ id: row.id, patch }),
+    (a, b) => {
+      const merged: Record<string, unknown> = { ...a, ...b };
+      const aAttr = a.attributesPatch as Record<string, unknown> | undefined;
+      const bAttr = b.attributesPatch as Record<string, unknown> | undefined;
+      if (aAttr || bAttr) merged.attributesPatch = { ...aAttr, ...bAttr };
+      const aDays = a.daysPatch as Record<string, unknown> | undefined;
+      const bDays = b.daysPatch as Record<string, unknown> | undefined;
+      if (aDays || bDays) merged.daysPatch = { ...aDays, ...bDays };
+      return merged;
+    },
+  );
+
   const setAttr = (r: MonthlyShiftRow, code: string, v: unknown) =>
-    updateRow.mutate({ id: r.id, patch: { attributesPatch: { [code]: v === '' ? null : v } } });
+    saveRow(r, { attributesPatch: { [code]: v === '' ? null : v } });
   const setDay = (r: MonthlyShiftRow, dateKey: string, n: number | null) =>
-    updateRow.mutate({ id: r.id, patch: { daysPatch: { [dateKey]: n } } });
+    saveRow(r, { daysPatch: { [dateKey]: n } });
 
   const rows = data?.rows ?? [];
   const days = data?.days ?? [];
@@ -136,7 +154,7 @@ export function ShiftTab() {
           value={r.userId}
           options={(userOptions ?? []).map((u) => ({ id: u.id, label: u.name }))}
           placeholder="(未割当)"
-          onSave={(v) => updateRow.mutate({ id: r.id, patch: { userId: v || null } })}
+          onSave={(v) => saveRow(r, { userId: v || null })}
         />
       ),
       copyValue: (r) => r.userName ?? '',

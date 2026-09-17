@@ -432,7 +432,7 @@ export function DataTable<T>({
       // 別セルへドラッグ開始 → 範囲選択モードに入り、開いていた入力欄は閉じる
       draggingRef.current = true;
       (document.activeElement as HTMLElement | null)?.blur();
-      gridRef.current?.focus();
+      gridRef.current?.focus({ preventScroll: true });
       document.body.style.userSelect = 'none';
       setSel((s) => (s ? { ...s, fr: hover.r, fc: hover.c } : s));
     }
@@ -443,17 +443,17 @@ export function DataTable<T>({
     window.removeEventListener('mouseup', onWindowMouseUp);
     document.body.style.userSelect = '';
     dragRef.current = null;
-    if (draggingRef.current) gridRef.current?.focus();
+    if (draggingRef.current) gridRef.current?.focus({ preventScroll: true });
     draggingRef.current = false;
   }, [onWindowMouseMove]);
 
   const selectColumn = (c: number) => {
     if (rowsRef.current.length === 0) return;
-    gridRef.current?.focus();
+    gridRef.current?.focus({ preventScroll: true });
     setSel({ ar: 0, ac: c, fr: rowsRef.current.length - 1, fc: c });
   };
   const selectRow = (r: number, extend: boolean) => {
-    gridRef.current?.focus();
+    gridRef.current?.focus({ preventScroll: true });
     setSel((s) =>
       extend && s
         ? { ...s, fr: r, fc: columnsRef.current.length - 1 }
@@ -502,7 +502,7 @@ export function DataTable<T>({
     // 入力欄を抜けたあと何もフォーカスされていなければ、キーボード操作を続けられるよう
     // グリッドにフォーカスを戻す(Enter / Escape で編集を終えた直後など)
     window.setTimeout(() => {
-      if (document.activeElement === document.body) gridRef.current?.focus();
+      if (document.activeElement === document.body) gridRef.current?.focus({ preventScroll: true });
     }, 0);
     const pending = pendingEditRef.current;
     if (!pending || pending.rowId !== rowId || pending.colKey !== colKey) return;
@@ -548,6 +548,7 @@ export function DataTable<T>({
   return (
     <div
       style={{
+        position: 'relative',
         background: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
@@ -555,7 +556,7 @@ export function DataTable<T>({
         overflow: 'hidden',
       }}
     >
-      {(toast || hiddenCount > 0) && (
+      {hiddenCount > 0 && (
         <div
           style={{
             display: 'flex',
@@ -567,15 +568,37 @@ export function DataTable<T>({
             background: 'var(--color-subtle)',
           }}
         >
-          {toast && <span style={{ color: 'var(--color-success)' }}>{toast}</span>}
-          {hiddenCount > 0 && (
-            <span style={{ color: 'var(--color-text-muted)' }}>
-              🚫 {hiddenCount}行 非表示中{' '}
-              <button onClick={unhideAll} style={{ fontSize: 11, padding: '1px 6px', marginLeft: 2 }}>
-                すべて表示
-              </button>
-            </span>
-          )}
+          <span style={{ color: 'var(--color-text-muted)' }}>
+            🚫 {hiddenCount}行 非表示中{' '}
+            <button onClick={unhideAll} style={{ fontSize: 11, padding: '1px 6px', marginLeft: 2 }}>
+              すべて表示
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* コピー/貼り付け等のトースト通知はレイアウトに影響させない浮き出し表示にする
+          (要望: ショートカット操作のたびに行・列の位置が少しずれる不具合の修正) */}
+      {toast && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 400,
+            padding: '3px 12px',
+            borderRadius: 999,
+            fontSize: 11,
+            fontWeight: 600,
+            color: '#fff',
+            background: 'var(--color-success)',
+            boxShadow: 'var(--shadow-md)',
+            pointerEvents: 'none',
+          }}
+        >
+          {toast}
         </div>
       )}
 

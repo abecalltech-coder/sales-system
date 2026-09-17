@@ -9,6 +9,7 @@ import { useContracts, useStatuses, useMe, ContractListItem } from '../../hooks/
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
+import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 import { useManualSort } from '../../hooks/useManualSort';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
@@ -53,8 +54,12 @@ export function ContractsListPage() {
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
-  const save = (row: ContractListItem, patch: Record<string, unknown>) =>
-    updateMutation.mutate({ id: row.id, version: row.version, patch });
+  // 複数セル貼り付け等で同じ行に複数回書き込む際、行ごとに1回のPATCHへまとめて送る
+  // (要望: バージョン競合で一部セル、特にプルダウン列が反映されない不具合の修正)
+  const save = useBatchedRowSave<ContractListItem, Record<string, unknown>>(
+    (row) => row.id,
+    (row, patch) => updateMutation.mutate({ id: row.id, version: row.version, patch }),
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (ids: string[]) => api.post('/contracts/bulk-delete', { ids }),

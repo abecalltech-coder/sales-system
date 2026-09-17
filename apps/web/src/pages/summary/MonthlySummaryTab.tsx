@@ -14,6 +14,7 @@ import {
 import { api, ApiError } from '../../lib/api';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
+import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 
 const AUTO_CODES = new Set(['tossUp', 'apo', 'meetingDone', 'contractSites', 'etCount', 'reschedule']);
 
@@ -108,8 +109,22 @@ export function MonthlySummaryTab() {
     onError: onErr,
   });
 
+  // 複数セル貼り付け等で同じ行に複数回書き込む際、行ごとに1回のPATCHへまとめて送る
+  // (要望: 同時に複数の変更を送ると片方が後勝ちで上書きロストし、一部セルが反映されない不具合の修正)
+  const saveRow = useBatchedRowSave<MonthlySummaryRow, Record<string, unknown>>(
+    (row) => row.id,
+    (row, patch) => updateRow.mutate({ id: row.id, patch }),
+    (a, b) => {
+      const merged: Record<string, unknown> = { ...a, ...b };
+      const av = a.valuesPatch as Record<string, unknown> | undefined;
+      const bv = b.valuesPatch as Record<string, unknown> | undefined;
+      if (av || bv) merged.valuesPatch = { ...av, ...bv };
+      return merged;
+    },
+  );
+
   const setVal = (row: MonthlySummaryRow, code: string, n: number | null) =>
-    updateRow.mutate({ id: row.id, patch: { valuesPatch: { [code]: n } } });
+    saveRow(row, { valuesPatch: { [code]: n } });
 
   const rows = data?.rows ?? [];
   const cols = data?.columns ?? [];
@@ -119,9 +134,9 @@ export function MonthlySummaryTab() {
       key: 'role',
       label: '役割',
       width: 92,
-      render: (r) => <InlineText value={r.role} onSave={(v) => updateRow.mutate({ id: r.id, patch: { role: v || null } })} />,
+      render: (r) => <InlineText value={r.role} onSave={(v) => saveRow(r, { role: v || null })} />,
       copyValue: (r) => r.role ?? '',
-      pasteValue: (r, t) => updateRow.mutate({ id: r.id, patch: { role: t || null } }),
+      pasteValue: (r, t) => saveRow(r, { role: t || null }),
     };
     const nameCol: Column<MonthlySummaryRow> = {
       key: 'userName',
@@ -132,7 +147,7 @@ export function MonthlySummaryTab() {
           value={r.userId}
           options={(userOptions ?? []).map((u) => ({ id: u.id, label: u.name }))}
           placeholder="(未割当)"
-          onSave={(v) => updateRow.mutate({ id: r.id, patch: { userId: v || null } })}
+          onSave={(v) => saveRow(r, { userId: v || null })}
         />
       ),
       copyValue: (r) => r.userName ?? '',
@@ -147,12 +162,12 @@ export function MonthlySummaryTab() {
         return (
           <InlineText
             value={v}
-            onSave={(x) => updateRow.mutate({ id: r.id, patch: { valuesPatch: { department: x || null } } })}
+            onSave={(x) => saveRow(r, { valuesPatch: { department: x || null } })}
           />
         );
       },
       copyValue: (r) => (r.values?.department as string) ?? '',
-      pasteValue: (r, t) => updateRow.mutate({ id: r.id, patch: { valuesPatch: { department: t || null } } }),
+      pasteValue: (r, t) => saveRow(r, { valuesPatch: { department: t || null } }),
     };
 
     const dataCols: Column<MonthlySummaryRow>[] = cols.map((c) => {

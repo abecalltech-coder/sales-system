@@ -11,6 +11,7 @@ import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
+import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 
 const MANAGE_OPTIONS = '__manage_options__';
 const ADD_COLUMN_KEY = '__add_column__';
@@ -60,8 +61,12 @@ export function DealsListPage() {
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
-  const save = (row: DealListItem, patch: Record<string, unknown>) =>
-    updateMutation.mutate({ id: row.id, version: row.version, patch });
+  // 複数セル貼り付け等で同じ行に複数回書き込む際、行ごとに1回のPATCHへまとめて送る
+  // (要望: バージョン競合で一部セル、特にプルダウン列が反映されない不具合の修正)
+  const save = useBatchedRowSave<DealListItem, Record<string, unknown>>(
+    (row) => row.id,
+    (row, patch) => updateMutation.mutate({ id: row.id, version: row.version, patch }),
+  );
 
   const createMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => api.post('/deals', { values }),
