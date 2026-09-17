@@ -1,4 +1,5 @@
 import {
+  ClipboardEvent as ReactClipboardEvent,
   CSSProperties,
   DragEvent as ReactDragEvent,
   Fragment,
@@ -285,13 +286,7 @@ export function DataTable<T>({
     flash('切り取りました');
   };
 
-  const doPaste = async (s: Sel) => {
-    let text = '';
-    try {
-      text = await navigator.clipboard.readText();
-    } catch {
-      text = clipboardRef.current;
-    }
+  const doPasteText = (text: string, s: Sel) => {
     if (!text) return;
     const matrix = parseClipboard(text);
     const b = bounds(s);
@@ -335,15 +330,52 @@ export function DataTable<T>({
     flash('貼り付けました');
   };
 
+  const doPaste = async (s: Sel) => {
+    let text = '';
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      text = clipboardRef.current;
+    }
+    doPasteText(text, s);
+  };
+
+  /**
+   * プルダウン以外の入力欄(input/textarea)にフォーカスがある状態でCtrl+Vされた場合の
+   * ネイティブpasteイベント。単一値の貼り付けは通常のテキスト編集に任せるが、
+   * 複数セル分(タブ/改行区切り)のデータが貼り付けられた場合だけ、そのセルを起点に
+   * グリッド側の一括貼り付けへ差し替える(要望: 1セル選択のままでも複数セルへ反映されるように)。
+   */
+  const onContainerPaste = (e: ReactClipboardEvent<HTMLDivElement>) => {
+    if (!sel) return;
+    const t = e.target as HTMLElement;
+    if (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA') return;
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    const normalized = text.replace(/\r\n/g, '\n').replace(/\n$/, '');
+    if (!normalized.includes('\t') && !normalized.includes('\n')) return;
+    e.preventDefault();
+    doPasteText(text, sel);
+  };
+
   // --- グリッドのキーボード ------------------------------------------
   const onGridKeyDown = (e: ReactKeyboardEvent) => {
     const t = e.target as HTMLElement;
-    const inField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
+    const isSelect = t.tagName === 'SELECT';
+    const inTextField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
     const mod = e.ctrlKey || e.metaKey;
 
-    // 入力欄にフォーカスがある時はネイティブ挙動(文字のコピー・元に戻す)に任せる
-    if (inField) return;
+    // テキスト入力欄はネイティブ挙動(文字のコピー・元に戻す等)に任せる。
+    if (inTextField) return;
     if (!sel) return;
+    // プルダウン(select)は矢印キーでの選択肢変更などネイティブ動作を残しつつ、
+    // コピー/切り取り/貼り付け/クリア/元に戻す/全選択だけはグリッド側で処理する
+    // (要望: プルダウンセルもコピー&ペーストに対応させる)
+    if (isSelect) {
+      const isShortcut =
+        (mod && 'zycxva'.includes(e.key.toLowerCase())) || e.key === 'Delete' || e.key === 'Backspace';
+      if (!isShortcut) return;
+    }
 
     if (mod && (e.key === 'z' || e.key === 'Z')) {
       e.preventDefault();
@@ -547,6 +579,7 @@ export function DataTable<T>({
 
   return (
     <div
+      onPaste={onContainerPaste}
       style={{
         position: 'relative',
         background: 'var(--color-surface)',
@@ -797,6 +830,18 @@ export function DataTable<T>({
                         const cursor = cellCursor?.(rowId, col.key);
                         const selected = sel ? inSel(sel, i, colIdx) : false;
                         const isFocusCell = sel ? sel.fr === i && sel.fc === colIdx : false;
+                        // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
+                        const selBounds = selected && sel ? bounds(sel) : null;
+                        const selEdgeShadow = selBounds
+                          ? [
+                              i === selBounds.r0 ? 'inset 0 1px 0 0 var(--color-primary)' : null,
+                              i === selBounds.r1 ? 'inset 0 -1px 0 0 var(--color-primary)' : null,
+                              colIdx === selBounds.c0 ? 'inset 1px 0 0 0 var(--color-primary)' : null,
+                              colIdx === selBounds.c1 ? 'inset -1px 0 0 0 var(--color-primary)' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(', ') || undefined
+                          : undefined;
                         return (
                           <td
                             key={col.key}
@@ -816,7 +861,7 @@ export function DataTable<T>({
                               boxShadow: isFocusCell
                                 ? 'inset 0 0 0 2px var(--color-primary)'
                                 : selected
-                                  ? 'inset 0 0 0 1px var(--color-primary)'
+                                  ? selEdgeShadow
                                   : cursor
                                     ? `inset 0 0 0 2px ${cursor.color}`
                                     : undefined,
