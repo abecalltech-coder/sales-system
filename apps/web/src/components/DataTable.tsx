@@ -132,11 +132,13 @@ export function DataTable<T>({
   const clipboardRef = useRef<string>('');
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // 最新の rows(表示中) / columns を event ハンドラから参照するための ref
+  // 最新の rows(表示中) / columns / sel を event ハンドラから参照するための ref
   const rowsRef = useRef(rows2);
   rowsRef.current = rows2;
   const columnsRef = useRef(columns);
   columnsRef.current = columns;
+  const selRef = useRef(sel);
+  selRef.current = sel;
 
   // ドラッグ選択
   const dragRef = useRef<{ startR: number; startC: number } | null>(null);
@@ -156,6 +158,33 @@ export function DataTable<T>({
   useEffect(() => {
     setSel(null);
   }, [rows2.length]);
+
+  // Tabキーでのセル移動(要望)。セルの編集を終えた直後は一瞬 document.body にフォーカスが
+  // 移る(blur→再フォーカスの間)ため、gridRef経由のバブリングに頼るonKeyDownだけでは
+  // そのタイミングでTabを取りこぼす。window直下でcapture登録し、フォーカスがグリッド内部
+  // またはbody(=編集直後の遷移中)のときだけ割り込むことで、常にセル移動として機能させる。
+  useEffect(() => {
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const s = selRef.current;
+      if (!s) return;
+      const active = document.activeElement as HTMLElement | null;
+      const insideGrid = !!active && !!gridRef.current?.contains(active);
+      const isBody = active === document.body;
+      if (!insideGrid && !isBody) return;
+      e.preventDefault();
+      if (active && active !== gridRef.current) active.blur();
+      const dc = e.shiftKey ? -1 : 1;
+      setSel((cur) => {
+        if (!cur) return cur;
+        const fc = Math.max(0, Math.min(columnsRef.current.length - 1, cur.fc + dc));
+        return { ar: cur.fr, ac: fc, fr: cur.fr, fc };
+      });
+      window.setTimeout(() => gridRef.current?.focus({ preventScroll: true }), 0);
+    };
+    window.addEventListener('keydown', handleTab, true);
+    return () => window.removeEventListener('keydown', handleTab, true);
+  }, []);
 
   const widthOf = (col: Column<T>): number =>
     draftWidths[col.key] ?? savedWidths[col.key] ?? col.width ?? DEFAULT_COLUMN_WIDTH;
@@ -359,22 +388,6 @@ export function DataTable<T>({
     const isSelect = t.tagName === 'SELECT';
     const inTextField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
     const mod = e.ctrlKey || e.metaKey;
-
-    // Tab/Shift+Tabは入力欄の編集中でも常に有効にし、選択セルを基準に右/左のセルへ移動する
-    // (要望: Tabキーでのセル移動に対応。編集中の値はフォーカスを外す=既存のonBlurで確定される)
-    if (e.key === 'Tab' && sel) {
-      e.preventDefault();
-      const active = document.activeElement as HTMLElement | null;
-      if (active && active !== gridRef.current) active.blur();
-      const dc = e.shiftKey ? -1 : 1;
-      setSel((s) => {
-        if (!s) return s;
-        const fc = Math.max(0, Math.min(columnsRef.current.length - 1, s.fc + dc));
-        return { ar: s.fr, ac: fc, fr: s.fr, fc };
-      });
-      window.setTimeout(() => gridRef.current?.focus({ preventScroll: true }), 0);
-      return;
-    }
 
     // テキスト入力欄はネイティブ挙動(文字のコピー・元に戻す等)に任せる。
     if (inTextField) return;
