@@ -30,7 +30,8 @@ export function DealsListPage() {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const [personFilter, setPersonFilter] = useState<string | null>(null);
-  const pageSize = 100;
+  // 全件を1ページで表示する(要望: 100件までの表示上限を無くす)
+  const pageSize = 100000;
   const queryClient = useQueryClient();
 
   const { data, isLoading, error: listError } = useDeals({ page, pageSize, keyword: keyword || undefined });

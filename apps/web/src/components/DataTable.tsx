@@ -807,7 +807,15 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div ref={gridRef} tabIndex={0} onKeyDown={onGridKeyDown} style={{ overflowX: 'auto', outline: 'none' }}>
+      {/* 見出し行・1列目の固定(sticky)は「実際にスクロールする祖先要素」が必要。
+          外側カードのoverflow:hiddenだけでは(自身はスクロールしないため)固定が効かないので、
+          このグリッド自身に高さ上限とoverflow-yを持たせて実際のスクロール領域にする(要望対応の修正)。 */}
+      <div
+        ref={gridRef}
+        tabIndex={0}
+        onKeyDown={onGridKeyDown}
+        style={{ overflow: 'auto', maxHeight: 'calc(100vh - 230px)', outline: 'none' }}
+      >
         <table style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
           <colgroup>
             <col style={{ width: GUTTER_WIDTH }} />
