@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { InlineText } from '../../components/InlineEdit';
-import { useUsers, useDepartments, useRoles, UserListItem, RoleItem } from '../../hooks/useApi';
+import { useUsers, useDepartments, useRoles, UserListItem, RoleItem, DepartmentItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { ALL_NAV_TABS } from '../../lib/navTabs';
 
@@ -254,6 +254,129 @@ function RolesControl({
   );
 }
 
+/** 所属(部署・チーム)をその場で編集するポップオーバー(要望: チームの振り分けをユーザー管理で行えるように)。 */
+function OrgControl({
+  user,
+  departments,
+  onSave,
+}: {
+  user: UserListItem;
+  departments: DepartmentItem[];
+  onSave: (v: { departmentId: string | null; teamId: string | null }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draftDept, setDraftDept] = useState<string>('');
+  const [draftTeam, setDraftTeam] = useState<string>('');
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const deptName = departments.find((d) => d.id === user.departmentId)?.name;
+  const teamName = departments.find((d) => d.id === user.departmentId)?.teams.find((t) => t.id === user.teamId)?.name;
+  const teamsForDraftDept = departments.find((d) => d.id === draftDept)?.teams ?? [];
+
+  useLayoutEffect(() => {
+    if (!editing || !anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left });
+  }, [editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setEditing(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [editing]);
+
+  const open = () => {
+    setDraftDept(user.departmentId ?? '');
+    setDraftTeam(user.teamId ?? '');
+    setEditing(true);
+  };
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {deptName ?? '(部署未設定)'}
+        {teamName ? ` / ${teamName}` : ''}
+      </span>
+      <button ref={anchorRef} onClick={open} style={{ fontSize: 11, padding: '2px 6px', flexShrink: 0 }}>
+        編集
+      </button>
+      {editing && pos && (
+        <div
+          ref={containerRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            zIndex: 1000,
+            width: 240,
+            padding: 10,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+          }}
+        >
+          <label style={{ display: 'block', fontSize: 11, marginBottom: 8 }}>
+            部署
+            <select
+              value={draftDept}
+              onChange={(e) => {
+                setDraftDept(e.target.value);
+                setDraftTeam('');
+              }}
+              style={{ display: 'block', width: '100%', fontSize: 12, padding: 4, marginTop: 2 }}
+            >
+              <option value="">未設定</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'block', fontSize: 11 }}>
+            チーム
+            <select
+              value={draftTeam}
+              onChange={(e) => setDraftTeam(e.target.value)}
+              disabled={!draftDept}
+              style={{ display: 'block', width: '100%', fontSize: 12, padding: 4, marginTop: 2 }}
+            >
+              <option value="">未設定</option>
+              {teamsForDraftDept.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+            <button style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setEditing(false)}>
+              キャンセル
+            </button>
+            <button
+              className="btn-primary"
+              style={{ fontSize: 12, padding: '3px 8px' }}
+              onClick={() => {
+                onSave({ departmentId: draftDept || null, teamId: draftTeam || null });
+                setEditing(false);
+              }}
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}
+
 /** 役職ごとのタブ表示設定(要望: ユーザー管理でチェックボックス設定)。 */
 function TabVisibilitySettings() {
   const { data: roles, isLoading } = useRoles();
@@ -339,11 +462,12 @@ export function UsersAdminPage() {
   const { data: departments } = useDepartments();
 
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ email: '', name: '', roleCodes: [] as string[], departmentId: '' });
+  const [form, setForm] = useState({ email: '', name: '', roleCodes: [] as string[], departmentId: '', teamId: '' });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+  const teamsForFormDept = (departments ?? []).find((d) => d.id === form.departmentId)?.teams ?? [];
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -352,12 +476,13 @@ export function UsersAdminPage() {
         name: form.name,
         roleCodes: form.roleCodes,
         departmentId: form.departmentId || undefined,
+        teamId: form.teamId || undefined,
       }),
     onSuccess: (res) => {
       setError(null);
       setMessage(`ユーザーを作成しました。初期パスワード: ${res.tempPassword}(このパスワードでそのままログインできます。変更する場合は管理者が再設定してください)`);
       setShowCreate(false);
-      setForm({ email: '', name: '', roleCodes: [], departmentId: '' });
+      setForm({ email: '', name: '', roleCodes: [], departmentId: '', teamId: '' });
       invalidateUsers();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
@@ -375,6 +500,13 @@ export function UsersAdminPage() {
       api.patch(`/users/${vars.id}`, { version: vars.version, roleCodes: vars.roleCodes }),
     onSuccess: invalidateUsers,
     onError: (err) => setError(err instanceof ApiError ? err.message : 'ロールの更新に失敗しました'),
+  });
+
+  const updateOrgMutation = useMutation({
+    mutationFn: (vars: { id: string; version: number; departmentId: string | null; teamId: string | null }) =>
+      api.patch(`/users/${vars.id}`, { version: vars.version, departmentId: vars.departmentId, teamId: vars.teamId }),
+    onSuccess: invalidateUsers,
+    onError: (err) => setError(err instanceof ApiError ? err.message : '所属の更新に失敗しました'),
   });
 
   const deleteMutation = useMutation({
@@ -404,6 +536,23 @@ export function UsersAdminPage() {
         />
       ),
       copyValue: (r) => r.roles.map((ur) => ROLE_LABELS[ur.role.code] ?? ur.role.code).join(', '),
+    },
+    {
+      key: 'org',
+      label: '所属',
+      width: 200,
+      render: (r) => (
+        <OrgControl
+          user={r}
+          departments={departments ?? []}
+          onSave={(v) => updateOrgMutation.mutate({ id: r.id, version: r.version, ...v })}
+        />
+      ),
+      copyValue: (r) => {
+        const dept = departments?.find((d) => d.id === r.departmentId);
+        const team = dept?.teams.find((t) => t.id === r.teamId);
+        return [dept?.name, team?.name].filter(Boolean).join(' / ');
+      },
     },
     {
       key: 'status',
@@ -465,13 +614,29 @@ export function UsersAdminPage() {
               <label style={{ fontSize: 13 }}>所属部署</label>
               <select
                 value={form.departmentId}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                onChange={(e) => setForm({ ...form, departmentId: e.target.value, teamId: '' })}
                 style={{ display: 'block', width: '100%', padding: 6 }}
               >
                 <option value="">未設定</option>
                 {departments?.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ fontSize: 13 }}>所属チーム</label>
+              <select
+                value={form.teamId}
+                onChange={(e) => setForm({ ...form, teamId: e.target.value })}
+                disabled={!form.departmentId}
+                style={{ display: 'block', width: '100%', padding: 6 }}
+              >
+                <option value="">未設定</option>
+                {teamsForFormDept.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
                   </option>
                 ))}
               </select>
