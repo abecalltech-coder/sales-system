@@ -167,6 +167,53 @@ export function DataTable<T>({
     setSel(null);
   }, [rows2.length]);
 
+  // --- 行の仮想化(要望: 件数が数千〜数万件になっても軽く保つ) ---------
+  // content-visibility等の描画スキップだけでは、React自体が全行分の要素を毎回
+  // 生成・差分計算するコストが残るため、実際に画面付近にある行だけをtbodyへ
+  // レンダリングし、その前後は高さだけ合わせたダミー行で埋める。
+  const ROW_HEIGHT = fontSize + 18; // 1行分の高さ(padding+行送りの概算)。行はほぼ一定高さという前提。
+  const ROW_OVERSCAN = 8; // 画面のすぐ外側にも少し多めに描画し、スクロール時のちらつきを防ぐ
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
+  const scrollRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const update = () => setViewportHeight(el.clientHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const onGridScroll = () => {
+    if (scrollRafRef.current != null) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      setScrollTop(gridRef.current?.scrollTop ?? 0);
+    });
+  };
+
+  const rowWindowStart = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
+  const rowWindowCount = Math.ceil(viewportHeight / ROW_HEIGHT) + ROW_OVERSCAN * 2;
+  const rowWindowEnd = Math.min(rows2.length, rowWindowStart + rowWindowCount);
+
+  // 矢印キー/Tab等で選択セルが描画範囲の外へ移動したら、その行が見えるようスクロールを合わせる
+  // (仮想化により範囲外の行はそもそもDOMに存在しないため、選択だけ移動して見えなくなるのを防ぐ)
+  useEffect(() => {
+    if (!sel || !gridRef.current) return;
+    const el = gridRef.current;
+    const rowTop = sel.fr * ROW_HEIGHT;
+    const rowBottom = rowTop + ROW_HEIGHT;
+    if (rowTop < el.scrollTop) {
+      el.scrollTop = rowTop;
+    } else if (rowBottom > el.scrollTop + el.clientHeight) {
+      el.scrollTop = rowBottom - el.clientHeight;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel?.fr]);
+
   // Tabキーでのセル移動(要望)。セルの編集を終えた直後は一瞬 document.body にフォーカスが
   // 移る(blur→再フォーカスの間)ため、gridRef経由のバブリングに頼るonKeyDownだけでは
   // そのタイミングでTabを取りこぼす。window直下でcapture登録し、フォーカスがグリッド内部
@@ -656,8 +703,6 @@ export function DataTable<T>({
   // 行数が多いとセルごとに何度もbounds(sel)を呼ぶコストが積み上がるため、描画1回につき1度だけ計算する
   // (要望: 表示が重い問題の軽減)
   const selBoundsOnce = sel ? bounds(sel) : null;
-  // 1行分の推定高さ(content-visibility用)。実測値が分かればブラウザが自動的にそちらへ合わせる。
-  const estimatedRowHeight = fontSize + 18;
 
   return (
     <div
@@ -820,6 +865,7 @@ export function DataTable<T>({
         ref={gridRef}
         tabIndex={0}
         onKeyDown={onGridKeyDown}
+        onScroll={onGridScroll}
         style={{ overflow: 'auto', maxHeight: 'calc(100vh - 230px)', outline: 'none' }}
       >
         <table style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
@@ -927,7 +973,16 @@ export function DataTable<T>({
                 </td>
               </tr>
             ) : (
-              rows2.map((row, i) => {
+              <>
+                {/* 仮想化: 画面付近の行だけを実際にレンダリングし、前後は高さだけのダミー行で埋める
+                    (要望: 件数が数千〜数万件になっても軽く保つ) */}
+                {rowWindowStart > 0 && (
+                  <tr aria-hidden="true">
+                    <td colSpan={columns.length + 1} style={{ padding: 0, border: 'none', height: rowWindowStart * ROW_HEIGHT }} />
+                  </tr>
+                )}
+                {rows2.slice(rowWindowStart, rowWindowEnd).map((row, sliceIdx) => {
+                const i = rowWindowStart + sliceIdx;
                 const restingBackground: string = String(
                   rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
                 );
@@ -945,9 +1000,6 @@ export function DataTable<T>({
                         borderTop: dragOverRow === i ? '2px solid var(--color-primary)' : undefined,
                         ...rowStyle?.(row),
                         background: restingBackground,
-                        // 画面外の行はブラウザに描画をスキップさせ、行数が多い一覧を軽くする(要望)
-                        contentVisibility: 'auto',
-                        containIntrinsicSize: `auto ${estimatedRowHeight}px`,
                       }}
                     >
                       <td
@@ -1072,7 +1124,16 @@ export function DataTable<T>({
                     )}
                   </Fragment>
                 );
-              })
+                })}
+                {rowWindowEnd < rows2.length && (
+                  <tr aria-hidden="true">
+                    <td
+                      colSpan={columns.length + 1}
+                      style={{ padding: 0, border: 'none', height: (rows2.length - rowWindowEnd) * ROW_HEIGHT }}
+                    />
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
           {footerRow && (
