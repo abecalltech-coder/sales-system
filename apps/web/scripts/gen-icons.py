@@ -126,6 +126,7 @@ def write_png_rgba(path, size, pixels):
     print(f'wrote {path} ({len(png)} bytes)')
 
 if __name__ == '__main__':
-    write_png_rgba(os.path.join(OUT_DIR, 'icon-192.png'), 192, render(192, rounded=True))
-    write_png_rgba(os.path.join(OUT_DIR, 'icon-512.png'), 512, render(512, rounded=True))
+    # マークが角丸の左右ギリギリまで届いていた(要望)ため、0.8倍に縮小して余白を作る
+    write_png_rgba(os.path.join(OUT_DIR, 'icon-192.png'), 192, render(192, rounded=True, mark_scale=0.8))
+    write_png_rgba(os.path.join(OUT_DIR, 'icon-512.png'), 512, render(512, rounded=True, mark_scale=0.8))
     write_png_rgba(os.path.join(OUT_DIR, 'icon-512-maskable.png'), 512, render(512, rounded=False, mark_scale=0.72))
