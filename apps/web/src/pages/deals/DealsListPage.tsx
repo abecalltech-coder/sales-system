@@ -9,6 +9,7 @@ import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
+import { BulkImportDealsModal } from './BulkImportDealsModal';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
@@ -26,6 +27,7 @@ export function DealsListPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   const [personFilter, setPersonFilter] = useState<string | null>(null);
   const pageSize = 100;
@@ -257,6 +259,9 @@ export function DealsListPage() {
             <button onClick={() => openPanel()} style={{ fontSize: 13 }}>
               列を管理
             </button>
+            <button onClick={() => setBulkImportOpen(true)} style={{ fontSize: 13 }}>
+              一括投入
+            </button>
             <button className="btn-primary" onClick={() => setAddOpen(true)} style={{ fontSize: 13 }}>
               ＋ 案件追加
             </button>
@@ -337,6 +342,15 @@ export function DealsListPage() {
           submitting={createMutation.isPending}
           onCancel={() => setAddOpen(false)}
           onSubmit={(values) => createMutation.mutate(values)}
+        />
+      )}
+
+      {bulkImportOpen && (
+        <BulkImportDealsModal
+          fields={fields ?? []}
+          userOptions={userOptions ?? []}
+          onClose={() => setBulkImportOpen(false)}
+          onImported={invalidate}
         />
       )}
     </AppLayout>

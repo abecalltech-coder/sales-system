@@ -1,6 +1,7 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { DealsService } from './deals.service';
 import {
+  BulkCreateDealsDto,
   CreateDealDto,
   CreateDealFieldDto,
   CreateDealFieldOptionDto,
@@ -89,6 +90,12 @@ export class DealsController {
   @Post()
   create(@Body() dto: CreateDealDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.create(dto, user.id);
+  }
+
+  @RequirePermissions({ resource: 'deal', action: 'create' })
+  @Post('bulk-create')
+  bulkCreate(@Body() dto: BulkCreateDealsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.bulkCreate(dto.rows, user.id);
   }
 
   @RequirePermissions({ resource: 'deal', action: 'edit' })

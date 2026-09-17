@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 const DATA_TYPES = ['TEXT', 'DATE', 'SELECT', 'USER'] as const;
@@ -25,6 +25,14 @@ export class CreateDealDto {
   @IsOptional()
   @IsObject()
   values?: Record<string, unknown>;
+}
+
+/** 一括投入(要望): 外部シートを貼り付けてまとめて案件を作成する */
+export class BulkCreateDealsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateDealDto)
+  rows!: CreateDealDto[];
 }
 
 export class UpdateDealDto {

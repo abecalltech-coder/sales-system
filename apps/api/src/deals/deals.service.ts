@@ -150,6 +150,26 @@ export class DealsService {
     });
   }
 
+  // 一括投入(要望): 外部シートを貼り付けてまとめて作成する。既存行の先頭に積む(create()と同じ並び)。
+  async bulkCreate(rows: { values?: Record<string, unknown> }[], userId: string) {
+    if (rows.length === 0) return { ok: true, count: 0 };
+    const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
+    const base = (min._min.manualOrder ?? 0) - 10 * rows.length;
+    const created = await this.prisma.$transaction(
+      rows.map((r, i) =>
+        this.prisma.deal.create({
+          data: {
+            values: clean((r.values ?? {}) as Record<string, unknown>) as Prisma.InputJsonValue,
+            manualOrder: base + i * 10,
+            createdBy: userId,
+            updatedBy: userId,
+          },
+        }),
+      ),
+    );
+    return { ok: true, count: created.length };
+  }
+
   async update(id: string, dto: UpdateDealDto, userId: string) {
     const existing = await this.findOne(id);
     if (existing.version !== dto.version) {
