@@ -290,42 +290,37 @@ export function DataTable<T>({
     if (!text) return;
     const matrix = parseClipboard(text);
     const b = bounds(s);
-    const single = matrix.length === 1 && matrix[0].length === 1;
+    const mRows = matrix.length;
+    const mCols = Math.max(...matrix.map((m) => m.length));
+    // 貼り付け先が複数セル選択されている場合、コピー元より広ければコピー元のパターンを
+    // 繰り返して選択範囲全体を埋める(要望: 複数選択していても1セル目にしか反映されない不具合の修正)。
+    // 選択が1セルだけ、またはコピー元より小さい場合はコピー元の大きさをそのまま使う。
+    const targetRows = Math.max(b.r1 - b.r0 + 1, mRows);
+    const targetCols = Math.max(b.c1 - b.c0 + 1, mCols);
     const ops: UndoCell[] = [];
     const cols = columnsRef.current;
     const allRows = rowsRef.current;
 
-    if (single) {
-      const v = matrix[0][0];
-      for (let r = b.r0; r <= b.r1 && r < allRows.length; r++) {
-        for (let c = b.c0; c <= b.c1 && c < cols.length; c++) {
-          const col = cols[c];
-          if (!col.pasteValue) continue;
-          ops.push({ rowId: getRowId(allRows[r]), colKey: col.key, before: col.copyValue?.(allRows[r]) ?? '', after: v });
-          col.pasteValue(allRows[r], v);
-        }
+    for (let dr = 0; dr < targetRows; dr++) {
+      const tr = b.r0 + dr;
+      if (tr >= allRows.length) break;
+      const srcRow = matrix[dr % mRows];
+      for (let dc = 0; dc < targetCols; dc++) {
+        const tc = b.c0 + dc;
+        if (tc >= cols.length) break;
+        const col = cols[tc];
+        if (!col.pasteValue) continue;
+        const v = srcRow[dc % srcRow.length] ?? '';
+        ops.push({ rowId: getRowId(allRows[tr]), colKey: col.key, before: col.copyValue?.(allRows[tr]) ?? '', after: v });
+        col.pasteValue(allRows[tr], v);
       }
-    } else {
-      for (let dr = 0; dr < matrix.length; dr++) {
-        const tr = b.r0 + dr;
-        if (tr >= allRows.length) break;
-        for (let dc = 0; dc < matrix[dr].length; dc++) {
-          const tc = b.c0 + dc;
-          if (tc >= cols.length) break;
-          const col = cols[tc];
-          if (!col.pasteValue) continue;
-          const v = matrix[dr][dc];
-          ops.push({ rowId: getRowId(allRows[tr]), colKey: col.key, before: col.copyValue?.(allRows[tr]) ?? '', after: v });
-          col.pasteValue(allRows[tr], v);
-        }
-      }
-      setSel({
-        ar: b.r0,
-        ac: b.c0,
-        fr: Math.min(b.r0 + matrix.length - 1, allRows.length - 1),
-        fc: Math.min(b.c0 + Math.max(...matrix.map((m) => m.length)) - 1, cols.length - 1),
-      });
     }
+    setSel({
+      ar: b.r0,
+      ac: b.c0,
+      fr: Math.min(b.r0 + targetRows - 1, allRows.length - 1),
+      fc: Math.min(b.c0 + targetCols - 1, cols.length - 1),
+    });
     pushUndo(ops);
     flash('貼り付けました');
   };
@@ -364,6 +359,22 @@ export function DataTable<T>({
     const isSelect = t.tagName === 'SELECT';
     const inTextField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
     const mod = e.ctrlKey || e.metaKey;
+
+    // Tab/Shift+Tabは入力欄の編集中でも常に有効にし、選択セルを基準に右/左のセルへ移動する
+    // (要望: Tabキーでのセル移動に対応。編集中の値はフォーカスを外す=既存のonBlurで確定される)
+    if (e.key === 'Tab' && sel) {
+      e.preventDefault();
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active !== gridRef.current) active.blur();
+      const dc = e.shiftKey ? -1 : 1;
+      setSel((s) => {
+        if (!s) return s;
+        const fc = Math.max(0, Math.min(columnsRef.current.length - 1, s.fc + dc));
+        return { ar: s.fr, ac: fc, fr: s.fr, fc };
+      });
+      window.setTimeout(() => gridRef.current?.focus({ preventScroll: true }), 0);
+      return;
+    }
 
     // テキスト入力欄はネイティブ挙動(文字のコピー・元に戻す等)に任せる。
     if (inTextField) return;
