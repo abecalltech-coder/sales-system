@@ -26,7 +26,7 @@ export function CommentsPanel({ entityType, entityId }: CommentsPanelProps) {
 
   return (
     <div style={{ marginTop: 24, borderTop: '1px solid #e5e7eb', paddingTop: 16 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>コメント</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>コメント</h2>
 
       {isLoading && <p style={{ fontSize: 13, color: '#9ca3af' }}>読み込み中...</p>}
       {!isLoading && comments?.length === 0 && <p style={{ fontSize: 13, color: '#9ca3af' }}>まだコメントはありません</p>}

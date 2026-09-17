@@ -571,7 +571,7 @@ export function DataTable<T>({
           {hiddenCount > 0 && (
             <span style={{ color: 'var(--color-text-muted)' }}>
               🚫 {hiddenCount}行 非表示中{' '}
-              <button onClick={unhideAll} style={{ fontSize: 10, padding: '1px 6px', marginLeft: 2 }}>
+              <button onClick={unhideAll} style={{ fontSize: 11, padding: '1px 6px', marginLeft: 2 }}>
                 すべて表示
               </button>
             </span>
@@ -661,7 +661,7 @@ export function DataTable<T>({
                   textAlign: 'center',
                   color: 'var(--color-text-faint)',
                   fontWeight: 600,
-                  fontSize: 9,
+                  fontSize: 10,
                   borderRight: '1px solid var(--color-border)',
                 }}
               >
@@ -759,7 +759,7 @@ export function DataTable<T>({
                         }
                         style={{
                           textAlign: 'center',
-                          fontSize: 9,
+                          fontSize: 10,
                           color: 'var(--color-text-faint)',
                           userSelect: 'none',
                           cursor: reorderable ? 'grab' : 'pointer',

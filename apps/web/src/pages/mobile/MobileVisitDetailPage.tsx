@@ -130,7 +130,7 @@ export function MobileVisitDetailPage() {
         <button onClick={() => navigate('/m')} style={{ fontSize: 13, marginBottom: 8 }}>
           ← 戻る
         </button>
-        <h1 style={{ fontSize: 17, fontWeight: 700 }}>{customer?.corporateName ?? '法人名未登録'}</h1>
+        <h1 style={{ fontSize: 16, fontWeight: 700 }}>{customer?.corporateName ?? '法人名未登録'}</h1>
         <p style={{ fontSize: 13, color: '#6b7280' }}>{customer?.contactName}</p>
       </header>
 
@@ -152,7 +152,7 @@ export function MobileVisitDetailPage() {
 
         {showResultForm && (
           <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 16, marginTop: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>商談結果</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>商談結果</div>
             <select value={meetingResult} onChange={(e) => setMeetingResult(e.target.value)} style={{ width: '100%', padding: 10, fontSize: 15, marginBottom: 12 }}>
               {MEETING_RESULTS.map((r) => (
                 <option key={r} value={r}>

@@ -201,7 +201,7 @@ export function MonthlySummaryTab() {
 
   const footerRow = data ? (
     <>
-      <td style={{ textAlign: 'center', fontSize: 9, color: 'var(--color-text-faint)' }}>Σ</td>
+      <td style={{ textAlign: 'center', fontSize: 10, color: 'var(--color-text-faint)' }}>Σ</td>
       <td style={{ padding: '3px 8px' }}>合計</td>
       <td />
       <td />

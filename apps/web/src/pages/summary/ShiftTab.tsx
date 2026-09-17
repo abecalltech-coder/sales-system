@@ -141,7 +141,7 @@ export function ShiftTab() {
         renderHeader: () => (
           <div style={{ textAlign: 'center', lineHeight: 1.15 }}>
             <div>{`${Number(m)}/${Number(d)}`}</div>
-            <div style={{ fontSize: 9, color: weekend ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>{wd}</div>
+            <div style={{ fontSize: 10, color: weekend ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>{wd}</div>
           </div>
         ),
         render: (r) => (
@@ -171,7 +171,7 @@ export function ShiftTab() {
 
   const footerRow = data ? (
     <>
-      <td style={{ textAlign: 'center', fontSize: 9, color: 'var(--color-text-faint)' }}>Σ</td>
+      <td style={{ textAlign: 'center', fontSize: 10, color: 'var(--color-text-faint)' }}>Σ</td>
       {columns.map((c) => {
         if (c.key === 'no') return <td key="no" style={{ padding: '3px 8px' }}>合計</td>;
         if (c.key === '_actualHours')

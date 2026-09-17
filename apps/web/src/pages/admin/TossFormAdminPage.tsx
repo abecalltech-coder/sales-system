@@ -161,7 +161,7 @@ function FieldCard({
           defaultValue={f.label}
           onBlur={(e) => e.target.value.trim() && e.target.value !== f.label && onPatch({ label: e.target.value.trim() })}
           placeholder="項目名(アポインターに表示される名前)"
-          style={{ flex: 1, fontSize: 14, fontWeight: 700, padding: '5px 8px' }}
+          style={{ flex: 1, fontSize: 13, fontWeight: 700, padding: '5px 8px' }}
         />
         <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
           <input type="checkbox" defaultChecked={f.required} onChange={(e) => onPatch({ required: e.target.checked })} />

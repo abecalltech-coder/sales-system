@@ -303,7 +303,7 @@ function CategoryCard({
         background: 'var(--color-surface)',
       }}
     >
-      <h2 style={{ fontSize: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <h2 style={{ fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
         {label}
         {shared && (
           <span
@@ -412,13 +412,13 @@ function ProductsAndSources() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
       <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 14, background: 'var(--color-surface)' }}>
-        <h2 style={{ fontSize: 14, marginBottom: 10 }}>商材</h2>
+        <h2 style={{ fontSize: 15, marginBottom: 10 }}>商材</h2>
         <ul style={{ fontSize: 13, paddingLeft: 18 }}>
           {products?.map((p) => <li key={p.id}>{p.name}</li>)}
         </ul>
       </div>
       <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 14, background: 'var(--color-surface)' }}>
-        <h2 style={{ fontSize: 14, marginBottom: 10 }}>流入元</h2>
+        <h2 style={{ fontSize: 15, marginBottom: 10 }}>流入元</h2>
         <ul style={{ fontSize: 13, paddingLeft: 18 }}>
           {sources?.map((s) => <li key={s.id}>{s.name}</li>)}
         </ul>

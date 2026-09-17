@@ -150,7 +150,7 @@ export function FinalReportPage() {
                     return (
                       <th key={d} style={{ ...th, minWidth: cellW, width: cellW, background: d === today ? 'var(--color-primary-soft)' : th.background }}>
                         <div>{d.slice(5).replace('-', '/').replace(/^0/, '')}</div>
-                        <div style={{ fontSize: 9, color: weekend ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>{WEEKDAYS[dow]}</div>
+                        <div style={{ fontSize: 10, color: weekend ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>{WEEKDAYS[dow]}</div>
                       </th>
                     );
                   })}

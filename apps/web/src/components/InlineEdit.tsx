@@ -7,6 +7,13 @@ import {
   parseTimeText as parseFlexTimeText,
 } from '../lib/dateInput';
 import { pastel, readableTextColor } from '../lib/color';
+import { useIsCoarsePointer } from '../lib/useIsCoarsePointer';
+
+/** キーボード表示中も隠れずに収まるよう、ソフトキーボードを差し引いた実際の可視範囲を返す。 */
+function visibleViewport() {
+  const vv = window.visualViewport;
+  return { height: vv?.height ?? window.innerHeight, top: vv?.offsetTop ?? 0 };
+}
 
 const baseStyle: CSSProperties = {
   border: 'none',
@@ -23,7 +30,7 @@ const baseStyle: CSSProperties = {
  * 一覧セルをその場で書き換える部品。フォーカス時はセルいっぱいに textarea を敷き、
  * 枠(ポップアップ)を出さず「セルの中で編集している」見た目にする(要望)。
  * expand 指定(備考等)のときだけ、下方向に広げて全文を表示する。
- * Enterで確定、Shift+Enterで改行。
+ * Enterは常に改行。確定はPC: Shift/Ctrl/Alt+Enter、スマホ: 「確定」ボタン(要望)。
  */
 export function InlineText({
   value,
@@ -45,8 +52,11 @@ export function InlineText({
   const [focused, setFocused] = useState(false);
   // expand時: セルの overflow:hidden を抜けるため position:fixed でセル位置に貼り付ける
   const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  // ソフトキーボードで狭くなった実際の可視範囲(高さ・上端オフセット)
+  const [viewport, setViewport] = useState(() => visibleViewport());
   const anchorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isCoarsePointer = useIsCoarsePointer();
 
   useEffect(() => setDraft(value ?? ''), [value]);
 
@@ -55,6 +65,7 @@ export function InlineText({
     if (!el) return;
     const r = el.getBoundingClientRect();
     setRect({ top: r.top, left: r.left, width: r.width });
+    setViewport(visibleViewport());
   };
 
   useLayoutEffect(() => {
@@ -63,9 +74,14 @@ export function InlineText({
     const on = () => updateRect();
     window.addEventListener('scroll', on, true);
     window.addEventListener('resize', on);
+    // ソフトキーボードの開閉はwindowのresizeではなくvisualViewportのresize/scrollで通知される
+    window.visualViewport?.addEventListener('resize', on);
+    window.visualViewport?.addEventListener('scroll', on);
     return () => {
       window.removeEventListener('scroll', on, true);
       window.removeEventListener('resize', on);
+      window.visualViewport?.removeEventListener('resize', on);
+      window.visualViewport?.removeEventListener('scroll', on);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused, expand]);
@@ -75,15 +91,21 @@ export function InlineText({
     const el = textareaRef.current;
     if (!focused || !expand || !el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 140), Math.round(window.innerHeight * 0.6))}px`;
-  }, [focused, expand, draft, rect]);
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 140), Math.round(viewport.height * 0.6))}px`;
+  }, [focused, expand, draft, rect, viewport.height]);
 
   const commit = () => {
     setFocused(false);
     if (draft !== (value ?? '')) onSave(draft);
   };
+  const cancel = () => {
+    setDraft(value ?? '');
+    setFocused(false);
+  };
 
   const previewText = (value ?? '').replace(/\n/g, ' ');
+  // 見えている範囲(キーボードで隠れる分を除く)の下端。ここより下にはみ出さないようにする。
+  const visibleBottom = viewport.top + viewport.height;
 
   return (
     <div
@@ -104,9 +126,8 @@ export function InlineText({
       }}
     >
       {previewText || (placeholder && <span style={{ color: 'var(--color-text-faint)' }}>{placeholder}</span>)}
-      {focused && (!expand || rect) && (
+      {focused && !expand && (
         <textarea
-          ref={textareaRef}
           autoFocus
           value={draft}
           disabled={disabled}
@@ -116,61 +137,104 @@ export function InlineText({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
               e.preventDefault();
               (e.target as HTMLTextAreaElement).blur();
             } else if (e.key === 'Escape') {
-              setDraft(value ?? '');
-              (e.target as HTMLTextAreaElement).blur();
+              e.preventDefault();
+              cancel();
             }
+            // Enter単体は既定の改行動作のまま(要望: PC・スマホ共通でEnterは改行)
           }}
-          style={
-            expand && rect
-              ? {
-                  // セルの位置に固定表示し、内容に合わせて下方向へ広げて全文を見せる。
-                  // 画面下端で見切れないよう上方向に寄せる
-                  position: 'fixed',
-                  top: Math.min(rect.top, Math.max(8, window.innerHeight - 240)),
-                  left: Math.min(rect.left, window.innerWidth - Math.max(rect.width, 380) - 12),
-                  width: Math.max(rect.width, 380),
-                  minHeight: 140,
-                  maxHeight: '60vh',
-                  overflowY: 'auto',
-                  zIndex: 1000,
-                  resize: 'none',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  font: 'inherit',
-                  fontSize: 12,
-                  color: 'var(--color-text)',
-                  lineHeight: 1.55,
-                  padding: '4px 8px',
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: 'var(--shadow-lg)',
-                }
-              : {
-                  position: 'absolute',
-                  inset: 0,
-                  width: '100%',
-                  height: '100%',
-                  zIndex: 30,
-                  resize: 'none',
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
-                  font: 'inherit',
-                  color: 'var(--color-text)',
-                  lineHeight: 'inherit',
-                  padding: 'inherit',
-                  margin: 0,
-                  background: 'var(--color-surface)',
-                  border: 'none',
-                  outline: 'none',
-                  borderRadius: 0,
-                }
-          }
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            zIndex: 30,
+            resize: 'none',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            font: 'inherit',
+            color: 'var(--color-text)',
+            lineHeight: 'inherit',
+            padding: 'inherit',
+            margin: 0,
+            background: 'var(--color-surface)',
+            border: 'none',
+            outline: 'none',
+            borderRadius: 0,
+          }}
         />
+      )}
+      {focused && expand && rect && (
+        // セルの位置を起点に、可視範囲(ソフトキーボードで隠れる分を除く)へ確実に収まるよう
+        // textareaと確定ボタンを1つの固定位置コンテナにまとめる(要望: 入力欄全体がキーボード上に収まるように)。
+        <div
+          style={{
+            position: 'fixed',
+            top: Math.min(rect.top, Math.max(viewport.top + 8, visibleBottom - 240)),
+            left: Math.min(rect.left, window.innerWidth - Math.max(rect.width, 380) - 12),
+            width: Math.max(rect.width, 380),
+            maxHeight: Math.max(160, Math.round(viewport.height * 0.7)),
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            zIndex: 1000,
+          }}
+        >
+          <textarea
+            ref={textareaRef}
+            autoFocus
+            value={draft}
+            disabled={disabled}
+            placeholder={placeholder}
+            rows={1}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey)) {
+                e.preventDefault();
+                (e.target as HTMLTextAreaElement).blur();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancel();
+              }
+              // Enter単体は既定の改行動作のまま(要望: PC・スマホ共通でEnterは改行)
+            }}
+            style={{
+              flex: 1,
+              minHeight: 140,
+              overflowY: 'auto',
+              resize: 'none',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              font: 'inherit',
+              fontSize: 12,
+              color: 'var(--color-text)',
+              lineHeight: 1.55,
+              padding: '4px 8px',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-primary)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-lg)',
+            }}
+          />
+          {isCoarsePointer && (
+            <button
+              type="button"
+              // pointerDownの時点でpreventDefaultし、ボタン押下でtextareaのフォーカスが外れない
+              // (=onBlurで先にcommitされてボタンが消える)ようにしてからonClickでcommitする
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={commit}
+              className="btn-primary"
+              style={{ fontSize: 12, padding: '7px 14px', flexShrink: 0, boxShadow: 'var(--shadow-md)' }}
+            >
+              確定
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

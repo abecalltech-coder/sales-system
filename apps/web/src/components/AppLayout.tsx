@@ -168,7 +168,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               >
                 CH
               </div>
-              <div style={{ fontWeight: 700, fontSize: 12.5, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+              <div style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                 CH partners実績管理
               </div>
             </div>
