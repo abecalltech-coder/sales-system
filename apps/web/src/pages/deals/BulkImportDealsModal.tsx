@@ -5,15 +5,15 @@ import { parseDateText } from '../../lib/dateInput';
 
 // 外部シートの列名 → 案件管理の項目名(要望で指定されたマッピング)
 const SOURCE_TO_TARGET_LABEL: [string, string][] = [
-  ['訪問日', '訪問日'],
+  ['訪問日', '商談日'],
   ['CL', '担当者名'],
   ['フック', 'フック'],
   ['部署', '部署'],
-  ['店舗名', '店舗名'],
+  ['店舗名', '案件名'],
   ['ET日', 'エントリー日'],
   ['進捗', 'ステータス'],
   ['申込番号', '申込番号'],
-  ['MCOK日', 'MCOK日'],
+  ['MCOK日', 'MC日'],
 ];
 
 function parseTsv(text: string): string[][] {
