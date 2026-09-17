@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
+import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate } from '../../components/InlineEdit';
 import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -11,6 +12,9 @@ import { QuickAddDealModal } from './QuickAddDealModal';
 
 const MANAGE_OPTIONS = '__manage_options__';
 const ADD_COLUMN_KEY = '__add_column__';
+const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
+// 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
+const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
 
 export function DealsListPage() {
   const [page, setPage] = useState(1);
@@ -19,12 +23,20 @@ export function DealsListPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
+  const [personFilter, setPersonFilter] = useState<string | null>(null);
   const pageSize = 100;
   const queryClient = useQueryClient();
 
   const { data, isLoading, error: listError } = useDeals({ page, pageSize, keyword: keyword || undefined });
   const { data: fields } = useDealFields();
   const { data: userOptions } = useUserOptions();
+
+  // 案件名で検索の右に出す「CL・責任者」の人物フィルター(要望: 押すとその人だけの案件を表示)
+  const personFilterOptions = useMemo(
+    () => (userOptions ?? []).filter((u) => u.roles.some((r) => PERSON_FILTER_ROLES.includes(r))),
+    [userOptions],
+  );
 
   const displayedError = error ?? (listError instanceof ApiError ? listError.message : listError ? '一覧の取得に失敗しました' : null);
 
@@ -69,7 +81,7 @@ export function DealsListPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '並び替えに失敗しました'),
   });
 
-  const rows = useMemo(() => data?.items ?? [], [data]);
+  const rawRows = useMemo(() => data?.items ?? [], [data]);
 
   const fieldColumn = (field: DealFieldItem): Column<DealListItem> => {
     const key = field.fieldKey;
@@ -162,8 +174,24 @@ export function DealsListPage() {
     };
   };
 
+  // 各項目の絞り込み(要望)。列に表示される文字列(copyValueと同じ変換)を選択肢にする。
+  const optionsFor = (col: Column<DealListItem>) => {
+    if (!col.copyValue) return [];
+    const set = new Set<string>();
+    for (const r of rawRows) set.add(col.copyValue(r));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'));
+  };
+  const filterHeaderFor = (col: Column<DealListItem>) => () => (
+    <ColumnFilterHeader
+      label={col.label}
+      options={optionsFor(col)}
+      selected={filters[col.key] ?? null}
+      onChange={(sel) => setFilters((f) => ({ ...f, [col.key]: sel }))}
+    />
+  );
+
   const columns: Column<DealListItem>[] = useMemo(() => {
-    const cols = (fields ?? []).map(fieldColumn);
+    const cols = (fields ?? []).map(fieldColumn).map((col) => ({ ...col, renderHeader: filterHeaderFor(col) }));
     cols.push({
       key: ADD_COLUMN_KEY,
       label: '',
@@ -177,7 +205,24 @@ export function DealsListPage() {
     });
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, userOptions]);
+  }, [fields, userOptions, filters, rawRows]);
+
+  const rows = useMemo(() => {
+    let filtered = rawRows;
+    if (Object.values(filters).some((sel) => sel != null)) {
+      filtered = filtered.filter((r) =>
+        Object.entries(filters).every(([key, sel]) => {
+          if (!sel) return true;
+          const col = columns.find((c) => c.key === key);
+          return col?.copyValue ? sel.has(col.copyValue(r)) : true;
+        }),
+      );
+    }
+    if (personFilter) {
+      filtered = filtered.filter((r) => r.values[ASSIGNEE_FIELD_KEY] === personFilter);
+    }
+    return filtered;
+  }, [rawRows, filters, personFilter, columns]);
 
   return (
     <AppLayout>
@@ -196,7 +241,7 @@ export function DealsListPage() {
 
         {displayedError && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{displayedError}</p>}
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <input
             placeholder="案件名で検索"
             value={keyword}
@@ -206,6 +251,27 @@ export function DealsListPage() {
             }}
             style={{ padding: 6, fontSize: 13, width: 240 }}
           />
+          {personFilterOptions.length > 0 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {personFilterOptions.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setPersonFilter((cur) => (cur === u.id ? null : u.id))}
+                  style={{
+                    fontSize: 12,
+                    padding: '4px 12px',
+                    border: 'none',
+                    borderRadius: 999,
+                    fontWeight: personFilter === u.id ? 700 : 500,
+                    background: personFilter === u.id ? 'var(--color-primary-soft)' : 'var(--color-subtle)',
+                    color: personFilter === u.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {u.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <DataTable

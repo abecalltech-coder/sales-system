@@ -153,25 +153,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
         >
           {!collapsed && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-              <div
-                style={{
-                  width: 26,
-                  height: 26,
-                  flexShrink: 0,
-                  borderRadius: 7,
-                  background: 'linear-gradient(150deg, #4762e0 0%, #2c44b4 100%)',
-                  color: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: 10,
-                  letterSpacing: '-0.02em',
-                  boxShadow: '0 2px 6px rgba(44, 68, 180, 0.35)',
-                }}
-              >
-                CH
-              </div>
+              <img
+                src="/icons/icon-512.png"
+                alt="CH partners"
+                width={26}
+                height={26}
+                style={{ flexShrink: 0, borderRadius: 7, boxShadow: '0 2px 6px rgba(44, 68, 180, 0.35)' }}
+              />
               <div style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                 CH partners実績管理
               </div>

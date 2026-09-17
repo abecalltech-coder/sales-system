@@ -37,24 +37,13 @@ export function LoginPage() {
     >
       <div style={{ width: 340 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: 9,
-              background: 'linear-gradient(150deg, #4762e0 0%, #2c44b4 100%)',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 13,
-              letterSpacing: '-0.02em',
-              boxShadow: '0 4px 12px rgba(44, 68, 180, 0.35)',
-            }}
-          >
-            CH
-          </div>
+          <img
+            src="/icons/icon-512.png"
+            alt="CH partners"
+            width={34}
+            height={34}
+            style={{ borderRadius: 9, boxShadow: '0 4px 12px rgba(44, 68, 180, 0.35)' }}
+          />
           <div>
             <div style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.015em' }}>CH partners実績管理</div>
             <div style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>Sales Pipeline Management</div>

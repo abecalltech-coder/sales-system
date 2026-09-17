@@ -450,6 +450,7 @@ export interface UserOption {
   employeeCode: string | null;
   departmentId: string | null;
   teamId: string | null;
+  roles: string[];
 }
 
 export function useUserOptions() {

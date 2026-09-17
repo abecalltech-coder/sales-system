@@ -52,11 +52,26 @@ export class UsersService {
 
   /** 行追加のユーザー選択などで使う軽量なロスター。認証ユーザーなら誰でも取得できる。 */
   async options() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where: { deletedAt: null, status: { not: 'RETIRED' } },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, employeeCode: true, departmentId: true, teamId: true },
+      select: {
+        id: true,
+        name: true,
+        employeeCode: true,
+        departmentId: true,
+        teamId: true,
+        roles: { select: { role: { select: { code: true } } } },
+      },
     });
+    return users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      employeeCode: u.employeeCode,
+      departmentId: u.departmentId,
+      teamId: u.teamId,
+      roles: u.roles.map((ur) => ur.role.code),
+    }));
   }
 
   async findOne(id: string) {
