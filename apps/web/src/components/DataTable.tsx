@@ -820,12 +820,18 @@ export function DataTable<T>({
               <th
                 title="行番号(クリックで行選択・ドラッグで範囲)"
                 style={{
+                  position: 'sticky',
+                  top: 0,
+                  left: 0,
+                  zIndex: 4,
                   padding: 0,
                   textAlign: 'center',
                   color: 'var(--color-text-faint)',
                   fontWeight: 600,
                   fontSize: 10,
+                  background: 'var(--color-subtle)',
                   borderRight: '1px solid var(--color-border)',
+                  borderBottom: '1px solid var(--color-border-strong)',
                 }}
               >
                 #
@@ -853,7 +859,10 @@ export function DataTable<T>({
                   }}
                   title={colReorderable && !col.locked ? 'ドラッグで列の並び替え / 右クリックで列メニュー' : undefined}
                   style={{
-                    position: 'relative',
+                    position: 'sticky',
+                    top: 0,
+                    left: colIdx === 0 ? GUTTER_WIDTH : undefined,
+                    zIndex: colIdx === 0 ? 3 : 2,
                     padding: '4px 8px',
                     color: 'var(--color-text-muted)',
                     fontWeight: 700,
@@ -863,6 +872,9 @@ export function DataTable<T>({
                     overflow: col.renderHeader ? 'visible' : 'hidden',
                     textOverflow: 'ellipsis',
                     cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
+                    background: 'var(--color-subtle)',
+                    borderBottom: '1px solid var(--color-border-strong)',
+                    borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
                     borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,
                     ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                   }}
@@ -937,13 +949,17 @@ export function DataTable<T>({
                             : 'クリックで行選択(Shiftで範囲)'
                         }
                         style={{
+                          position: 'sticky',
+                          left: 0,
+                          zIndex: 1,
                           textAlign: 'center',
                           fontSize: 10,
                           color: 'var(--color-text-faint)',
                           userSelect: 'none',
                           cursor: reorderable ? 'grab' : 'pointer',
                           borderRight: '1px solid var(--color-border)',
-                          background: sel && i >= bounds(sel).r0 && i <= bounds(sel).r1 ? 'var(--color-primary-soft)' : undefined,
+                          background:
+                            sel && i >= bounds(sel).r0 && i <= bounds(sel).r1 ? 'var(--color-primary-soft)' : restingBackground,
                         }}
                       >
                         {i + 1}
@@ -975,11 +991,14 @@ export function DataTable<T>({
                             onMouseEnter={() => onCellMouseEnter(i, colIdx)}
                             onContextMenu={(e) => onCellContextMenu(e, i)}
                             style={{
-                              position: 'relative',
+                              position: colIdx === 0 ? 'sticky' : 'relative',
+                              left: colIdx === 0 ? GUTTER_WIDTH : undefined,
+                              zIndex: colIdx === 0 ? 1 : undefined,
                               padding: '3px 8px',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
+                              borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
                               ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                               boxShadow: isFocusCell
                                 ? 'inset 0 0 0 2px var(--color-primary)'
@@ -993,7 +1012,9 @@ export function DataTable<T>({
                                   ? 'var(--color-primary-soft)'
                                   : cursor
                                     ? `${cursor.color}1a`
-                                    : undefined,
+                                    : colIdx === 0
+                                      ? restingBackground
+                                      : undefined,
                             }}
                           >
                             {cursor && (
