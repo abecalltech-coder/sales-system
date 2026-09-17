@@ -88,13 +88,18 @@ export const ROLE_DEFS: RoleDef[] = [
   { code: 'VIEWER', name: '閲覧専用', permissions: RESOURCES.map((r) => ({ resource: r, action: 'view', scope: 'ALL' })) },
   // 役職(要望: 各アカウントに必ず役職を付与し、役職ごとに表示タブをユーザー管理で設定できるようにする)。
   // 権限(閲覧/編集の範囲)は既存ロールと同じ仕組みで持たせつつ、表示タブはRole.visibleTabsで別途管理する。
+  // 要望: タブ表示権限がある役職は、見えるタブの機能(閲覧/編集/新規追加/削除)を全て使えるようにする。
+  // タブの表示/非表示はRole.visibleTabsで別途管理されるため、権限側は対象リソースに対し
+  // view/edit/create/deleteを揃えて付与し、「タブは見えるのに新規追加だけ403になる」ような
+  // 抜けが生まれないようにする。
   {
     code: 'AP',
     name: 'AP',
-    permissions: ['toss_case', 'appointment', 'customer'].flatMap((resource) => [
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
       { resource, action: 'view', scope: 'OWN' },
       { resource, action: 'edit', scope: 'OWN' },
       { resource, action: 'create', scope: 'OWN' },
+      { resource, action: 'delete', scope: 'OWN' },
     ]),
   },
   {
@@ -103,30 +108,28 @@ export const ROLE_DEFS: RoleDef[] = [
     permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
       { resource, action: 'view', scope: 'TEAM' },
       { resource, action: 'edit', scope: 'TEAM' },
+      { resource, action: 'create', scope: 'TEAM' },
+      { resource, action: 'delete', scope: 'TEAM' },
     ]),
   },
   {
     code: 'CL',
     name: 'CL',
-    permissions: [
-      ...['appointment', 'deal', 'customer'].flatMap((resource) => [
-        { resource, action: 'view', scope: 'TEAM' },
-        { resource, action: 'edit', scope: 'TEAM' },
-      ]),
-      { resource: 'contract', action: 'view', scope: 'ALL' },
-      { resource: 'contract', action: 'edit', scope: 'ALL' },
-    ],
+    permissions: ['toss_case', 'appointment', 'visit', 'contract', 'deal', 'customer'].flatMap((resource) => [
+      { resource, action: 'view', scope: 'TEAM' },
+      { resource, action: 'edit', scope: 'TEAM' },
+      { resource, action: 'create', scope: 'TEAM' },
+      { resource, action: 'delete', scope: 'TEAM' },
+    ]),
   },
   {
     code: 'RESPONSIBLE',
     name: '責任者',
-    permissions: [
-      ...RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
-        { resource, action: 'view', scope: 'DEPT' },
-        { resource, action: 'edit', scope: 'DEPT' },
-      ]),
-      { resource: 'deal', action: 'create', scope: 'DEPT' },
-      { resource: 'deal', action: 'delete', scope: 'DEPT' },
-    ],
+    permissions: RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
+      { resource, action: 'view', scope: 'DEPT' },
+      { resource, action: 'edit', scope: 'DEPT' },
+      { resource, action: 'create', scope: 'DEPT' },
+      { resource, action: 'delete', scope: 'DEPT' },
+    ]),
   },
 ];
