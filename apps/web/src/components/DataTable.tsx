@@ -653,6 +653,12 @@ export function DataTable<T>({
 
   const menuIds = selectedRowIds();
 
+  // 行数が多いとセルごとに何度もbounds(sel)を呼ぶコストが積み上がるため、描画1回につき1度だけ計算する
+  // (要望: 表示が重い問題の軽減)
+  const selBoundsOnce = sel ? bounds(sel) : null;
+  // 1行分の推定高さ(content-visibility用)。実測値が分かればブラウザが自動的にそちらへ合わせる。
+  const estimatedRowHeight = fontSize + 18;
+
   return (
     <div
       onPaste={onContainerPaste}
@@ -939,6 +945,9 @@ export function DataTable<T>({
                         borderTop: dragOverRow === i ? '2px solid var(--color-primary)' : undefined,
                         ...rowStyle?.(row),
                         background: restingBackground,
+                        // 画面外の行はブラウザに描画をスキップさせ、行数が多い一覧を軽くする(要望)
+                        contentVisibility: 'auto',
+                        containIntrinsicSize: `auto ${estimatedRowHeight}px`,
                       }}
                     >
                       <td
@@ -970,7 +979,9 @@ export function DataTable<T>({
                           cursor: reorderable ? 'grab' : 'pointer',
                           borderRight: '1px solid var(--color-border)',
                           background:
-                            sel && i >= bounds(sel).r0 && i <= bounds(sel).r1 ? 'var(--color-primary-soft)' : stickyBackground,
+                            selBoundsOnce && i >= selBoundsOnce.r0 && i <= selBoundsOnce.r1
+                              ? 'var(--color-primary-soft)'
+                              : stickyBackground,
                         }}
                       >
                         {i + 1}
@@ -978,10 +989,12 @@ export function DataTable<T>({
                       {columns.map((col, colIdx) => {
                         const rowId = getRowId(row);
                         const cursor = cellCursor?.(rowId, col.key);
-                        const selected = sel ? inSel(sel, i, colIdx) : false;
+                        const selected = selBoundsOnce
+                          ? i >= selBoundsOnce.r0 && i <= selBoundsOnce.r1 && colIdx >= selBoundsOnce.c0 && colIdx <= selBoundsOnce.c1
+                          : false;
                         const isFocusCell = sel ? sel.fr === i && sel.fc === colIdx : false;
                         // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
-                        const selBounds = selected && sel ? bounds(sel) : null;
+                        const selBounds = selected ? selBoundsOnce : null;
                         const selEdgeShadow = selBounds
                           ? [
                               i === selBounds.r0 ? 'inset 0 1px 0 0 var(--color-primary)' : null,
