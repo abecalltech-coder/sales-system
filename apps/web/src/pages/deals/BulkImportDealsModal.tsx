@@ -101,7 +101,8 @@ export function BulkImportDealsModal({
             const p = parseDateText(raw);
             if (p) values[field.fieldKey] = new Date(`${p}T00:00:00`).toISOString();
           } else if (field.dataType === 'USER') {
-            const u = userOptions.find((x) => x.name === raw);
+            // 登録アカウント名に前後の空白・改行が紛れていても一致するようtrimして比較する
+            const u = userOptions.find((x) => x.name.trim() === raw);
             if (u) values[field.fieldKey] = u.id;
             else skippedUsers.add(raw);
           } else if (field.dataType === 'SELECT') {

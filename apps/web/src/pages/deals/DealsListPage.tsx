@@ -350,7 +350,10 @@ export function DealsListPage() {
           fields={fields ?? []}
           userOptions={userOptions ?? []}
           onClose={() => setBulkImportOpen(false)}
-          onImported={invalidate}
+          onImported={() => {
+            invalidate();
+            invalidateFields();
+          }}
         />
       )}
     </AppLayout>
