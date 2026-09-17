@@ -972,3 +972,17 @@ model Deal {
   @@index([manualOrder])
   @@index([deletedAt])
 }
+
+// サマリータブ「カスタムレポート作成」(要望)。対象データ・集計軸・指標・期間の組み合わせを
+// JSONで保持し、あとで呼び出して再集計できるようにする。集計自体はDBへ保存せず毎回動的に計算する。
+model CustomReport {
+  id        String   @id @default(uuid())
+  name      String
+  config    Json // { dataSource, axis, metrics[], periodMode, preset?, startDate?, endDate? }
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?
+
+  @@index([order])
+}

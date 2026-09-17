@@ -24,8 +24,21 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   );
 }
 
-// プレゼンス/カーソル共有を許可する一覧種別(それ以外のroom名は無視する)
-const PRESENCE_ROOMS = ['TOSS_CASE', 'APPOINTMENT', 'VISIT', 'CONTRACT'];
+// プレゼンス/カーソル共有を許可する一覧種別(それ以外のroom名は無視する)。
+// 要望: トス/アポ/エントリーの3画面限定だったものをサマリー・営業タブ全て・シフトにも拡大。
+const PRESENCE_ROOMS = [
+  'TOSS_CASE',
+  'APPOINTMENT',
+  'VISIT',
+  'CONTRACT',
+  'DEAL',
+  'SHIFT',
+  'SUMMARY',
+  'FREE_SHEET',
+  'FINAL_REPORT',
+  'CL_CALENDAR',
+  'TOSS_NEW',
+];
 
 interface CursorPayload {
   socketId: string;

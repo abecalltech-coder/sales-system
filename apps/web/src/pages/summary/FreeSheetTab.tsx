@@ -1,7 +1,9 @@
 import { CSSProperties, useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSummarySheet, useSummarySheets, SummarySheetCell } from '../../hooks/useApi';
+import { useSummarySheet, useSummarySheets, SummarySheetCell, useMe } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
+import { PresenceBar } from '../../components/PresenceBar';
+import { usePresence } from '../../lib/usePresence';
 
 function buildCellMap(cells: SummarySheetCell[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -46,6 +48,8 @@ const deleteBtnStyle: CSSProperties = {
 export function FreeSheetTab() {
   const queryClient = useQueryClient();
   const { data: sheets } = useSummarySheets();
+  const { data: me } = useMe();
+  const presence = usePresence('FREE_SHEET', me?.id);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -148,6 +152,8 @@ export function FreeSheetTab() {
   return (
     <div>
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+      <PresenceBar viewers={presence.viewers} />
 
       <div
         style={{

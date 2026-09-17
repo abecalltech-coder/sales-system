@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { AppLayout } from '../components/AppLayout';
 import { MonthlySummaryTab } from './summary/MonthlySummaryTab';
 import { FreeSheetTab } from './summary/FreeSheetTab';
+import { CustomReportsTab } from './summary/CustomReportsTab';
 
-type Tab = 'summary' | 'free';
+type Tab = 'summary' | 'free' | 'report';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'summary', label: '実績' },
   { id: 'free', label: 'フリーシート' },
+  { id: 'report', label: 'カスタムレポート' },
 ];
 
 export function SummarySheetsPage() {
@@ -43,6 +45,7 @@ export function SummarySheetsPage() {
 
         {tab === 'summary' && <MonthlySummaryTab />}
         {tab === 'free' && <FreeSheetTab />}
+        {tab === 'report' && <CustomReportsTab />}
       </div>
     </AppLayout>
   );

@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
-import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS } from '../hooks/useApi';
+import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS, useMe } from '../hooks/useApi';
 import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
 import { buildCalendarTitle, buildPreContactTitle, closerSurname } from '../lib/calendarTitle';
+import { PresenceBar } from '../components/PresenceBar';
+import { usePresence } from '../lib/usePresence';
 
 const COLOR_PALETTE = [
   '#ff887c', '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
@@ -119,6 +121,8 @@ export function CLCalendarPage() {
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
   const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
+  const { data: me } = useMe();
+  const presence = usePresence('CL_CALENDAR', me?.id);
 
   const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
   const { data, isLoading } = useAppointments({
@@ -252,6 +256,8 @@ export function CLCalendarPage() {
         </div>
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+
+        <PresenceBar viewers={presence.viewers} />
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

@@ -6,6 +6,8 @@ import { MonthSwitcher } from '../components/MonthSwitcher';
 import { usePeriodMonth } from '../lib/usePeriodMonth';
 import { useFinalReportMonth, useMe, FinalReportField } from '../hooks/useApi';
 import { api, ApiError } from '../lib/api';
+import { PresenceBar } from '../components/PresenceBar';
+import { usePresence } from '../lib/usePresence';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -28,6 +30,7 @@ function evalComputed(expr: string, get: (code: string) => number): number | nul
 export function FinalReportPage() {
   const [periodMonth] = usePeriodMonth();
   const { data: me } = useMe();
+  const presence = usePresence('FINAL_REPORT', me?.id);
   const { data, isLoading } = useFinalReportMonth(periodMonth);
   const queryClient = useQueryClient();
 
@@ -127,6 +130,8 @@ export function FinalReportPage() {
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
           日々の数値を入力してください。19:00時点で出勤日にもかかわらず未入力の場合、責任者・管理者へ通知されます。
         </p>
+
+        <PresenceBar viewers={presence.viewers} />
 
         {isLoading ? (
           <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>

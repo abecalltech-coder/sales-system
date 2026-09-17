@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '../../components/AppLayout';
 import { useTossFormFields, useMe, TossFormField } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
+import { PresenceBar } from '../../components/PresenceBar';
+import { usePresence } from '../../lib/usePresence';
 
 type AnswerValue = string | string[];
 
@@ -11,6 +13,7 @@ type AnswerValue = string | string[];
 export function TossEntryPage() {
   const { data: fields, isLoading } = useTossFormFields(false);
   const { data: me } = useMe();
+  const presence = usePresence('TOSS_NEW', me?.id);
   const navigate = useNavigate();
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +60,8 @@ export function TossEntryPage() {
             トス実績一覧へ →
           </button>
         </div>
+
+        <PresenceBar viewers={presence.viewers} />
 
         {error && (
           <div

@@ -654,6 +654,58 @@ export function useDeals(params: { page: number; pageSize: number; keyword?: str
 }
 
 // ============================================================
+// カスタムレポート(サマリータブ「カスタムレポート作成」)
+// ============================================================
+
+export type ReportDataSource = 'TOSS' | 'APPOINTMENT' | 'VISIT' | 'CONTRACT' | 'ENTRY';
+export type ReportAxis = 'USER' | 'TEAM' | 'DEPARTMENT' | 'PRODUCT' | 'WEEK' | 'MONTH';
+export type ReportMetric = 'COUNT' | 'CONVERSION_RATE' | 'RANKING';
+export type ReportPreset = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_WEEK' | 'LAST_WEEK';
+
+export interface ReportConfig {
+  dataSource: ReportDataSource;
+  axis: ReportAxis;
+  metrics: ReportMetric[];
+  periodMode: 'PRESET' | 'CUSTOM';
+  preset?: ReportPreset;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface ReportRow {
+  axisKey: string;
+  axisLabel: string;
+  count: number;
+  conversionRate: number | null;
+  rank: number | null;
+}
+
+export interface CustomReportItem {
+  id: string;
+  name: string;
+  config: ReportConfig;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomReportDetail extends CustomReportItem {
+  rows: ReportRow[];
+}
+
+export function useCustomReports() {
+  return useQuery({ queryKey: ['custom-reports'], queryFn: () => api.get<CustomReportItem[]>('/custom-reports') });
+}
+
+export function useCustomReport(id: string | undefined) {
+  return useQuery({
+    queryKey: ['custom-reports', id],
+    queryFn: () => api.get<CustomReportDetail>(`/custom-reports/${id}`),
+    enabled: !!id,
+  });
+}
+
+// ============================================================
 // 操作ログ・システム設定
 // ============================================================
 export interface AuditLogItem {

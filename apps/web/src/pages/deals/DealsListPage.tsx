@@ -4,11 +4,13 @@ import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate } from '../../components/InlineEdit';
-import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions } from '../../hooks/useApi';
+import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions, useMe } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
+import { PresenceBar } from '../../components/PresenceBar';
+import { usePresence } from '../../lib/usePresence';
 
 const MANAGE_OPTIONS = '__manage_options__';
 const ADD_COLUMN_KEY = '__add_column__';
@@ -31,6 +33,8 @@ export function DealsListPage() {
   const { data, isLoading, error: listError } = useDeals({ page, pageSize, keyword: keyword || undefined });
   const { data: fields } = useDealFields();
   const { data: userOptions } = useUserOptions();
+  const { data: me } = useMe();
+  const presence = usePresence('DEAL', me?.id);
 
   // 案件名で検索の右に出す「CL・責任者」の人物フィルター(要望: 押すとその人だけの案件を表示)
   const personFilterOptions = useMemo(
@@ -241,6 +245,8 @@ export function DealsListPage() {
 
         {displayedError && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{displayedError}</p>}
 
+        <PresenceBar viewers={presence.viewers} />
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <input
             placeholder="案件名で検索"
@@ -286,6 +292,9 @@ export function DealsListPage() {
           getRowId={(r) => r.id}
           onReorder={(ids) => reorderMutation.mutate(ids)}
           onDeleteRows={(ids) => deleteMutation.mutate(ids)}
+          onCellFocus={presence.notifyFocus}
+          onCellBlur={presence.notifyBlur}
+          cellCursor={presence.cellCursor}
         />
       </div>
 

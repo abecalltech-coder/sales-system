@@ -9,8 +9,11 @@ import {
   useMonthlySummary,
   useMonthlySummaryDepartments,
   useUserOptions,
+  useMe,
 } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
+import { PresenceBar } from '../../components/PresenceBar';
+import { usePresence } from '../../lib/usePresence';
 
 const AUTO_CODES = new Set(['tossUp', 'apo', 'meetingDone', 'contractSites', 'etCount', 'reschedule']);
 
@@ -76,6 +79,8 @@ export function MonthlySummaryTab() {
   const activeDept = deptId ?? departments?.[0]?.id;
   const { data, isLoading } = useMonthlySummary(periodMonth, activeDept);
   const { data: userOptions } = useUserOptions();
+  const { data: me } = useMe();
+  const presence = usePresence('SUMMARY', me?.id);
   const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['monthly-summary'] });
@@ -265,6 +270,8 @@ export function MonthlySummaryTab() {
 
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
+      <PresenceBar viewers={presence.viewers} />
+
       <DataTable
         tableKey={`monthly-summary:${activeDept}`}
         columns={columns}
@@ -278,6 +285,9 @@ export function MonthlySummaryTab() {
         onReorder={(ids) => reorder.mutate(ids)}
         onDeleteRows={(ids) => deleteRows.mutate(ids)}
         footerRow={footerRow}
+        onCellFocus={presence.notifyFocus}
+        onCellBlur={presence.notifyBlur}
+        cellCursor={presence.cellCursor}
       />
       <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8, lineHeight: 1.6 }}>
         「トスアップ・アポ・商談実施数・成約拠点数・ET数・リスケ」はトス/アポ/エントリー実績から自動集計します(青字は手入力の上書き。セルを空にすると自動値に戻ります)。

@@ -4,8 +4,10 @@ import { DataTable, Column } from '../../components/DataTable';
 import { InlineNumber, InlineSelect, InlineText } from '../../components/InlineEdit';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth } from '../../lib/usePeriodMonth';
-import { MonthlyShiftRow, useMonthlyShift, useShiftDepartments, useUserOptions } from '../../hooks/useApi';
+import { MonthlyShiftRow, useMonthlyShift, useShiftDepartments, useUserOptions, useMe } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
+import { PresenceBar } from '../../components/PresenceBar';
+import { usePresence } from '../../lib/usePresence';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const NUMERIC_ATTRS = new Set(['cost', 'cumulativeHours', 'seats']);
@@ -26,6 +28,8 @@ export function ShiftTab() {
   const activeDept = deptId ?? departments?.[0]?.id;
   const { data, isLoading } = useMonthlyShift(periodMonth, activeDept);
   const { data: userOptions } = useUserOptions();
+  const { data: me } = useMe();
+  const presence = usePresence('SHIFT', me?.id);
   const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['monthly-shift'] });
@@ -256,6 +260,8 @@ export function ShiftTab() {
 
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
+      <PresenceBar viewers={presence.viewers} />
+
       <DataTable
         tableKey={`monthly-shift:${activeDept}`}
         columns={columns}
@@ -269,6 +275,9 @@ export function ShiftTab() {
         onReorder={(ids) => reorder.mutate(ids)}
         onDeleteRows={(ids) => deleteRows.mutate(ids)}
         footerRow={footerRow}
+        onCellFocus={presence.notifyFocus}
+        onCellBlur={presence.notifyBlur}
+        cellCursor={presence.cellCursor}
       />
       <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8 }}>
         部署に在籍中の登録アカウントは自動的に一覧へ反映されます。日別セルに稼働時間数(例: 8 / 0)を

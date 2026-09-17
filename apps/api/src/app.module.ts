@@ -35,6 +35,7 @@ import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
 import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.module';
 import { FinalReportsModule } from './final-reports/final-reports.module';
 import { DealsModule } from './deals/deals.module';
+import { CustomReportsModule } from './custom-reports/custom-reports.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { DealsModule } from './deals/deals.module';
     MonthlyRolloverModule,
     FinalReportsModule,
     DealsModule,
+    CustomReportsModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,
