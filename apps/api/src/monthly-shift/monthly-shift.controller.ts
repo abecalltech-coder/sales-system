@@ -9,15 +9,21 @@ export class MonthlyShiftController {
   constructor(private readonly service: MonthlyShiftService) {}
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })
+  @Get('departments')
+  departments() {
+    return this.service.departments();
+  }
+
+  @RequirePermissions({ resource: 'toss_case', action: 'view' })
   @Get()
   get(@Query() query: GetMonthlyShiftQueryDto) {
-    return this.service.get(query.period);
+    return this.service.get(query.period, query.departmentId);
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })
   @Post('rows')
   addRow(@Body() dto: AddShiftRowDto) {
-    return this.service.addRow(dto.period, dto.userId);
+    return this.service.addRow(dto.period, dto.departmentId, dto.userId);
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })

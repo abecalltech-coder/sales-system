@@ -6,12 +6,18 @@ export class GetMonthlyShiftQueryDto {
   @IsString()
   @Matches(PERIOD, { message: 'periodは"YYYY-MM"形式で指定してください' })
   period!: string;
+
+  @IsString()
+  departmentId!: string;
 }
 
 export class AddShiftRowDto {
   @IsString()
   @Matches(PERIOD)
   period!: string;
+
+  @IsString()
+  departmentId!: string;
 
   @IsOptional()
   @IsUUID('4')

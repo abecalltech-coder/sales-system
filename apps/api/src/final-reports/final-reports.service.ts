@@ -96,13 +96,15 @@ export class FinalReportsService {
    */
   async findUnreported(date: string): Promise<{ userId: string; name: string }[]> {
     const period = toPeriodMonth(new Date(`${date}T00:00:00+09:00`));
-    const shift = await this.prisma.monthlyShiftSheet.findUnique({
+    // シフト表は部署ごとに分かれているため、当月の全部署分のシートから行を集める
+    const sheets = await this.prisma.monthlyShiftSheet.findMany({
       where: { periodMonth: period },
       include: { rows: true },
     });
-    if (!shift) return [];
+    if (sheets.length === 0) return [];
 
-    const workingUserIds = shift.rows
+    const workingUserIds = sheets
+      .flatMap((s) => s.rows)
       .filter((r) => r.userId && Number((r.days as Record<string, unknown>)?.[date] ?? 0) > 0)
       .map((r) => r.userId as string);
     if (workingUserIds.length === 0) return [];

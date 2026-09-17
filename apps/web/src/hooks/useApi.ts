@@ -528,16 +528,30 @@ export interface MonthlyShiftRow {
 
 export interface MonthlyShiftResponse {
   period: string;
+  departmentId: string;
   days: string[];
   attributeDefs: ShiftAttributeDef[];
   rows: MonthlyShiftRow[];
 }
 
-export function useMonthlyShift(period: string) {
+export interface ShiftDepartment {
+  id: string;
+  name: string;
+}
+
+export function useShiftDepartments() {
   return useQuery({
-    queryKey: ['monthly-shift', period],
-    queryFn: () => api.get<MonthlyShiftResponse>(`/monthly-shift?period=${period}`),
-    enabled: !!period,
+    queryKey: ['shift-departments'],
+    queryFn: () => api.get<ShiftDepartment[]>('/monthly-shift/departments'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useMonthlyShift(period: string, departmentId: string | undefined) {
+  return useQuery({
+    queryKey: ['monthly-shift', period, departmentId],
+    queryFn: () => api.get<MonthlyShiftResponse>(`/monthly-shift?period=${period}&departmentId=${departmentId}`),
+    enabled: !!period && !!departmentId,
   });
 }
 

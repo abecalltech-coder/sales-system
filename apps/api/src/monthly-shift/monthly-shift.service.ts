@@ -24,16 +24,28 @@ export const SHIFT_ATTRIBUTE_DEFS = [
 export class MonthlyShiftService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async get(period: string) {
+  /** 部署の選択肢(要望: シフトは部署ごとに分ける)。組織管理の実部署を使う。 */
+  async departments() {
+    return this.prisma.department.findMany({
+      where: { active: true },
+      orderBy: { order: 'asc' },
+      select: { id: true, name: true },
+    });
+  }
+
+  async get(period: string, departmentId: string) {
     if (!isValidPeriodMonth(period)) throw new BadRequestException('対象月が不正です');
+    if (!departmentId) throw new BadRequestException('部署を指定してください');
 
     const existing = await this.prisma.monthlyShiftSheet.findUnique({
-      where: { periodMonth: period },
+      where: { periodMonth_departmentId: { periodMonth: period, departmentId } },
       include: { rows: { orderBy: { order: 'asc' } } },
     });
-    const sheet = existing ?? (await this.lazyCreate(period));
+    const sheet = existing ?? (await this.lazyCreate(period, departmentId));
+    await this.syncDepartmentMembers(sheet.id, departmentId);
 
-    const userIds = sheet.rows.map((r) => r.userId).filter((id): id is string => !!id);
+    const rows = await this.prisma.monthlyShiftRow.findMany({ where: { sheetId: sheet.id }, orderBy: { order: 'asc' } });
+    const userIds = rows.map((r) => r.userId).filter((id): id is string => !!id);
     const users = userIds.length
       ? await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
       : [];
@@ -41,9 +53,10 @@ export class MonthlyShiftService {
 
     return {
       period,
+      departmentId,
       days: periodMonthDays(period),
       attributeDefs: SHIFT_ATTRIBUTE_DEFS,
-      rows: sheet.rows.map((r, i) => ({
+      rows: rows.map((r, i) => ({
         id: r.id,
         no: i + 1,
         userId: r.userId,
@@ -55,27 +68,62 @@ export class MonthlyShiftService {
     };
   }
 
-  /** 対象月のシートを(無ければ)生成する。月次ロールオーバーcron用。 */
-  async ensureForMonth(period: string) {
-    if (!isValidPeriodMonth(period)) return { created: 0 };
-    const exists = await this.prisma.monthlyShiftSheet.findUnique({
-      where: { periodMonth: period },
-      select: { id: true },
+  /**
+   * 対象部署に在籍中(ACTIVE・未退職)の登録アカウントを、まだ行が無ければ追加する
+   * (要望: 登録アカウントは全て反映する)。既にいる行・手動追加した行はそのまま。
+   */
+  private async syncDepartmentMembers(sheetId: string, departmentId: string) {
+    const [members, existingRows] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { departmentId, status: 'ACTIVE', deletedAt: null },
+        orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true },
+      }),
+      this.prisma.monthlyShiftRow.findMany({ where: { sheetId }, select: { userId: true, order: true } }),
+    ]);
+    const existingUserIds = new Set(existingRows.map((r) => r.userId).filter((id): id is string => !!id));
+    const missing = members.filter((m) => !existingUserIds.has(m.id));
+    if (missing.length === 0) return;
+
+    let nextOrder = existingRows.reduce((max, r) => Math.max(max, r.order), 0) + 10;
+    await this.prisma.monthlyShiftRow.createMany({
+      data: missing.map((m) => {
+        const order = nextOrder;
+        nextOrder += 10;
+        return { sheetId, userId: m.id, order };
+      }),
     });
-    if (exists) return { created: 0 };
-    await this.lazyCreate(period);
-    return { created: 1 };
   }
 
-  private async lazyCreate(period: string) {
+  /** 対象月のシートを(無ければ)生成する。月次ロールオーバーcron用。全部署分をまとめて用意する。 */
+  async ensureForMonth(period: string) {
+    if (!isValidPeriodMonth(period)) return { created: 0 };
+    const depts = await this.prisma.department.findMany({ where: { active: true }, select: { id: true } });
+    let created = 0;
+    for (const d of depts) {
+      const exists = await this.prisma.monthlyShiftSheet.findUnique({
+        where: { periodMonth_departmentId: { periodMonth: period, departmentId: d.id } },
+        select: { id: true },
+      });
+      if (!exists) {
+        const sheet = await this.lazyCreate(period, d.id);
+        await this.syncDepartmentMembers(sheet.id, d.id);
+        created++;
+      }
+    }
+    return { created };
+  }
+
+  private async lazyCreate(period: string, departmentId: string) {
     const prev = await this.prisma.monthlyShiftSheet.findUnique({
-      where: { periodMonth: previousPeriodMonth(period) },
+      where: { periodMonth_departmentId: { periodMonth: previousPeriodMonth(period), departmentId } },
       include: { rows: { orderBy: { order: 'asc' } } },
     });
     try {
       return await this.prisma.monthlyShiftSheet.create({
         data: {
           periodMonth: period,
+          departmentId,
           rows: prev
             ? {
                 create: prev.rows.map((r) => ({
@@ -92,7 +140,7 @@ export class MonthlyShiftService {
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         return this.prisma.monthlyShiftSheet.findUniqueOrThrow({
-          where: { periodMonth: period },
+          where: { periodMonth_departmentId: { periodMonth: period, departmentId } },
           include: { rows: { orderBy: { order: 'asc' } } },
         });
       }
@@ -100,9 +148,11 @@ export class MonthlyShiftService {
     }
   }
 
-  async addRow(period: string, userId?: string) {
-    const existing = await this.prisma.monthlyShiftSheet.findUnique({ where: { periodMonth: period } });
-    const sheet = existing ?? (await this.lazyCreate(period));
+  async addRow(period: string, departmentId: string, userId?: string) {
+    const existing = await this.prisma.monthlyShiftSheet.findUnique({
+      where: { periodMonth_departmentId: { periodMonth: period, departmentId } },
+    });
+    const sheet = existing ?? (await this.lazyCreate(period, departmentId));
     const max = await this.prisma.monthlyShiftRow.aggregate({ where: { sheetId: sheet.id }, _max: { order: true } });
     return this.prisma.monthlyShiftRow.create({
       data: { sheetId: sheet.id, userId: userId ?? null, order: (max._max.order ?? 0) + 10 },

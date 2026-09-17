@@ -43,6 +43,7 @@ model Department {
   updatedAt   DateTime @updatedAt
   teams       Team[]
   users       User[]
+  shiftSheets MonthlyShiftSheet[]
 
   @@index([companyId])
 }
@@ -857,14 +858,20 @@ model MonthlySummaryRow {
   @@index([sheetId])
 }
 
-// 月ごとのシフト表(全部署共通で1枚)。
+// 月次シフト表(要望: 部署ごとに分けて作成する)。
 model MonthlyShiftSheet {
-  id          String   @id @default(uuid())
-  periodMonth String   @unique // "YYYY-MM"
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String     @id @default(uuid())
+  periodMonth  String     // "YYYY-MM"
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   rows MonthlyShiftRow[]
+
+  @@unique([periodMonth, departmentId])
+  @@index([periodMonth])
+  @@index([departmentId])
 }
 
 model MonthlyShiftRow {

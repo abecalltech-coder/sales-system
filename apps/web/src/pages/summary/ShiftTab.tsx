@@ -4,7 +4,7 @@ import { DataTable, Column } from '../../components/DataTable';
 import { InlineNumber, InlineSelect, InlineText } from '../../components/InlineEdit';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth } from '../../lib/usePeriodMonth';
-import { MonthlyShiftRow, useMonthlyShift, useUserOptions } from '../../hooks/useApi';
+import { MonthlyShiftRow, useMonthlyShift, useShiftDepartments, useUserOptions } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -21,7 +21,10 @@ const workedDays = (r: MonthlyShiftRow) => Object.values(r.days ?? {}).filter((v
 export function ShiftTab() {
   const [periodMonth] = usePeriodMonth();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useMonthlyShift(periodMonth);
+  const { data: departments } = useShiftDepartments();
+  const [deptId, setDeptId] = useState<string | undefined>(undefined);
+  const activeDept = deptId ?? departments?.[0]?.id;
+  const { data, isLoading } = useMonthlyShift(periodMonth, activeDept);
   const { data: userOptions } = useUserOptions();
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +32,7 @@ export function ShiftTab() {
   const onErr = (e: unknown) => setError(e instanceof ApiError ? e.message : '保存に失敗しました');
 
   const addRow = useMutation({
-    mutationFn: (userId?: string) => api.post('/monthly-shift/rows', { period: periodMonth, userId }),
+    mutationFn: (userId?: string) => api.post('/monthly-shift/rows', { period: periodMonth, departmentId: activeDept, userId }),
     onSuccess: invalidate,
     onError: onErr,
   });
@@ -202,8 +205,27 @@ export function ShiftTab() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
         <MonthSwitcher />
+        <div style={{ display: 'flex', gap: 2 }}>
+          {departments?.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setDeptId(d.id)}
+              style={{
+                fontSize: 12,
+                padding: '4px 12px',
+                border: 'none',
+                borderRadius: 999,
+                fontWeight: activeDept === d.id ? 700 : 500,
+                background: activeDept === d.id ? 'var(--color-primary-soft)' : 'transparent',
+                color: activeDept === d.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              }}
+            >
+              {d.name}
+            </button>
+          ))}
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
           <select
             defaultValue=""
@@ -229,7 +251,7 @@ export function ShiftTab() {
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
       <DataTable
-        tableKey="monthly-shift"
+        tableKey={`monthly-shift:${activeDept}`}
         columns={columns}
         rows={rows}
         total={rows.length}
@@ -243,7 +265,8 @@ export function ShiftTab() {
         footerRow={footerRow}
       />
       <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8 }}>
-        日別セルに稼働時間数(例: 8 / 0)を入力すると、稼働人数・実稼働時間・各列の合計が自動計算されます。月を切り替えると日数・曜日が自動で変わります。
+        部署に在籍中の登録アカウントは自動的に一覧へ反映されます。日別セルに稼働時間数(例: 8 / 0)を
+        入力すると、稼働人数・実稼働時間・各列の合計が自動計算されます。月を切り替えると日数・曜日が自動で変わります。
       </p>
     </div>
   );
