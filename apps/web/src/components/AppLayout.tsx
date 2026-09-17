@@ -119,7 +119,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: 'var(--viewport-height)' }}>
       <nav
         style={{
           width: collapsed ? 54 : 208,
@@ -131,7 +131,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           padding: collapsed ? '14px 9px' : '14px 12px',
           position: 'sticky',
           top: 0,
-          height: '100vh',
+          height: 'var(--viewport-height)',
           overflowY: 'auto',
           overflowX: 'hidden',
           transition: 'width 0.16s ease, padding 0.16s ease',

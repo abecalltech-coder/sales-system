@@ -1,4 +1,9 @@
 :root {
+  /* スマホでソフトキーボードが開いた際にレイアウトが崩れないよう、対応ブラウザでは
+     動的ビューポート単位(dvh)を使う。100vhはキーボード表示中もレイアウトビューポート
+     基準のままで、実際に見えている高さとズレて余白がガタつく原因になる(要望)。 */
+  --viewport-height: 100vh;
+
   /* ---- サーフェス(奥行きを3段で表現) ---- */
   --color-bg: #eef0f4;
   --color-surface: #ffffff;
@@ -58,6 +63,12 @@ body,
    viewportのuser-scalable=noだけではブラウザによって無視されることがあるための保険。 */
 html {
   touch-action: manipulation;
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-height: 100dvh;
+  }
 }
 
 body {

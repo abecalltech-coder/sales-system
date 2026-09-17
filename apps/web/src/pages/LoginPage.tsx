@@ -27,7 +27,7 @@ export function LoginPage() {
     <div
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        minHeight: 'var(--viewport-height)',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 24,

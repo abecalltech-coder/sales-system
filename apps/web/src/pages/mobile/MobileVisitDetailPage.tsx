@@ -125,7 +125,7 @@ export function MobileVisitDetailPage() {
   const mapUrl = address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}` : undefined;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: 'var(--viewport-height)', display: 'flex', flexDirection: 'column' }}>
       <header style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
         <button onClick={() => navigate('/m')} style={{ fontSize: 13, marginBottom: 8 }}>
           ← 戻る

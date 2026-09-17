@@ -12,7 +12,7 @@ export function MobileHomePage() {
   const statusColor = (id: string) => statuses?.find((s) => s.id === id)?.color ?? '#9ca3af';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
+    <div style={{ minHeight: 'var(--viewport-height)', background: '#f9fafb' }}>
       <header style={{ padding: '16px', background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0 }}>
         <h1 style={{ fontSize: 16, fontWeight: 700 }}>本日の訪問予定</h1>
       </header>
