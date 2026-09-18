@@ -29,12 +29,17 @@ export function DealsListPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
+  // 列の絞り込みポップオーバー内で検索した文字列(列ごと)。チェックが入っている値に加え、
+  // ここにヒットする値も一覧に表示する(要望: 絞り込み内検索がそのまま一覧表示に反映されるように)
+  const [columnSearch, setColumnSearch] = useState<Record<string, string>>({});
   const [personFilter, setPersonFilter] = useState<string | null>(null);
   // 全件を1ページで表示する(要望: 100件までの表示上限を無くす)
   const pageSize = 100000;
   const queryClient = useQueryClient();
 
-  const { data, isLoading, error: listError } = useDeals({ page, pageSize, keyword: keyword || undefined });
+  // 検索は全項目を対象にクライアント側で行う(要望: 案件名だけでなく全項目を検索対象に)。
+  // 既に全件をクライアントに読み込んでいるため、キーワードをAPIへ送らず即座に絞り込める。
+  const { data, isLoading, error: listError } = useDeals({ page, pageSize });
   const { data: fields } = useDealFields();
   const { data: userOptions } = useUserOptions();
   const { data: me } = useMe();
@@ -213,6 +218,8 @@ export function DealsListPage() {
       options={optionsFor(col)}
       selected={filters[col.key] ?? null}
       onChange={(sel) => setFilters((f) => ({ ...f, [col.key]: sel }))}
+      searchText={columnSearch[col.key] ?? ''}
+      onSearchTextChange={(text) => setColumnSearch((s) => ({ ...s, [col.key]: text }))}
     />
   );
 
@@ -232,24 +239,42 @@ export function DealsListPage() {
     });
     return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, userOptions, filters, rawRows]);
+  }, [fields, userOptions, filters, columnSearch, rawRows]);
 
   const rows = useMemo(() => {
     let filtered = rawRows;
-    if (Object.values(filters).some((sel) => sel != null)) {
+
+    // 検索欄は全項目を対象に(要望: 案件名だけでなく全項目を検索できるように)
+    const kw = keyword.trim().toLowerCase();
+    if (kw) {
+      filtered = filtered.filter((r) => columns.some((c) => (c.copyValue?.(r) ?? '').toLowerCase().includes(kw)));
+    }
+
+    // 列の絞り込み: チェックが入っている値 or 絞り込み内検索にヒットした値、のどちらかを満たせば表示
+    // (要望: 絞り込み内で検索してヒットしたらそれだけを表示されるように)
+    const activeFilterKeys = new Set([
+      ...Object.keys(filters).filter((k) => filters[k] != null),
+      ...Object.keys(columnSearch).filter((k) => columnSearch[k]),
+    ]);
+    if (activeFilterKeys.size > 0) {
       filtered = filtered.filter((r) =>
-        Object.entries(filters).every(([key, sel]) => {
-          if (!sel) return true;
+        Array.from(activeFilterKeys).every((key) => {
           const col = columns.find((c) => c.key === key);
-          return col?.copyValue ? sel.has(col.copyValue(r)) : true;
+          if (!col?.copyValue) return true;
+          const val = col.copyValue(r);
+          const searchText = columnSearch[key];
+          if (searchText && val.toLowerCase().includes(searchText.toLowerCase())) return true;
+          const sel = filters[key];
+          return sel ? sel.has(val) : false;
         }),
       );
     }
+
     if (personFilter) {
       filtered = filtered.filter((r) => r.values[ASSIGNEE_FIELD_KEY] === personFilter);
     }
     return filtered;
-  }, [rawRows, filters, personFilter, columns]);
+  }, [rawRows, keyword, filters, columnSearch, personFilter, columns]);
 
   return (
     <AppLayout>
@@ -275,7 +300,7 @@ export function DealsListPage() {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <input
-            placeholder="案件名で検索"
+            placeholder="全項目を検索"
             value={keyword}
             onChange={(e) => {
               setKeyword(e.target.value);
@@ -310,7 +335,7 @@ export function DealsListPage() {
           tableKey="deals"
           columns={columns}
           rows={rows}
-          total={data?.total ?? 0}
+          total={rows.length}
           page={page}
           pageSize={pageSize}
           loading={isLoading}

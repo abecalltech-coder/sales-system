@@ -7,6 +7,14 @@ interface ColumnFilterHeaderProps {
   /** 現在選択中の値集合。null/undefinedは「絞り込みなし(全件表示)」を意味する */
   selected: Set<string> | null;
   onChange: (selected: Set<string> | null) => void;
+  /**
+   * 絞り込み内検索の現在のテキストを呼び出し側で保持したい場合に指定する(省略時はこのコンポーネント内だけの
+   * ローカルstateになり、ポップオーバーを開き直すたびにリセットされる=従来どおりの挙動)。
+   * 指定した場合、検索テキストは開閉に関わらず保持され、呼び出し側で「チェックが入っている or 検索に
+   * ヒットした値」を行フィルタの条件として使えるようになる(要望: 絞り込み内検索を一覧にも反映)。
+   */
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 /**
@@ -14,11 +22,22 @@ interface ColumnFilterHeaderProps {
  * フィルター状態は呼び出し側のReact stateにのみ保持し、サーバーや他ユーザーには一切共有しない
  * (「そのフィルターは他のユーザー画面には共有されず自分の画面のみ変更で」という要望を満たすため)。
  */
-export function ColumnFilterHeader({ label, options, selected, onChange }: ColumnFilterHeaderProps) {
+export function ColumnFilterHeader({
+  label,
+  options,
+  selected,
+  onChange,
+  searchText: searchTextProp,
+  onSearchTextChange,
+}: ColumnFilterHeaderProps) {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
   const ref = useRef<HTMLDivElement>(null);
-  const active = selected != null;
+  // searchText/onSearchTextChangeが指定された場合のみ「呼び出し側で状態保持する検索」として扱う
+  const controlled = searchTextProp !== undefined && onSearchTextChange !== undefined;
+  const searchText = controlled ? searchTextProp : localSearch;
+  const setSearchText = controlled ? onSearchTextChange : setLocalSearch;
+  const active = selected != null || (controlled && searchText !== '');
 
   useEffect(() => {
     if (!open) return;
@@ -29,11 +48,13 @@ export function ColumnFilterHeader({ label, options, selected, onChange }: Colum
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [open]);
 
+  // 呼び出し側で検索テキストを保持しない(=従来仕様の)ページでは、開き直すたびに検索欄をリセットする
   useEffect(() => {
-    if (open) setSearch('');
+    if (!controlled && open) setLocalSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const filteredOptions = options.filter((o) => o.toLowerCase().includes(search.toLowerCase()));
+  const filteredOptions = options.filter((o) => o.toLowerCase().includes(searchText.toLowerCase()));
   const checkedSet = selected ?? new Set(options);
 
   const toggleValue = (value: string) => {
@@ -88,14 +109,21 @@ export function ColumnFilterHeader({ label, options, selected, onChange }: Colum
           <div style={{ padding: 8, borderBottom: '1px solid var(--color-border)' }}>
             <input
               autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="検索"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder={controlled ? '検索(ヒットした行を一覧に表示)' : '検索'}
               style={{ width: '100%', fontSize: 12, padding: '4px 6px' }}
             />
           </div>
           <div style={{ display: 'flex', gap: 8, padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>
-            <button type="button" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => onChange(null)}>
+            <button
+              type="button"
+              style={{ fontSize: 11, padding: '2px 6px' }}
+              onClick={() => {
+                onChange(null);
+                setSearchText('');
+              }}
+            >
               すべて選択
             </button>
             <button type="button" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => onChange(new Set())}>
