@@ -290,6 +290,136 @@ function RowInner<T>({
 }
 const Row = memo(RowInner) as typeof RowInner;
 
+interface TableHeadProps<T> {
+  columns: Column<T>[];
+  fontSize: number;
+  resizable: boolean;
+  colReorderable: boolean;
+  dragOverCol: number | null;
+  onColDragStart: (e: ReactDragEvent, index: number) => void;
+  onColDragOver: (e: ReactDragEvent, index: number) => void;
+  onColDrop: (index: number) => void;
+  onColDragEnd: () => void;
+  onColContextMenu: (e: ReactMouseEvent, col: Column<T>) => void;
+  onSelectColumn: (index: number) => void;
+  onResizeStart: (e: ReactMouseEvent, col: Column<T>) => void;
+  onResizeTouchStart: (e: ReactTouchEvent, col: Column<T>) => void;
+  onResetColumn: (col: Column<T>) => void;
+}
+
+/**
+ * 見出し行をReact.memo化したコンポーネント(要望: PCでもスクロールが重い問題の軽減)。
+ * 見出しは列幅リサイズ・並び替え以外では内容が変わらないため、スクロール由来の
+ * DataTable本体の再レンダリングでは(propsが同じ参照のままなら)再レンダリングされない。
+ */
+function TableHeadInner<T>({
+  columns,
+  fontSize,
+  resizable,
+  colReorderable,
+  dragOverCol,
+  onColDragStart,
+  onColDragOver,
+  onColDrop,
+  onColDragEnd,
+  onColContextMenu,
+  onSelectColumn,
+  onResizeStart,
+  onResizeTouchStart,
+  onResetColumn,
+}: TableHeadProps<T>) {
+  return (
+    <thead>
+      <tr style={{ background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border-strong)', textAlign: 'left' }}>
+        <th
+          title="行番号(クリックで行選択・ドラッグで範囲)"
+          style={{
+            position: 'sticky',
+            top: 0,
+            left: 0,
+            zIndex: 4,
+            padding: 0,
+            textAlign: 'center',
+            color: 'var(--color-text-faint)',
+            fontWeight: 600,
+            fontSize: 10,
+            background: 'var(--color-subtle)',
+            borderRight: '1px solid var(--color-border)',
+            borderBottom: '1px solid var(--color-border-strong)',
+          }}
+        >
+          #
+        </th>
+        {columns.map((col, colIdx) => (
+          <th
+            key={col.key}
+            draggable={colReorderable && !col.locked}
+            onDragStart={colReorderable && !col.locked ? (e) => onColDragStart(e, colIdx) : undefined}
+            onDragOver={colReorderable ? (e) => onColDragOver(e, colIdx) : undefined}
+            onDrop={colReorderable ? () => onColDrop(colIdx) : undefined}
+            onDragEnd={colReorderable ? onColDragEnd : undefined}
+            onContextMenu={(e) => onColContextMenu(e, col)}
+            onClick={(e) => {
+              // ヘッダー内の操作(フィルターボタン等)以外をクリックしたら列選択
+              if ((e.target as HTMLElement).closest('button')) return;
+              onSelectColumn(colIdx);
+            }}
+            title={colReorderable && !col.locked ? 'ドラッグで列の並び替え / 右クリックで列メニュー' : undefined}
+            style={{
+              position: 'sticky',
+              top: 0,
+              left: colIdx === 0 ? GUTTER_WIDTH : undefined,
+              zIndex: colIdx === 0 ? 3 : 2,
+              padding: '4px 8px',
+              color: 'var(--color-text-muted)',
+              fontWeight: 700,
+              letterSpacing: '0.01em',
+              fontSize: Math.max(fontSize - 1, 10),
+              whiteSpace: 'nowrap',
+              overflow: col.renderHeader ? 'visible' : 'hidden',
+              textOverflow: 'ellipsis',
+              cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
+              background: 'var(--color-subtle)',
+              borderBottom: '1px solid var(--color-border-strong)',
+              borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
+              borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,
+              ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
+            }}
+          >
+            {col.renderHeader ? col.renderHeader() : col.label}
+            {resizable && (
+              <span
+                role="separator"
+                aria-label={`${col.label}の列幅を変更`}
+                title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
+                draggable={false}
+                onMouseDown={(e) => onResizeStart(e, col)}
+                onTouchStart={(e) => onResizeTouchStart(e, col)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onResetColumn(col);
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  width: 14,
+                  height: '100%',
+                  cursor: 'col-resize',
+                  zIndex: 1,
+                  touchAction: 'none',
+                }}
+              />
+            )}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+const TableHead = memo(TableHeadInner) as typeof TableHeadInner;
+
 export function DataTable<T>({
   columns,
   rows,
@@ -354,6 +484,15 @@ export function DataTable<T>({
   onReorderRef.current = onReorder;
   const getRowIdRef = useRef(getRowId);
   getRowIdRef.current = getRowId;
+  // 見出し行(TableHead)も同様にReact.memo化するための ref ミラー
+  const onReorderColumnsRef = useRef(onReorderColumns);
+  onReorderColumnsRef.current = onReorderColumns;
+  const onDeleteColumnRef = useRef(onDeleteColumn);
+  onDeleteColumnRef.current = onDeleteColumn;
+  const draftWidthsRef = useRef(draftWidths);
+  draftWidthsRef.current = draftWidths;
+  const savedWidthsRef = useRef(savedWidths);
+  savedWidthsRef.current = savedWidths;
 
   // ドラッグ選択
   const dragRef = useRef<{ startR: number; startC: number } | null>(null);
@@ -450,6 +589,8 @@ export function DataTable<T>({
 
   const widthOf = (col: Column<T>): number =>
     draftWidths[col.key] ?? savedWidths[col.key] ?? col.width ?? DEFAULT_COLUMN_WIDTH;
+  const widthOfRef = useRef(widthOf);
+  widthOfRef.current = widthOf;
 
   const findRowById = (id: string) => rowsRef.current.find((r) => getRowId(r) === id);
 
@@ -518,27 +659,34 @@ export function DataTable<T>({
       return d;
     });
   }, [onResizeMove, onResizeTouchMove, saveWidths, savedWidths]);
-  const onResizeStart = (e: ReactMouseEvent, col: Column<T>) => {
+  // onResizeStart/onResizeTouchStartはTableHead(React.memo)へpropsとして渡すため参照を固定したいが、
+  // onResizeEnd自体はsavedWidths変化のたびに参照が変わる。refで最新のonResizeEndを都度参照することで
+  // 「呼び出しは固定・中身は最新」を両立する(要望: スクロールだけでは見出し行が再レンダリングされないように)
+  const onResizeEndRef = useRef(onResizeEnd);
+  onResizeEndRef.current = onResizeEnd;
+  const onResizeStart = useCallback((e: ReactMouseEvent, col: Column<T>) => {
     e.preventDefault();
     e.stopPropagation();
-    resizingRef.current = { key: col.key, startX: e.clientX, startWidth: widthOf(col) };
+    resizingRef.current = { key: col.key, startX: e.clientX, startWidth: widthOfRef.current(col) };
     window.addEventListener('mousemove', onResizeMove);
-    window.addEventListener('mouseup', onResizeEnd);
+    window.addEventListener('mouseup', onResizeEndRef.current);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-  };
-  const onResizeTouchStart = (e: ReactTouchEvent, col: Column<T>) => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onResizeTouchStart = useCallback((e: ReactTouchEvent, col: Column<T>) => {
     const t = e.touches[0];
     if (!t) return;
     e.stopPropagation();
-    resizingRef.current = { key: col.key, startX: t.clientX, startWidth: widthOf(col) };
+    resizingRef.current = { key: col.key, startX: t.clientX, startWidth: widthOfRef.current(col) };
     window.addEventListener('touchmove', onResizeTouchMove, { passive: false });
-    window.addEventListener('touchend', onResizeEnd);
-    window.addEventListener('touchcancel', onResizeEnd);
+    window.addEventListener('touchend', onResizeEndRef.current);
+    window.addEventListener('touchcancel', onResizeEndRef.current);
     document.body.style.userSelect = 'none';
-  };
-  const resetColumn = (col: Column<T>) => {
-    const nextSaved = { ...savedWidths };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const resetColumn = useCallback((col: Column<T>) => {
+    const nextSaved = { ...savedWidthsRef.current };
     delete nextSaved[col.key];
     setDraftWidths((d) => {
       const n = { ...d };
@@ -546,7 +694,8 @@ export function DataTable<T>({
       return n;
     });
     saveWidths(nextSaved);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- コピー / 切り取り / 貼り付け ----------------------------------
   const buildTsv = (s: Sel): string => {
@@ -793,11 +942,11 @@ export function DataTable<T>({
     draggingRef.current = false;
   }, [onWindowMouseMove]);
 
-  const selectColumn = (c: number) => {
+  const selectColumn = useCallback((c: number) => {
     if (rowsRef.current.length === 0) return;
     gridRef.current?.focus({ preventScroll: true });
     setSel({ ar: 0, ac: c, fr: rowsRef.current.length - 1, fc: c });
-  };
+  }, []);
   const selectRow = useCallback((r: number, extend: boolean) => {
     gridRef.current?.focus({ preventScroll: true });
     setSel((s) =>
@@ -898,16 +1047,16 @@ export function DataTable<T>({
   const dragColRef = useRef<number | null>(null);
   const [dragOverCol, setDragOverCol] = useState<number | null>(null);
   const colReorderable = Boolean(onReorderColumns);
-  const onColDragStart = (e: ReactDragEvent, index: number) => {
+  const onColDragStart = useCallback((e: ReactDragEvent, index: number) => {
     dragColRef.current = index;
     e.dataTransfer.effectAllowed = 'move';
-  };
-  const onColDragOver = (e: ReactDragEvent, index: number) => {
+  }, []);
+  const onColDragOver = useCallback((e: ReactDragEvent, index: number) => {
     if (dragColRef.current === null) return;
     e.preventDefault();
     setDragOverCol(index);
-  };
-  const onColDrop = (index: number) => {
+  }, []);
+  const onColDrop = useCallback((index: number) => {
     const from = dragColRef.current;
     dragColRef.current = null;
     setDragOverCol(null);
@@ -915,16 +1064,20 @@ export function DataTable<T>({
     const keys = columnsRef.current.map((c) => c.key);
     const [moved] = keys.splice(from, 1);
     keys.splice(index, 0, moved);
-    onReorderColumns?.(keys);
-  };
+    onReorderColumnsRef.current?.(keys);
+  }, []);
+  const onColDragEnd = useCallback(() => {
+    dragColRef.current = null;
+    setDragOverCol(null);
+  }, []);
 
   const [colMenu, setColMenu] = useState<{ x: number; y: number; col: Column<T> } | null>(null);
-  const onColContextMenu = (e: ReactMouseEvent, col: Column<T>) => {
-    if (!onDeleteColumn || col.locked) return;
+  const onColContextMenu = useCallback((e: ReactMouseEvent, col: Column<T>) => {
+    if (!onDeleteColumnRef.current || col.locked) return;
     e.preventDefault();
     e.stopPropagation();
     setColMenu({ x: e.clientX, y: e.clientY, col });
-  };
+  }, []);
   useEffect(() => {
     if (!colMenu) return;
     const close = () => setColMenu(null);
@@ -1120,100 +1273,22 @@ export function DataTable<T>({
               <col key={col.key} style={{ width: widthOf(col) }} />
             ))}
           </colgroup>
-          <thead>
-            <tr style={{ background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border-strong)', textAlign: 'left' }}>
-              <th
-                title="行番号(クリックで行選択・ドラッグで範囲)"
-                style={{
-                  position: 'sticky',
-                  top: 0,
-                  left: 0,
-                  zIndex: 4,
-                  padding: 0,
-                  textAlign: 'center',
-                  color: 'var(--color-text-faint)',
-                  fontWeight: 600,
-                  fontSize: 10,
-                  background: 'var(--color-subtle)',
-                  borderRight: '1px solid var(--color-border)',
-                  borderBottom: '1px solid var(--color-border-strong)',
-                }}
-              >
-                #
-              </th>
-              {columns.map((col, colIdx) => (
-                <th
-                  key={col.key}
-                  draggable={colReorderable && !col.locked}
-                  onDragStart={colReorderable && !col.locked ? (e) => onColDragStart(e, colIdx) : undefined}
-                  onDragOver={colReorderable ? (e) => onColDragOver(e, colIdx) : undefined}
-                  onDrop={colReorderable ? () => onColDrop(colIdx) : undefined}
-                  onDragEnd={
-                    colReorderable
-                      ? () => {
-                          dragColRef.current = null;
-                          setDragOverCol(null);
-                        }
-                      : undefined
-                  }
-                  onContextMenu={(e) => onColContextMenu(e, col)}
-                  onClick={(e) => {
-                    // ヘッダー内の操作(フィルターボタン等)以外をクリックしたら列選択
-                    if ((e.target as HTMLElement).closest('button')) return;
-                    selectColumn(colIdx);
-                  }}
-                  title={colReorderable && !col.locked ? 'ドラッグで列の並び替え / 右クリックで列メニュー' : undefined}
-                  style={{
-                    position: 'sticky',
-                    top: 0,
-                    left: colIdx === 0 ? GUTTER_WIDTH : undefined,
-                    zIndex: colIdx === 0 ? 3 : 2,
-                    padding: '4px 8px',
-                    color: 'var(--color-text-muted)',
-                    fontWeight: 700,
-                    letterSpacing: '0.01em',
-                    fontSize: Math.max(fontSize - 1, 10),
-                    whiteSpace: 'nowrap',
-                    overflow: col.renderHeader ? 'visible' : 'hidden',
-                    textOverflow: 'ellipsis',
-                    cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
-                    background: 'var(--color-subtle)',
-                    borderBottom: '1px solid var(--color-border-strong)',
-                    borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
-                    borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,
-                    ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
-                  }}
-                >
-                  {col.renderHeader ? col.renderHeader() : col.label}
-                  {resizable && (
-                    <span
-                      role="separator"
-                      aria-label={`${col.label}の列幅を変更`}
-                      title="ドラッグで列幅変更 / ダブルクリックで既定に戻す"
-                      draggable={false}
-                      onMouseDown={(e) => onResizeStart(e, col)}
-                      onTouchStart={(e) => onResizeTouchStart(e, col)}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        resetColumn(col);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        right: 0,
-                        width: 14,
-                        height: '100%',
-                        cursor: 'col-resize',
-                        zIndex: 1,
-                        touchAction: 'none',
-                      }}
-                    />
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
+          <TableHead
+            columns={columns}
+            fontSize={fontSize}
+            resizable={resizable}
+            colReorderable={colReorderable}
+            dragOverCol={dragOverCol}
+            onColDragStart={onColDragStart}
+            onColDragOver={onColDragOver}
+            onColDrop={onColDrop}
+            onColDragEnd={onColDragEnd}
+            onColContextMenu={onColContextMenu}
+            onSelectColumn={selectColumn}
+            onResizeStart={onResizeStart}
+            onResizeTouchStart={onResizeTouchStart}
+            onResetColumn={resetColumn}
+          />
           <tbody>
             {loading ? (
               <tr>
