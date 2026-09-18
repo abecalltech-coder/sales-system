@@ -19,20 +19,27 @@ const ADD_COLUMN_KEY = '__add_column__';
 const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
 // 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
 const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
-// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を薄い赤にする(要望)。
+// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を赤くする(要望)。
 // 「未」は選択肢として明示的に選ばれている場合だけでなく、未入力(空欄)の行も対象に含める
 // (本番データでは「未」を選ばず空欄のまま運用している行がほとんどだったため)。
+// 当月になったらより濃い赤にする(要望: 当月は特に目立たせたい)。
 const SHOP_SUPPORT_DATE_KEY = 'shop_support_cancel_date';
 const SHOP_SUPPORT_STATUS_KEY = 'shop_support_cancel_status';
 const SHOP_SUPPORT_STATUS_DONE_LABEL = '済';
+const SHOP_SUPPORT_BG_PAST = 'rgba(239, 68, 68, 0.14)'; // 当月より前(薄い赤)
+const SHOP_SUPPORT_BG_CURRENT = 'rgba(239, 68, 68, 0.34)'; // 当月(濃い赤)
 
-/** 対象の日付が「当月以前」(今月を含む過去)かどうか。日は見ず年月だけで比較する */
-function isMonthOrEarlier(iso: string | null | undefined): boolean {
-  if (!iso) return false;
+/** 対象の日付が当月より前/当月/当月より後のどれかを、日を見ず年月だけで判定する */
+function monthCompareToNow(iso: string | null | undefined): 'past' | 'current' | 'future' | null {
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
+  if (Number.isNaN(d.getTime())) return null;
   const now = new Date();
-  return d.getFullYear() * 12 + d.getMonth() <= now.getFullYear() * 12 + now.getMonth();
+  const dKey = d.getFullYear() * 12 + d.getMonth();
+  const nowKey = now.getFullYear() * 12 + now.getMonth();
+  if (dKey < nowKey) return 'past';
+  if (dKey === nowKey) return 'current';
+  return 'future';
 }
 
 export function DealsListPage() {
@@ -137,9 +144,10 @@ export function DealsListPage() {
     if (!shopSupportDoneOptionId) return undefined;
     const dateVal = r.values[SHOP_SUPPORT_DATE_KEY] as string | null;
     const statusVal = r.values[SHOP_SUPPORT_STATUS_KEY] as string | null;
-    if (isMonthOrEarlier(dateVal) && statusVal !== shopSupportDoneOptionId) {
-      return { background: 'rgba(239, 68, 68, 0.14)' };
-    }
+    if (statusVal === shopSupportDoneOptionId) return undefined;
+    const cmp = monthCompareToNow(dateVal);
+    if (cmp === 'current') return { background: SHOP_SUPPORT_BG_CURRENT };
+    if (cmp === 'past') return { background: SHOP_SUPPORT_BG_PAST };
     return undefined;
   };
 
