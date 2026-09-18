@@ -19,10 +19,12 @@ const ADD_COLUMN_KEY = '__add_column__';
 const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
 // 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
 const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
-// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を薄い赤にする(要望)
+// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を薄い赤にする(要望)。
+// 「未」は選択肢として明示的に選ばれている場合だけでなく、未入力(空欄)の行も対象に含める
+// (本番データでは「未」を選ばず空欄のまま運用している行がほとんどだったため)。
 const SHOP_SUPPORT_DATE_KEY = 'shop_support_cancel_date';
 const SHOP_SUPPORT_STATUS_KEY = 'shop_support_cancel_status';
-const SHOP_SUPPORT_STATUS_UNSET_LABEL = '未';
+const SHOP_SUPPORT_STATUS_DONE_LABEL = '済';
 
 /** 対象の日付が「当月以前」(今月を含む過去)かどうか。日は見ず年月だけで比較する */
 function isMonthOrEarlier(iso: string | null | undefined): boolean {
@@ -127,15 +129,15 @@ export function DealsListPage() {
 
   const rawRows = useMemo(() => data?.items ?? [], [data]);
 
-  // 店サポ解約誘導日が当月以前 かつ 店サポ解約誘導が「未」の行を薄い赤で塗る(要望)
-  const shopSupportUnsetOptionId = fields
+  // 店サポ解約誘導日が当月以前 かつ 店サポ解約誘導が「未」(空欄含む)の行を薄い赤で塗る(要望)
+  const shopSupportDoneOptionId = fields
     ?.find((f) => f.fieldKey === SHOP_SUPPORT_STATUS_KEY)
-    ?.options.find((o) => o.label === SHOP_SUPPORT_STATUS_UNSET_LABEL)?.id;
+    ?.options.find((o) => o.label === SHOP_SUPPORT_STATUS_DONE_LABEL)?.id;
   const rowStyle = (r: DealListItem): CSSProperties | undefined => {
-    if (!shopSupportUnsetOptionId) return undefined;
+    if (!shopSupportDoneOptionId) return undefined;
     const dateVal = r.values[SHOP_SUPPORT_DATE_KEY] as string | null;
     const statusVal = r.values[SHOP_SUPPORT_STATUS_KEY] as string | null;
-    if (isMonthOrEarlier(dateVal) && statusVal === shopSupportUnsetOptionId) {
+    if (isMonthOrEarlier(dateVal) && statusVal !== shopSupportDoneOptionId) {
       return { background: 'rgba(239, 68, 68, 0.14)' };
     }
     return undefined;
