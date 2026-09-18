@@ -14,11 +14,14 @@ export function isoToDateKey(iso: string | null) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-/** 「次回対応日」等の手入力欄の表示用。入力方法(-区切り/区切り/区切りなし)によらず月/日の半角/表記に統一する */
+/**
+ * 「次回対応日」等の手入力欄の表示用。入力方法(-区切り/区切り/区切りなし)によらず
+ * 年/月/日の半角表記に統一する(要望: 年月日の入力欄は全て年まで表示されるように)。
+ */
 export function isoToDateInput(iso: string | null) {
   if (!iso) return '';
   const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 }
 export function isoToTimeInput(iso: string | null) {
   if (!iso) return '';

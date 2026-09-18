@@ -223,6 +223,8 @@ function RowInner<T>({
           return (
             <td
               key={col.key}
+              data-row={i}
+              data-col={colIdx}
               title={cursor ? `${cursor.userName}さんが編集中` : undefined}
               onFocusCapture={() => onCellFocus(rowId, col.key)}
               onBlurCapture={() => onCellBlur(rowId, col.key)}
@@ -466,6 +468,9 @@ export function DataTable<T>({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const clipboardRef = useRef<string>('');
   const gridRef = useRef<HTMLDivElement>(null);
+  // セル選択中のEnterキーの段階(1回目=入力に切替, 2回目=セル側で確定, 3回目=下へ移動)を
+  // 覚えておくためのref。確定後もsel自体は動かないため、同じセルへのEnterかどうかで判定する(要望)。
+  const enterEditedCellRef = useRef<{ fr: number; fc: number } | null>(null);
 
   // 最新の rows(表示中) / columns / sel を event ハンドラから参照するための ref
   const rowsRef = useRef(rows2);
@@ -593,6 +598,23 @@ export function DataTable<T>({
   widthOfRef.current = widthOf;
 
   const findRowById = (id: string) => rowsRef.current.find((r) => getRowId(r) === id);
+
+  // 選択中のセルを「クリックしたのと同じ状態」にする(要望: Enterでクリックと同じ機能に)。
+  // 入力欄(input/select/textarea)が既にあればフォーカスするだけでよいが、InlineTextの
+  // 未編集時のようにまだDOM上に入力欄が無いセルは、クリックで初めて表示されるため
+  // クリックイベント自体を発火させる。
+  const activateCell = (fr: number, fc: number) => {
+    const td = gridRef.current?.querySelector<HTMLElement>(`td[data-row="${fr}"][data-col="${fc}"]`);
+    if (!td) return;
+    const interactive = td.querySelector<HTMLElement>('input, select, textarea');
+    if (interactive) {
+      interactive.focus();
+      return;
+    }
+    // カーソル表示用のドットspanがある場合はそれを飛ばし、実際のセル内容(常に最後の子要素)を対象にする
+    const clickable = td.lastElementChild as HTMLElement | null;
+    clickable?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  };
 
   // --- Undo/Redo -------------------------------------------------------
   const applyOp = (op: UndoOp, dir: 'undo' | 'redo') => {
@@ -887,6 +909,23 @@ export function DataTable<T>({
         return e.shiftKey ? { ...s, fr, fc } : { ar: fr, ac: fc, fr, fc };
       });
     };
+    // セル選択中のEnter(要望: 1回目=入力に切替, 2回目=入力欄側で確定, 3回目=下のセルへ移動)。
+    // 2回目のEnterは各入力コンポーネント側(InlineText等)がblurして確定するため、このグリッド側の
+    // ハンドラは1回目(入力欄への切替)と3回目(確定後の下移動)の2回だけを区別すればよい。
+    // 確定後はフォーカスがグリッドへ戻るので、同じセルのまま3回目のEnterがここに届く。
+    // 矢印キーでの移動や別セルのクリックなど他の理由でセルが変わった場合は自然に1回目からやり直しになる。
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const activated = enterEditedCellRef.current;
+      if (activated && activated.fr === sel.fr && activated.fc === sel.fc) {
+        enterEditedCellRef.current = null;
+        move(1, 0);
+      } else {
+        enterEditedCellRef.current = { fr: sel.fr, fc: sel.fc };
+        activateCell(sel.fr, sel.fc);
+      }
+      return;
+    }
     if (e.key === 'ArrowUp') move(-1, 0);
     else if (e.key === 'ArrowDown') move(1, 0);
     else if (e.key === 'ArrowLeft') move(0, -1);

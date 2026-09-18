@@ -382,6 +382,11 @@ export function InlineSelect({
       disabled={disabled}
       onClick={(e) => e.stopPropagation()}
       onChange={(e) => onSave(e.target.value)}
+      onKeyDown={(e) => {
+        // 選択肢の確定後、グリッドに戻って3回目のEnterで下のセルへ移動できるようにする
+        // (要望: セル選択→1回目Enterで入力切替→2回目で確定→3回目で下へ移動)
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
       style={{
         font: 'inherit',
         color: textColor,
@@ -460,6 +465,17 @@ export function InlineFlexDate({
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => commitText(draft.trim())}
+        onKeyDown={(e) => {
+          // Enterで確定してグリッドに戻す(要望: セル選択→1回目Enterで入力切替→2回目で確定→3回目で下へ移動)
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(isoToDateInput(iso));
+            e.currentTarget.blur();
+          }
+        }}
         style={{ ...baseStyle, flex: 1, minWidth: 0 }}
       />
       <button
@@ -551,6 +567,17 @@ export function InlineFlexTime({
         }
         const date = isoToDateKey(iso) || isoToDateKey(new Date().toISOString());
         onSave(new Date(`${date}T${parsed}`).toISOString());
+      }}
+      onKeyDown={(e) => {
+        // Enterで確定してグリッドに戻す(要望: セル選択→1回目Enterで入力切替→2回目で確定→3回目で下へ移動)
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setDraft(isoToTimeInput(iso));
+          e.currentTarget.blur();
+        }
       }}
       style={baseStyle}
     />

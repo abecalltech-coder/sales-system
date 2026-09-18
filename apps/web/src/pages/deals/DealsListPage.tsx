@@ -19,15 +19,15 @@ const ADD_COLUMN_KEY = '__add_column__';
 const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
 // 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
 const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
-// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を赤くする(要望)。
+// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を赤紫にする(要望)。
 // 「未」は選択肢として明示的に選ばれている場合だけでなく、未入力(空欄)の行も対象に含める
 // (本番データでは「未」を選ばず空欄のまま運用している行がほとんどだったため)。
-// 当月になったらより濃い赤にする(要望: 当月は特に目立たせたい)。
+// 当月になったらより濃くする(要望: 当月は特に目立たせたい / 当月以前は温度感を高くしたい)。
 const SHOP_SUPPORT_DATE_KEY = 'shop_support_cancel_date';
 const SHOP_SUPPORT_STATUS_KEY = 'shop_support_cancel_status';
 const SHOP_SUPPORT_STATUS_DONE_LABEL = '済';
-const SHOP_SUPPORT_BG_PAST = 'rgba(239, 68, 68, 0.14)'; // 当月より前(薄い赤)
-const SHOP_SUPPORT_BG_CURRENT = 'rgba(239, 68, 68, 0.34)'; // 当月(濃い赤)
+const SHOP_SUPPORT_BG_PAST = 'rgba(190, 24, 93, 0.16)'; // 当月より前(薄い赤紫)
+const SHOP_SUPPORT_BG_CURRENT = 'rgba(190, 24, 93, 0.38)'; // 当月(濃い赤紫)
 
 /** 対象の日付が当月より前/当月/当月より後のどれかを、日を見ず年月だけで判定する */
 function monthCompareToNow(iso: string | null | undefined): 'past' | 'current' | 'future' | null {
