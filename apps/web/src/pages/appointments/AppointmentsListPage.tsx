@@ -14,6 +14,7 @@ import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
+import { BulkImportAppointmentsModal } from './BulkImportAppointmentsModal';
 
 const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 const inlineInputStyle = { border: 'none', background: 'transparent', font: 'inherit', color: 'inherit', width: '100%', padding: 0 } as const;
@@ -34,6 +35,7 @@ export function AppointmentsListPage() {
   const pageSize = 100;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const manualSort = useManualSort('appointments', '/appointments/reorder', 'appointments');
 
   const { data, isLoading } = useAppointments({ page, pageSize, statusId: statusId || undefined, periodMonth, includePrevMonth });
@@ -473,9 +475,14 @@ export function AppointmentsListPage() {
             <h1 className="page-title">アポ実績管理</h1>
             <MonthSwitcher />
           </div>
-          <a href="/api/appointments/export" style={{ fontSize: 13 }}>
-            CSV出力
-          </a>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <a href="/api/appointments/export" style={{ fontSize: 13 }}>
+              CSV出力
+            </a>
+            <button onClick={() => setBulkImportOpen(true)} style={{ fontSize: 13 }}>
+              一括投入
+            </button>
+          </div>
         </div>
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{error}</p>}
@@ -533,6 +540,29 @@ export function AppointmentsListPage() {
           ]}
         />
       </div>
+
+      {bulkImportOpen && (
+        <BulkImportAppointmentsModal
+          preConfirmOptions={preConfirmOptions ?? []}
+          preContactOptions={preContactOptions ?? []}
+          closerOptions={closerOptions ?? []}
+          departmentOptions={departmentOptions ?? []}
+          typeOptions={typeOptions ?? []}
+          progressOptions={progressOptions ?? []}
+          acquisitionMethodOptions={acquisitionMethodOptions ?? []}
+          anshinBizStatusOptions={anshinBizStatusOptions ?? []}
+          anshinBizLostReasonOptions={anshinBizLostReasonOptions ?? []}
+          mobileStatusOptions={mobileStatusOptions ?? []}
+          mobileLostReasonOptions={mobileLostReasonOptions ?? []}
+          funfoStatusOptions={funfoStatusOptions ?? []}
+          funfoLostReasonOptions={funfoLostReasonOptions ?? []}
+          consentFormTypeOptions={consentFormTypeOptions ?? []}
+          deliveryMethodOptions={deliveryMethodOptions ?? []}
+          deliveryStatusOptions={deliveryStatusOptions ?? []}
+          onClose={() => setBulkImportOpen(false)}
+          onImported={() => queryClient.invalidateQueries({ queryKey: ['appointments'] })}
+        />
+      )}
     </AppLayout>
   );
 }

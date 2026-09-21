@@ -1,4 +1,5 @@
-import { IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 enum MeetingTypeDto {
   VISIT = 'VISIT',
@@ -93,4 +94,59 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsDateString() preContactAt?: string; // 前連日時
   @IsOptional() @IsBoolean() reminderEnabled?: boolean;
   @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;
+}
+
+/**
+ * 一括投入(要望): 外部シートを貼り付けてまとめてアポ詳細を作成する。
+ * CLカレンダー直接作成用のCreateAppointmentDto(meetingStartAt必須・項目少なめ)とは
+ * 用途が異なるため別DTOにする。
+ */
+export class CreateAppointmentBulkRowDto {
+  @IsOptional() @IsDateString() createdAt?: string; // アポ日
+  @IsOptional() @IsDateString() meetingStartAt?: string; // 商談日+商談時間
+  @IsOptional() @IsString() apStaffName?: string;
+  @IsOptional() @IsString() preConfirmStatusId?: string;
+  @IsOptional() @IsString() preContactStatusId?: string;
+  @IsOptional() @IsString() closerStatusId?: string;
+  @IsOptional() @IsString() hook?: string;
+  @IsOptional() @IsString() department?: string; // StatusMaster.id(category=DEPARTMENT_BRANCH)
+  @IsOptional() @IsString() corporateName?: string;
+  @IsOptional() @IsString() contactName?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsString() email?: string;
+  @IsOptional() @IsString() memo?: string;
+  @IsOptional() @IsString() industry?: string;
+  @IsOptional() @IsDateString() importantMattersOkAt?: string;
+  @IsOptional() @IsDateString() electronicContractAt?: string;
+  @IsOptional() @IsDateString() nextActionAt?: string;
+  @IsOptional() @IsString() typeStatusId?: string;
+  @IsOptional() @IsString() progressStatusId?: string;
+  @IsOptional() @IsString() listName?: string;
+  @IsOptional() @IsString() acquisitionMethodStatusId?: string;
+  @IsOptional() @IsString() proposalLocation?: string;
+  @IsOptional() @IsString() existingContract?: string;
+  @IsOptional() @IsBoolean() anshinBizProposed?: boolean;
+  @IsOptional() @IsString() anshinBizStatusId?: string;
+  @IsOptional() @IsString() anshinBizLostReasonStatusId?: string;
+  @IsOptional() @IsInt() anshinBizPoints?: number;
+  @IsOptional() @IsBoolean() mobileProposed?: boolean;
+  @IsOptional() @IsString() mobileStatusId?: string;
+  @IsOptional() @IsString() mobileLostReasonStatusId?: string;
+  @IsOptional() @IsBoolean() funfoProposed?: boolean;
+  @IsOptional() @IsString() funfoStatusId?: string;
+  @IsOptional() @IsString() funfoLostReasonStatusId?: string;
+  @IsOptional() @IsString() deductionNote?: string;
+  @IsOptional() @IsString() consentFormTypeStatusId?: string;
+  @IsOptional() @IsString() deliveryMethodStatusId?: string;
+  @IsOptional() @IsString() deliveryStatusStatusId?: string;
+  @IsOptional() @IsDateString() deliveredAt?: string;
+  @IsOptional() @IsString() specialNotes?: string;
+}
+
+export class BulkCreateAppointmentsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateAppointmentBulkRowDto)
+  rows!: CreateAppointmentBulkRowDto[];
 }

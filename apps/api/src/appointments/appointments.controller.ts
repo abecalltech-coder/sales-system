@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AppointmentsService } from './appointments.service';
-import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
+import { CreateAppointmentDto, BulkCreateAppointmentsDto, UpdateAppointmentDto } from './dto/appointment.dto';
 import { ReorderDto, BulkIdsDto, PeriodMoveDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -94,6 +94,12 @@ export class AppointmentsController {
   @Post()
   create(@Body() dto: CreateAppointmentDto, @CurrentUser() user: AuthenticatedUser) {
     return this.appointmentsService.create(dto, user.id);
+  }
+
+  @RequirePermissions({ resource: 'appointment', action: 'create' })
+  @Post('bulk-create')
+  bulkCreate(@Body() dto: BulkCreateAppointmentsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.appointmentsService.bulkCreate(dto.rows, user.id);
   }
 
   @RequirePermissions({ resource: 'appointment', action: 'export' })

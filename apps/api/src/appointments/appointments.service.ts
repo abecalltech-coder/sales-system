@@ -2,7 +2,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateAppointmentDto, UpdateAppointmentDto } from './dto/appointment.dto';
+import { CreateAppointmentDto, CreateAppointmentBulkRowDto, UpdateAppointmentDto } from './dto/appointment.dto';
 import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
@@ -337,6 +337,88 @@ export class AppointmentsService {
     );
 
     return { ...appointment, storeName: appointment.customer?.corporateName ?? null, prefecture: extractPrefecture(appointment.customer?.address) };
+  }
+
+  /**
+   * 一括投入(要望): 外部シートを貼り付けてまとめてアポ詳細を作成する。
+   * 通常のcreate()はCLカレンダーからの直接作成用で項目が少ないため、ここでは
+   * アポ実績項目を直接指定してレコードを作る。顧客作成・採番など副作用が多く
+   * $transactionにまとめづらいため、1件ずつ順に作成する(トス側のbulkCreate()と同様)。
+   */
+  async bulkCreate(rows: CreateAppointmentBulkRowDto[], actorUserId: string) {
+    const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
+    let count = 0;
+    for (const dto of rows) {
+      const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');
+
+      let customerId: string | undefined;
+      if (dto.corporateName || dto.contactName || dto.phone || dto.address || dto.email) {
+        const customer = await this.prisma.customer.create({
+          data: {
+            corporateName: dto.corporateName,
+            contactName: dto.contactName,
+            phone: dto.phone,
+            address: dto.address,
+            email: dto.email,
+            createdBy: actorUserId,
+            updatedBy: actorUserId,
+          },
+        });
+        customerId = customer.id;
+      }
+
+      const meetingStartAt = dto.meetingStartAt ? new Date(dto.meetingStartAt) : undefined;
+      const createdAt = dto.createdAt ? new Date(dto.createdAt) : undefined;
+
+      await this.prisma.appointment.create({
+        data: {
+          caseNumber,
+          customerId,
+          apStaffName: dto.apStaffName,
+          preConfirmStatusId: dto.preConfirmStatusId,
+          preContactStatusId: dto.preContactStatusId,
+          closerStatusId: dto.closerStatusId,
+          hook: dto.hook,
+          department: dto.department,
+          memo: dto.memo,
+          industry: dto.industry,
+          importantMattersOkAt: dto.importantMattersOkAt ? new Date(dto.importantMattersOkAt) : undefined,
+          electronicContractAt: dto.electronicContractAt ? new Date(dto.electronicContractAt) : undefined,
+          nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : undefined,
+          typeStatusId: dto.typeStatusId,
+          progressStatusId: dto.progressStatusId,
+          listName: dto.listName,
+          acquisitionMethodStatusId: dto.acquisitionMethodStatusId,
+          proposalLocation: dto.proposalLocation,
+          existingContract: dto.existingContract,
+          anshinBizProposed: dto.anshinBizProposed,
+          anshinBizStatusId: dto.anshinBizStatusId,
+          anshinBizLostReasonStatusId: dto.anshinBizLostReasonStatusId,
+          anshinBizPoints: dto.anshinBizPoints,
+          mobileProposed: dto.mobileProposed,
+          mobileStatusId: dto.mobileStatusId,
+          mobileLostReasonStatusId: dto.mobileLostReasonStatusId,
+          funfoProposed: dto.funfoProposed,
+          funfoStatusId: dto.funfoStatusId,
+          funfoLostReasonStatusId: dto.funfoLostReasonStatusId,
+          deductionNote: dto.deductionNote,
+          consentFormTypeStatusId: dto.consentFormTypeStatusId,
+          deliveryMethodStatusId: dto.deliveryMethodStatusId,
+          deliveryStatusStatusId: dto.deliveryStatusStatusId,
+          deliveredAt: dto.deliveredAt ? new Date(dto.deliveredAt) : undefined,
+          specialNotes: dto.specialNotes,
+          meetingStartAt,
+          meetingStatusId,
+          idempotencyKey: randomUUID(),
+          createdAt,
+          periodMonth: toPeriodMonth(createdAt ?? meetingStartAt ?? new Date()),
+          createdBy: actorUserId,
+          updatedBy: actorUserId,
+        },
+      });
+      count += 1;
+    }
+    return { ok: true, count };
   }
 
   /** 部署ラベル・CL名字・都道府県・フック・店舗名からカレンダー題名を組み立てる(表示側と規則を揃える) */
