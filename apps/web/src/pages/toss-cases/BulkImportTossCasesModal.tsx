@@ -39,6 +39,19 @@ function parseTsv(text: string): string[][] {
     .map((l) => l.split('\t'));
 }
 
+/** 一覧APIはpageSizeの上限が100のため、重複判定用に全件をページングして取得する */
+async function fetchAllTossCases(): Promise<TossCaseListItem[]> {
+  const all: TossCaseListItem[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await api.get<{ items: TossCaseListItem[]; total: number }>(`/toss-cases?page=${page}&pageSize=100`);
+    all.push(...res.items);
+    if (all.length >= res.total || res.items.length === 0) break;
+    page += 1;
+  }
+  return all;
+}
+
 /**
  * トス実績の一括投入(要望)。案件管理と同じ「表をそのまま貼り付け→見出し行の列名で
  * 対応する項目に取り込む」方式。「地域」は住所から自動判定される項目のため取り込み対象外、
@@ -113,11 +126,9 @@ export function BulkImportTossCasesModal({
     const rows: Record<string, unknown>[] = [];
     try {
       // 重複判定のため既存のトス案件を全件取得しておく(トス日+店舗名が一致するものは取り込まない)
-      const existing = await api.get<{ items: TossCaseListItem[] }>('/toss-cases?page=1&pageSize=5000');
+      const existing = await fetchAllTossCases();
       const existingKeys = new Set(
-        existing.items
-          .filter((it) => it.receivedAt && it.customer?.corporateName)
-          .map((it) => dedupKey(it.receivedAt, it.customer!.corporateName!)),
+        existing.filter((it) => it.receivedAt && it.customer?.corporateName).map((it) => dedupKey(it.receivedAt, it.customer!.corporateName!)),
       );
       const batchKeys = new Set<string>();
 

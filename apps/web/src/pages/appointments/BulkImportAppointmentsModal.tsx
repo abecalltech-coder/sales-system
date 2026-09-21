@@ -59,6 +59,19 @@ function parseTsv(text: string): string[][] {
     .map((l) => l.split('\t'));
 }
 
+/** 一覧APIはpageSizeの上限が100のため、重複判定用に全件をページングして取得する */
+async function fetchAllAppointments(): Promise<AppointmentListItem[]> {
+  const all: AppointmentListItem[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await api.get<{ items: AppointmentListItem[]; total: number }>(`/appointments?page=${page}&pageSize=100`);
+    all.push(...res.items);
+    if (all.length >= res.total || res.items.length === 0) break;
+    page += 1;
+  }
+  return all;
+}
+
 export function BulkImportAppointmentsModal({
   preConfirmOptions,
   preContactOptions,
@@ -134,11 +147,9 @@ export function BulkImportAppointmentsModal({
     const rows: Record<string, unknown>[] = [];
     try {
       // 重複判定のため既存のアポ詳細を全件取得しておく(アポ日+店舗名が一致するものは取り込まない)
-      const existing = await api.get<{ items: AppointmentListItem[] }>('/appointments?page=1&pageSize=5000');
+      const existing = await fetchAllAppointments();
       const existingKeys = new Set(
-        existing.items
-          .filter((it) => it.createdAt && it.customer?.corporateName)
-          .map((it) => dedupKey(it.createdAt, it.customer!.corporateName!)),
+        existing.filter((it) => it.createdAt && it.customer?.corporateName).map((it) => dedupKey(it.createdAt, it.customer!.corporateName!)),
       );
       const batchKeys = new Set<string>();
 
