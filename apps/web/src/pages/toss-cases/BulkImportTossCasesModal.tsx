@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { StatusMasterItem } from '../../hooks/useApi';
+import { StatusMasterItem, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { parseDateText, parseTimeText } from '../../lib/dateInput';
+import { isoToDateKey, parseDateText, parseTimeText } from '../../lib/dateInput';
 
 const CALLING_TRUE = /^(済|✓|1|true|yes|○|◯)$/i;
 const CALL_DIRECTIONS = ['架電', '入電'];
@@ -60,10 +60,13 @@ export function BulkImportTossCasesModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skipped: number } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number } | null>(null);
 
   const statusIdByLabel = (opts: StatusMasterItem[], label: string): string | undefined =>
     opts.find((o) => o.displayName === label)?.id;
+
+  // トス日(日単位)+店舗名が一致する行は重複として取り込まない(要望)
+  const dedupKey = (dateIso: string, store: string) => `${isoToDateKey(dateIso)}|${store.trim().toLowerCase()}`;
 
   const submit = async () => {
     setError(null);
@@ -106,8 +109,18 @@ export function BulkImportTossCasesModal({
 
     setSubmitting(true);
     let skipped = 0;
+    let duplicates = 0;
     const rows: Record<string, unknown>[] = [];
     try {
+      // 重複判定のため既存のトス案件を全件取得しておく(トス日+店舗名が一致するものは取り込まない)
+      const existing = await api.get<{ items: TossCaseListItem[] }>('/toss-cases?page=1&pageSize=5000');
+      const existingKeys = new Set(
+        existing.items
+          .filter((it) => it.receivedAt && it.customer?.corporateName)
+          .map((it) => dedupKey(it.receivedAt, it.customer!.corporateName!)),
+      );
+      const batchKeys = new Set<string>();
+
       for (const line of dataLines) {
         const get = (i: number) => (i >= 0 ? (line[i] ?? '').trim() : '');
         const values: Record<string, unknown> = {};
@@ -170,15 +183,27 @@ export function BulkImportTossCasesModal({
           skipped += 1;
           continue;
         }
+        if (typeof values.receivedAt === 'string' && typeof values.corporateName === 'string') {
+          const key = dedupKey(values.receivedAt, values.corporateName);
+          if (existingKeys.has(key) || batchKeys.has(key)) {
+            duplicates += 1;
+            continue;
+          }
+          batchKeys.add(key);
+        }
         rows.push(values);
       }
       if (rows.length === 0) {
-        setError(skipped > 0 ? `取り込めるデータがありませんでした(空行 ${skipped}件を除外)` : '取り込めるデータ行がありませんでした');
+        setError(
+          skipped > 0 || duplicates > 0
+            ? `取り込めるデータがありませんでした(空行${skipped}件・重複${duplicates}件を除外)`
+            : '取り込めるデータ行がありませんでした',
+        );
         setSubmitting(false);
         return;
       }
       const res = await api.post<{ count: number }>('/toss-cases/bulk-create', { rows });
-      setSummary({ created: res.count, skipped });
+      setSummary({ created: res.count, skipped, duplicates });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -204,6 +229,12 @@ export function BulkImportTossCasesModal({
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
               {summary.created}件のトス案件を作成しました。
+              {summary.duplicates > 0 && (
+                <>
+                  <br />
+                  トス日・店舗名が一致する重複{summary.duplicates}件は除外しました。
+                </>
+              )}
               {summary.skipped > 0 && (
                 <>
                   <br />

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { StatusMasterItem } from '../../hooks/useApi';
+import { AppointmentListItem, StatusMasterItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { parseDateText, parseTimeText } from '../../lib/dateInput';
+import { isoToDateKey, parseDateText, parseTimeText } from '../../lib/dateInput';
 
 const PROPOSED_TRUE = /^(済|✓|1|true|yes|○|◯)$/i;
 
@@ -101,9 +101,12 @@ export function BulkImportAppointmentsModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skipped: number } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number } | null>(null);
 
   const idByLabel = (opts: StatusMasterItem[], label: string): string | undefined => opts.find((o) => o.displayName === label)?.id;
+
+  // アポ日(日単位)+店舗名が一致する行は重複として取り込まない(要望)
+  const dedupKey = (dateIso: string, store: string) => `${isoToDateKey(dateIso)}|${store.trim().toLowerCase()}`;
 
   const submit = async () => {
     setError(null);
@@ -127,8 +130,18 @@ export function BulkImportAppointmentsModal({
 
     setSubmitting(true);
     let skipped = 0;
+    let duplicates = 0;
     const rows: Record<string, unknown>[] = [];
     try {
+      // 重複判定のため既存のアポ詳細を全件取得しておく(アポ日+店舗名が一致するものは取り込まない)
+      const existing = await api.get<{ items: AppointmentListItem[] }>('/appointments?page=1&pageSize=5000');
+      const existingKeys = new Set(
+        existing.items
+          .filter((it) => it.createdAt && it.customer?.corporateName)
+          .map((it) => dedupKey(it.createdAt, it.customer!.corporateName!)),
+      );
+      const batchKeys = new Set<string>();
+
       for (const line of dataLines) {
         const get = (key: keyof typeof HEADER_LABELS) => {
           const i = col[key];
@@ -290,15 +303,27 @@ export function BulkImportAppointmentsModal({
           skipped += 1;
           continue;
         }
+        if (typeof values.createdAt === 'string' && typeof values.corporateName === 'string') {
+          const key = dedupKey(values.createdAt, values.corporateName);
+          if (existingKeys.has(key) || batchKeys.has(key)) {
+            duplicates += 1;
+            continue;
+          }
+          batchKeys.add(key);
+        }
         rows.push(values);
       }
       if (rows.length === 0) {
-        setError(skipped > 0 ? `取り込めるデータがありませんでした(空行 ${skipped}件を除外)` : '取り込めるデータ行がありませんでした');
+        setError(
+          skipped > 0 || duplicates > 0
+            ? `取り込めるデータがありませんでした(空行${skipped}件・重複${duplicates}件を除外)`
+            : '取り込めるデータ行がありませんでした',
+        );
         setSubmitting(false);
         return;
       }
       const res = await api.post<{ count: number }>('/appointments/bulk-create', { rows });
-      setSummary({ created: res.count, skipped });
+      setSummary({ created: res.count, skipped, duplicates });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -322,6 +347,12 @@ export function BulkImportAppointmentsModal({
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
               {summary.created}件のアポ詳細を作成しました。
+              {summary.duplicates > 0 && (
+                <>
+                  <br />
+                  アポ日・店舗名が一致する重複{summary.duplicates}件は除外しました。
+                </>
+              )}
               {summary.skipped > 0 && (
                 <>
                   <br />
