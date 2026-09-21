@@ -403,6 +403,7 @@ export function DealsListPage() {
       {addOpen && (
         <QuickAddDealModal
           fields={fields ?? []}
+          userOptions={userOptions ?? []}
           submitting={createMutation.isPending}
           onCancel={() => setAddOpen(false)}
           onSubmit={(values) => createMutation.mutate(values)}
