@@ -14,6 +14,7 @@ import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
+import { BulkImportTossCasesModal } from './BulkImportTossCasesModal';
 
 const CALL_DIRECTION_OPTIONS = [
   { id: '架電', label: '架電' },
@@ -58,6 +59,7 @@ export function TossCasesListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ corporateName: '', contactName: '', phone: '', memo: '' });
   const [error, setError] = useState<string | null>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   // ステータスを「アポイント」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
   const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; progressStatusId: string } | null>(null);
@@ -487,6 +489,9 @@ export function TossCasesListPage() {
             <a href="/api/toss-cases/export" style={{ fontSize: 13 }}>
               CSV出力
             </a>
+            <button onClick={() => setBulkImportOpen(true)} style={{ fontSize: 13 }}>
+              一括投入
+            </button>
             <button className="btn-primary" onClick={() => setShowCreate((v) => !v)}>
               {showCreate ? '閉じる' : '＋ 新規案件'}
             </button>
@@ -652,6 +657,16 @@ export function TossCasesListPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {bulkImportOpen && (
+        <BulkImportTossCasesModal
+          preConfirmOptions={preConfirmOptions ?? []}
+          progressOptions={progressOptions ?? []}
+          ngReasonOptions={ngReasonOptions ?? []}
+          onClose={() => setBulkImportOpen(false)}
+          onImported={() => queryClient.invalidateQueries({ queryKey: ['toss-cases'] })}
+        />
       )}
     </AppLayout>
   );

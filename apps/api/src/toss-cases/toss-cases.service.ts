@@ -162,8 +162,12 @@ export class TossCasesService {
         progressStatusId,
         ngReasonStatusId: dto.ngReasonStatusId,
         nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : undefined,
+        // 一括投入(過去データの取り込み)時のみ指定される。未指定時はDB既定値(作成時刻)を使う
+        receivedAt: dto.receivedAt ? new Date(dto.receivedAt) : undefined,
+        isCallingInProgress: dto.isCallingInProgress,
         // 対象月はトス受領日(=作成時のJST暦月)で確定。以後は「当月へ移動」でのみ変更。
-        periodMonth: toPeriodMonth(new Date()),
+        // 一括投入でreceivedAtを過去日にした場合は、その月を対象月にする(要望: 過去データの取り込み)。
+        periodMonth: toPeriodMonth(dto.receivedAt ? new Date(dto.receivedAt) : new Date()),
         createdBy: actorUserId,
         updatedBy: actorUserId,
       },
@@ -186,6 +190,20 @@ export class TossCasesService {
     );
 
     return tossCase;
+  }
+
+  /**
+   * 一括投入(要望): 外部シートを貼り付けてまとめてトス案件を作成する。
+   * create()は顧客作成・採番・ステータス既定値解決など副作用が多く$transactionにまとめづらいため、
+   * 1件ずつ順にcreate()を呼ぶ(bulk-deleteやbulk-updateのような単純な更新一括APIとは異なる)。
+   */
+  async bulkCreate(rows: CreateTossCaseDto[], actorUserId: string) {
+    let count = 0;
+    for (const row of rows) {
+      await this.create(row, actorUserId);
+      count += 1;
+    }
+    return { ok: true, count };
   }
 
   async update(id: string, dto: UpdateTossCaseDto, userId: string) {

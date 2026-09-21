@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@
 import { Response } from 'express';
 import { TossCasesService } from './toss-cases.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto, SetCallingFlagDto } from './dto/toss-case.dto';
+import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto, BulkCreateTossCasesDto, SetCallingFlagDto } from './dto/toss-case.dto';
 import { ReorderDto, BulkIdsDto, PeriodMoveDto } from '../common/dto/reorder.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -113,6 +113,12 @@ export class TossCasesController {
   @Post()
   create(@Body() dto: CreateTossCaseDto, @CurrentUser() user: AuthenticatedUser) {
     return this.tossCasesService.create(dto, user.id);
+  }
+
+  @RequirePermissions({ resource: 'toss_case', action: 'create' })
+  @Post('bulk-create')
+  bulkCreate(@Body() dto: BulkCreateTossCasesDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.tossCasesService.bulkCreate(dto.rows, user.id);
   }
 
   @RequirePermissions({ resource: 'toss_case', action: 'edit' })

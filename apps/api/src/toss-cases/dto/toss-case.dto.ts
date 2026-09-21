@@ -1,4 +1,5 @@
-import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsInt, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateTossCaseDto {
   @IsOptional() @IsUUID() customerId?: string;
@@ -33,6 +34,17 @@ export class CreateTossCaseDto {
   @IsOptional() @IsString() progressStatusId?: string;
   @IsOptional() @IsString() ngReasonStatusId?: string;
   @IsOptional() @IsDateString() nextActionAt?: string;
+  // 一括投入(要望)で過去日のトス日/対応中フラグを指定できるようにする。未指定時はDB既定値(作成時刻/false)を使う
+  @IsOptional() @IsDateString() receivedAt?: string;
+  @IsOptional() @IsBoolean() isCallingInProgress?: boolean;
+}
+
+/** 一括投入(要望): 外部シートを貼り付けてまとめてトス案件を作成する */
+export class BulkCreateTossCasesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateTossCaseDto)
+  rows!: CreateTossCaseDto[];
 }
 
 export class UpdateTossCaseDto {
