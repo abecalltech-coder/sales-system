@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DealFieldItem, DealListItem, UserOption } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText } from '../../lib/dateInput';
+import { parseTsv } from '../../lib/tsv';
 
 // 外部シートの列名 → 案件管理の項目名(要望で指定されたマッピング)
 const SOURCE_TO_TARGET_LABEL: [string, string][] = [
@@ -15,14 +16,6 @@ const SOURCE_TO_TARGET_LABEL: [string, string][] = [
   ['申込番号', '申込番号'],
   ['MCOK日', 'MC日'],
 ];
-
-function parseTsv(text: string): string[][] {
-  return text
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .filter((l) => l.trim() !== '')
-    .map((l) => l.split('\t'));
-}
 
 /**
  * 外部シート(見出し行付きの表)をそのまま貼り付けて、指定した列だけを拾って

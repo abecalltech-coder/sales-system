@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StatusMasterItem, TossCaseListItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { parseTsv } from '../../lib/tsv';
 
 const CALLING_TRUE = /^(済|✓|1|true|yes|○|◯)$/i;
 const CALL_DIRECTIONS = ['架電', '入電'];
@@ -30,14 +31,6 @@ const HEADER_LABELS = {
   hook: 'フック',
   existingContract: '既契約',
 } as const;
-
-function parseTsv(text: string): string[][] {
-  return text
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .filter((l) => l.trim() !== '')
-    .map((l) => l.split('\t'));
-}
 
 /** 一覧APIはpageSizeの上限が100のため、重複判定用に全件をページングして取得する */
 async function fetchAllTossCases(): Promise<TossCaseListItem[]> {

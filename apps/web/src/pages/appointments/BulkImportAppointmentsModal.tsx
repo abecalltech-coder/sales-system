@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppointmentListItem, StatusMasterItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { parseTsv } from '../../lib/tsv';
 
 const PROPOSED_TRUE = /^(済|✓|1|true|yes|○|◯)$/i;
 
@@ -50,14 +51,6 @@ const HEADER_LABELS = {
   email: 'SMS送付用携帯番号（メールアドレス）',
   specialNotes: 'メモ・特記事項',
 } as const;
-
-function parseTsv(text: string): string[][] {
-  return text
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .filter((l) => l.trim() !== '')
-    .map((l) => l.split('\t'));
-}
 
 /** 一覧APIはpageSizeの上限が100のため、重複判定用に全件をページングして取得する */
 async function fetchAllAppointments(): Promise<AppointmentListItem[]> {
