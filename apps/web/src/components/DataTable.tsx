@@ -10,6 +10,7 @@ import {
   TouchEvent as ReactTouchEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -522,7 +523,15 @@ export function DataTable<T>({
   // content-visibility等の描画スキップだけでは、React自体が全行分の要素を毎回
   // 生成・差分計算するコストが残るため、実際に画面付近にある行だけをtbodyへ
   // レンダリングし、その前後は高さだけ合わせたダミー行で埋める。
-  const ROW_HEIGHT = fontSize + 18; // 1行分の高さ(padding+行送りの概算)。行はほぼ一定高さという前提。
+  // 行の高さは概算値(fontSize+18)ではなく実際にDOMへ描画された行を計測して使う
+  // (要望: 一番下までスクロールすると画面がプルプルして見づらい不具合の修正。
+  // 概算と実際の1行の高さがわずかにズレていても、数千行分積み重なると誤差が
+  // 大きくなり、末尾付近でダミー行の高さと実際の内容の高さが合わずスクロール位置が
+  // 毎フレーム補正されがくがくする状態になっていた)。
+  const ESTIMATED_ROW_HEIGHT = fontSize + 18; // 実測できるまでの初期値
+  const [rowHeight, setRowHeight] = useState(ESTIMATED_ROW_HEIGHT);
+  const rowHeightMeasuredRef = useRef(false);
+  const ROW_HEIGHT = rowHeight;
   const ROW_OVERSCAN = 8; // 画面のすぐ外側にも少し多めに描画し、スクロール時のちらつきを防ぐ
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
@@ -537,6 +546,26 @@ export function DataTable<T>({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // fontSizeが変わったら再計測する(それ以外は行内容が同じ高さのはずなので初回だけでよい)
+  useLayoutEffect(() => {
+    rowHeightMeasuredRef.current = false;
+  }, [fontSize]);
+
+  useLayoutEffect(() => {
+    if (rowHeightMeasuredRef.current) return;
+    const el = gridRef.current;
+    if (!el) return;
+    // data-row属性を持つtd(=実データ行のセル。ローディング/空/ダミー行には無い)を含む
+    // <tr>だけを計測対象にする
+    const firstCell = el.querySelector('tbody td[data-row]');
+    const firstRow = firstCell?.closest('tr');
+    if (!firstRow) return;
+    const measured = firstRow.getBoundingClientRect().height;
+    if (measured <= 0) return;
+    rowHeightMeasuredRef.current = true;
+    setRowHeight((cur) => (Math.abs(measured - cur) > 0.5 ? measured : cur));
+  });
 
   const onGridScroll = () => {
     if (scrollRafRef.current != null) return;
