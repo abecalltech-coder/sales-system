@@ -107,9 +107,7 @@ export function BulkImportAppointmentsModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number } | null>(null);
-
-  const idByLabel = (opts: StatusMasterItem[], label: string): string | undefined => opts.find((o) => o.displayName === label)?.id;
+  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number; addedOptions: number } | null>(null);
 
   // アポ日(日単位)+店舗名が一致する行は重複として取り込まない(要望)
   const dedupKey = (dateIso: string, store: string) => `${isoToDateKey(dateIso)}|${store.trim().toLowerCase()}`;
@@ -137,6 +135,7 @@ export function BulkImportAppointmentsModal({
     setSubmitting(true);
     let skipped = 0;
     let duplicates = 0;
+    let addedOptions = 0;
     const rows: Record<string, unknown>[] = [];
     try {
       // 重複判定のため既存のアポ詳細を全件取得しておく(アポ日+店舗名が一致するものは取り込まない)
@@ -145,6 +144,43 @@ export function BulkImportAppointmentsModal({
         existing.filter((it) => it.createdAt && it.customer?.corporateName).map((it) => dedupKey(it.createdAt, it.customer!.corporateName!)),
       );
       const batchKeys = new Set<string>();
+
+      // 各プルダウン項目は既存の選択肢に無い値(マスタ未登録のスタッフ名等)でもデータを失わず
+      // 取り込めるよう、一致しなければ新しい選択肢として自動追加する(要望: 一括投入で情報が
+      // 正しく入らない不具合の調査・改善。案件管理の一括投入と同じ考え方)。
+      const optionsCache = new Map<string, StatusMasterItem[]>([
+        ['TOSS_PRE_CONFIRM', [...preConfirmOptions]],
+        ['APPOINTMENT_PRE_CONTACT', [...preContactOptions]],
+        ['APPOINTMENT_CLOSER', [...closerOptions]],
+        ['DEPARTMENT_BRANCH', [...departmentOptions]],
+        ['APPOINTMENT_TYPE', [...typeOptions]],
+        ['APPOINTMENT_PROGRESS', [...progressOptions]],
+        ['APPOINTMENT_ACQUISITION_METHOD', [...acquisitionMethodOptions]],
+        ['APPOINTMENT_ANSHIN_BIZ_STATUS', [...anshinBizStatusOptions]],
+        ['APPOINTMENT_ANSHIN_BIZ_LOST_REASON', [...anshinBizLostReasonOptions]],
+        ['APPOINTMENT_MOBILE_STATUS', [...mobileStatusOptions]],
+        ['APPOINTMENT_MOBILE_LOST_REASON', [...mobileLostReasonOptions]],
+        ['APPOINTMENT_FUNFO_STATUS', [...funfoStatusOptions]],
+        ['APPOINTMENT_FUNFO_LOST_REASON', [...funfoLostReasonOptions]],
+        ['APPOINTMENT_CONSENT_FORM_TYPE', [...consentFormTypeOptions]],
+        ['APPOINTMENT_DELIVERY_METHOD', [...deliveryMethodOptions]],
+        ['APPOINTMENT_DELIVERY_STATUS', [...deliveryStatusOptions]],
+      ]);
+      const resolveStatusId = async (category: string, rawLabel: string): Promise<string | undefined> => {
+        const label = rawLabel.trim();
+        if (!label) return undefined;
+        const opts = optionsCache.get(category) ?? [];
+        const exact = opts.find((o) => o.displayName === label);
+        if (exact) return exact.id;
+        const created = await api.post<StatusMasterItem>('/status-master', {
+          category,
+          internalCode: `${category}_IMPORT_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          displayName: label,
+        });
+        optionsCache.set(category, [...opts, created]);
+        addedOptions += 1;
+        return created.id;
+      };
 
       for (const line of dataLines) {
         const get = (key: keyof typeof HEADER_LABELS) => {
@@ -167,24 +203,24 @@ export function BulkImportAppointmentsModal({
         if (ap) values.apStaffName = ap;
         const preConfirm = get('preConfirm');
         if (preConfirm) {
-          const id = idByLabel(preConfirmOptions, preConfirm);
+          const id = await resolveStatusId('TOSS_PRE_CONFIRM', preConfirm);
           if (id) values.preConfirmStatusId = id;
         }
         const preContact = get('preContact');
         if (preContact) {
-          const id = idByLabel(preContactOptions, preContact);
+          const id = await resolveStatusId('APPOINTMENT_PRE_CONTACT', preContact);
           if (id) values.preContactStatusId = id;
         }
         const closer = get('closer');
         if (closer) {
-          const id = idByLabel(closerOptions, closer);
+          const id = await resolveStatusId('APPOINTMENT_CLOSER', closer);
           if (id) values.closerStatusId = id;
         }
         const hook = get('hook');
         if (hook) values.hook = hook;
         const department = get('department');
         if (department) {
-          const id = idByLabel(departmentOptions, department);
+          const id = await resolveStatusId('DEPARTMENT_BRANCH', department);
           if (id) values.department = id;
         }
         const corporateName = get('corporateName');
@@ -216,19 +252,19 @@ export function BulkImportAppointmentsModal({
         if (address) values.address = address;
         const type = get('type');
         if (type) {
-          const id = idByLabel(typeOptions, type);
+          const id = await resolveStatusId('APPOINTMENT_TYPE', type);
           if (id) values.typeStatusId = id;
         }
         const progress = get('progress');
         if (progress) {
-          const id = idByLabel(progressOptions, progress);
+          const id = await resolveStatusId('APPOINTMENT_PROGRESS', progress);
           if (id) values.progressStatusId = id;
         }
         const listName = get('listName');
         if (listName) values.listName = listName;
         const acquisitionMethod = get('acquisitionMethod');
         if (acquisitionMethod) {
-          const id = idByLabel(acquisitionMethodOptions, acquisitionMethod);
+          const id = await resolveStatusId('APPOINTMENT_ACQUISITION_METHOD', acquisitionMethod);
           if (id) values.acquisitionMethodStatusId = id;
         }
         const proposalLocation = get('proposalLocation');
@@ -239,12 +275,12 @@ export function BulkImportAppointmentsModal({
         if (anshinBizProposed) values.anshinBizProposed = PROPOSED_TRUE.test(anshinBizProposed);
         const anshinBizStatus = get('anshinBizStatus');
         if (anshinBizStatus) {
-          const id = idByLabel(anshinBizStatusOptions, anshinBizStatus);
+          const id = await resolveStatusId('APPOINTMENT_ANSHIN_BIZ_STATUS', anshinBizStatus);
           if (id) values.anshinBizStatusId = id;
         }
         const anshinBizLostReason = get('anshinBizLostReason');
         if (anshinBizLostReason) {
-          const id = idByLabel(anshinBizLostReasonOptions, anshinBizLostReason);
+          const id = await resolveStatusId('APPOINTMENT_ANSHIN_BIZ_LOST_REASON', anshinBizLostReason);
           if (id) values.anshinBizLostReasonStatusId = id;
         }
         const anshinBizPoints = get('anshinBizPoints');
@@ -256,41 +292,41 @@ export function BulkImportAppointmentsModal({
         if (mobileProposed) values.mobileProposed = PROPOSED_TRUE.test(mobileProposed);
         const mobileStatus = get('mobileStatus');
         if (mobileStatus) {
-          const id = idByLabel(mobileStatusOptions, mobileStatus);
+          const id = await resolveStatusId('APPOINTMENT_MOBILE_STATUS', mobileStatus);
           if (id) values.mobileStatusId = id;
         }
         const mobileLostReason = get('mobileLostReason');
         if (mobileLostReason) {
-          const id = idByLabel(mobileLostReasonOptions, mobileLostReason);
+          const id = await resolveStatusId('APPOINTMENT_MOBILE_LOST_REASON', mobileLostReason);
           if (id) values.mobileLostReasonStatusId = id;
         }
         const funfoProposed = get('funfoProposed');
         if (funfoProposed) values.funfoProposed = PROPOSED_TRUE.test(funfoProposed);
         const funfoStatus = get('funfoStatus');
         if (funfoStatus) {
-          const id = idByLabel(funfoStatusOptions, funfoStatus);
+          const id = await resolveStatusId('APPOINTMENT_FUNFO_STATUS', funfoStatus);
           if (id) values.funfoStatusId = id;
         }
         const funfoLostReason = get('funfoLostReason');
         if (funfoLostReason) {
-          const id = idByLabel(funfoLostReasonOptions, funfoLostReason);
+          const id = await resolveStatusId('APPOINTMENT_FUNFO_LOST_REASON', funfoLostReason);
           if (id) values.funfoLostReasonStatusId = id;
         }
         const deductionNote = get('deductionNote');
         if (deductionNote) values.deductionNote = deductionNote;
         const consentFormType = get('consentFormType');
         if (consentFormType) {
-          const id = idByLabel(consentFormTypeOptions, consentFormType);
+          const id = await resolveStatusId('APPOINTMENT_CONSENT_FORM_TYPE', consentFormType);
           if (id) values.consentFormTypeStatusId = id;
         }
         const deliveryMethod = get('deliveryMethod');
         if (deliveryMethod) {
-          const id = idByLabel(deliveryMethodOptions, deliveryMethod);
+          const id = await resolveStatusId('APPOINTMENT_DELIVERY_METHOD', deliveryMethod);
           if (id) values.deliveryMethodStatusId = id;
         }
         const deliveryStatus = get('deliveryStatus');
         if (deliveryStatus) {
-          const id = idByLabel(deliveryStatusOptions, deliveryStatus);
+          const id = await resolveStatusId('APPOINTMENT_DELIVERY_STATUS', deliveryStatus);
           if (id) values.deliveryStatusStatusId = id;
         }
         const deliveredAt = get('deliveredAt');
@@ -327,7 +363,7 @@ export function BulkImportAppointmentsModal({
         return;
       }
       const res = await api.post<{ count: number }>('/appointments/bulk-create', { rows });
-      setSummary({ created: res.count, skipped, duplicates });
+      setSummary({ created: res.count, skipped, duplicates, addedOptions });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -361,6 +397,12 @@ export function BulkImportAppointmentsModal({
                 <>
                   <br />
                   取り込める項目が無かった{summary.skipped}件は除外しました。
+                </>
+              )}
+              {summary.addedOptions > 0 && (
+                <>
+                  <br />
+                  プルダウン項目に無かった選択肢を{summary.addedOptions}件、マスタへ新規追加しました。
                 </>
               )}
             </p>

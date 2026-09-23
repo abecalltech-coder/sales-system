@@ -66,10 +66,7 @@ export function BulkImportTossCasesModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number } | null>(null);
-
-  const statusIdByLabel = (opts: StatusMasterItem[], label: string): string | undefined =>
-    opts.find((o) => o.displayName === label)?.id;
+  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number; addedOptions: number } | null>(null);
 
   // トス日(日単位)+店舗名が一致する行は重複として取り込まない(要望)
   const dedupKey = (dateIso: string, store: string) => `${isoToDateKey(dateIso)}|${store.trim().toLowerCase()}`;
@@ -116,6 +113,7 @@ export function BulkImportTossCasesModal({
     setSubmitting(true);
     let skipped = 0;
     let duplicates = 0;
+    let addedOptions = 0;
     const rows: Record<string, unknown>[] = [];
     try {
       // 重複判定のため既存のトス案件を全件取得しておく(トス日+店舗名が一致するものは取り込まない)
@@ -124,6 +122,30 @@ export function BulkImportTossCasesModal({
         existing.filter((it) => it.receivedAt && it.customer?.corporateName).map((it) => dedupKey(it.receivedAt, it.customer!.corporateName!)),
       );
       const batchKeys = new Set<string>();
+
+      // 前確・進捗・NG理由は既存の選択肢に無い値(例: マスタ未登録のスタッフ名)でも
+      // データを失わずに取り込めるよう、一致しなければ新しい選択肢として自動追加する
+      // (要望: 一括投入で情報が正しく入らない不具合の調査・改善。案件管理の一括投入と同じ考え方)。
+      const optionsCache = new Map<string, StatusMasterItem[]>([
+        ['TOSS_PRE_CONFIRM', [...preConfirmOptions]],
+        ['TOSS_PROGRESS', [...progressOptions]],
+        ['TOSS_NG_REASON', [...ngReasonOptions]],
+      ]);
+      const resolveStatusId = async (category: string, rawLabel: string): Promise<string | undefined> => {
+        const label = rawLabel.trim();
+        if (!label) return undefined;
+        const opts = optionsCache.get(category) ?? [];
+        const exact = opts.find((o) => o.displayName === label);
+        if (exact) return exact.id;
+        const created = await api.post<StatusMasterItem>('/status-master', {
+          category,
+          internalCode: `${category}_IMPORT_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          displayName: label,
+        });
+        optionsCache.set(category, [...opts, created]);
+        addedOptions += 1;
+        return created.id;
+      };
 
       for (const line of dataLines) {
         const get = (i: number) => (i >= 0 ? (line[i] ?? '').trim() : '');
@@ -143,7 +165,7 @@ export function BulkImportTossCasesModal({
         if (ap) values.apStaffName = ap;
         const preConfirm = get(col.preConfirm);
         if (preConfirm) {
-          const id = statusIdByLabel(preConfirmOptions, preConfirm);
+          const id = await resolveStatusId('TOSS_PRE_CONFIRM', preConfirm);
           if (id) values.preConfirmStatusId = id;
         }
         const department = get(col.department);
@@ -164,12 +186,12 @@ export function BulkImportTossCasesModal({
         if (proposal) values.proposal = proposal;
         const progress = get(col.progress);
         if (progress) {
-          const id = statusIdByLabel(progressOptions, progress);
+          const id = await resolveStatusId('TOSS_PROGRESS', progress);
           if (id) values.progressStatusId = id;
         }
         const ngReason = get(col.ngReason);
         if (ngReason) {
-          const id = statusIdByLabel(ngReasonOptions, ngReason);
+          const id = await resolveStatusId('TOSS_NG_REASON', ngReason);
           if (id) values.ngReasonStatusId = id;
         }
         const listName = get(col.listName);
@@ -207,7 +229,7 @@ export function BulkImportTossCasesModal({
         return;
       }
       const res = await api.post<{ count: number }>('/toss-cases/bulk-create', { rows });
-      setSummary({ created: res.count, skipped, duplicates });
+      setSummary({ created: res.count, skipped, duplicates, addedOptions });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -243,6 +265,12 @@ export function BulkImportTossCasesModal({
                 <>
                   <br />
                   取り込める項目が無かった{summary.skipped}件は除外しました。
+                </>
+              )}
+              {summary.addedOptions > 0 && (
+                <>
+                  <br />
+                  前確・進捗・NG理由に無かった選択肢を{summary.addedOptions}件、マスタへ新規追加しました。
                 </>
               )}
             </p>
