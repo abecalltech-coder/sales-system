@@ -28,7 +28,6 @@ type FilterValueFn = (r: AppointmentListItem) => string;
 
 export function AppointmentsListPage() {
   const [page, setPage] = useState(1);
-  const [statusId, setStatusId] = useState('');
   const [periodMonth] = usePeriodMonth();
   const [includePrevMonth, setIncludePrevMonth] = useState(false);
   // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
@@ -39,19 +38,16 @@ export function AppointmentsListPage() {
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const manualSort = useManualSort('appointments', '/appointments/reorder', 'appointments');
 
-  const { data, isLoading } = useAppointments({ page, pageSize, statusId: statusId || undefined, periodMonth, includePrevMonth });
+  const { data, isLoading } = useAppointments({ page, pageSize, periodMonth, includePrevMonth });
   const { data: me } = useMe();
   const presence = usePresence('APPOINTMENT', me?.id);
-  const { data: statuses } = useStatuses('APPOINTMENT');
   const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
-  const { data: industryOptions } = useStatuses('INDUSTRY');
   const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
   const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
-  const { data: hpProgressOptions } = useStatuses('APPOINTMENT_HP_PROGRESS');
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
   const { data: acquisitionMethodOptions } = useStatuses('APPOINTMENT_ACQUISITION_METHOD');
@@ -65,7 +61,6 @@ export function AppointmentsListPage() {
   const { data: deliveryMethodOptions } = useStatuses('APPOINTMENT_DELIVERY_METHOD');
   const { data: deliveryStatusOptions } = useStatuses('APPOINTMENT_DELIVERY_STATUS');
 
-  const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
   // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
   const progressBg = (id: string | null) =>
     (id ? pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) : null) ?? '#ffffff';
@@ -225,7 +220,6 @@ export function AppointmentsListPage() {
   filterValueFns.address = (r) => r.customer?.address ?? '';
   filterValueFns.anshinBizPoints = (r) => (r.anshinBizPoints != null ? String(r.anshinBizPoints) : '');
   filterValueFns.email = (r) => r.customer?.email ?? '';
-  filterValueFns.status = (r) => statusLabel(r.meetingStatusId);
   filterValueFns.memo = (r) => r.memo ?? '';
 
   const optLabel = (opts: StatusMasterItem[] | undefined, id: string | null | undefined) =>
@@ -314,27 +308,6 @@ export function AppointmentsListPage() {
       copyValue: (r) => r.memo ?? '',
       pasteValue: (r, text) => save(r, { memo: text }),
     },
-    {
-      key: 'status',
-      label: '商談ステータス',
-      renderHeader: filterHeader('status', '商談ステータス'),
-      render: (r) => (
-        <InlineSelect
-          value={r.meetingStatusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
-          onSave={(v) => save(r, { meetingStatusId: v })}
-          colored
-          style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
-        />
-      ),
-      width: 120,
-      copyValue: (r) => optLabel(statuses, r.meetingStatusId),
-      pasteValue: (r, text) => {
-        const m = optByLabel(statuses, text);
-        if (m) save(r, { meetingStatusId: m.id });
-      },
-    },
-    labelColumn('industry', '業種', industryOptions, 96),
     dateColumn('importantMattersOkAt', '重説OK日'),
     dateColumn('electronicContractAt', 'ET日'),
     dateColumn('nextActionAt', '決着予定日'),
@@ -373,9 +346,20 @@ export function AppointmentsListPage() {
       copyValue: (r) => r.customer?.address ?? '',
       pasteValue: (r, text) => save(r, { address: text }),
     },
-    selectColumn('hpProgressStatusId', 'HP進捗', hpProgressOptions, 100),
     selectColumn('typeStatusId', '種別', typeOptions, 90),
-    selectColumn('progressStatusId', '進捗', progressOptions, 110),
+    // 進捗は商談ステータスと同じ色付きの枠(ピル)で表示(要望)
+    {
+      ...selectColumn('progressStatusId', '進捗', progressOptions, 110),
+      render: (r) => (
+        <InlineSelect
+          value={r.progressStatusId}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          onSave={(v) => save(r, { progressStatusId: v })}
+          colored
+          style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
+        />
+      ),
+    },
     textColumn('listName', 'リスト', 96),
     selectColumn('acquisitionMethodStatusId', '獲得方法', acquisitionMethodOptions, 100),
     labelColumn('proposalLocation', '提案場所', proposalOptions, 100),
@@ -490,21 +474,6 @@ export function AppointmentsListPage() {
         <PresenceBar viewers={presence.viewers} />
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-          <select
-            value={statusId}
-            onChange={(e) => {
-              setStatusId(e.target.value);
-              setPage(1);
-            }}
-            style={{ padding: 6, fontSize: 13 }}
-          >
-            <option value="">すべてのステータス</option>
-            {statuses?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.displayName}
-              </option>
-            ))}
-          </select>
           {manualSort.manual && (
             <button onClick={manualSort.resetToAuto} style={{ fontSize: 12 }}>
               自動並びに戻す
