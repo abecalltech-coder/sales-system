@@ -10,7 +10,7 @@ import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
-import { pastel } from '../../lib/color';
+import { masterRowColors } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
 import { appointmentProgressRank, compareByRankThenTime } from '../../lib/progressPriority';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
@@ -61,9 +61,9 @@ export function AppointmentsListPage() {
   const { data: deliveryMethodOptions } = useStatuses('APPOINTMENT_DELIVERY_METHOD');
   const { data: deliveryStatusOptions } = useStatuses('APPOINTMENT_DELIVERY_STATUS');
 
-  // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
-  const progressBg = (id: string | null) =>
-    (id ? pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) : null) ?? '#ffffff';
+  // 行の塗りつぶし・文字色はマスタ管理の設定どおり(要望)
+  const progressRowColors = (id: string | null) =>
+    masterRowColors(id ? progressOptions?.find((s) => s.id === id) : undefined);
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
@@ -353,7 +353,7 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => save(r, { progressStatusId: v })}
           colored
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
@@ -495,7 +495,7 @@ export function AppointmentsListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          rowStyle={(r) => ({ background: progressBg(r.progressStatusId) })}
+          rowStyle={(r) => progressRowColors(r.progressStatusId)}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

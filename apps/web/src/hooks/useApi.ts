@@ -36,6 +36,7 @@ export interface StatusMasterItem {
   internalCode: string;
   displayName: string;
   color: string | null;
+  textColor?: string | null;
   order: number;
 }
 

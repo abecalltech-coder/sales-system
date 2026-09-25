@@ -6,7 +6,7 @@ import {
   parseDateText as parseFlexDateText,
   parseTimeText as parseFlexTimeText,
 } from '../lib/dateInput';
-import { pastel, readableTextColor } from '../lib/color';
+import { readableTextColor } from '../lib/color';
 import { useIsCoarsePointer } from '../lib/useIsCoarsePointer';
 import { NavIcon } from './NavIcon';
 
@@ -356,7 +356,7 @@ export function InlineSelect({
   colored,
 }: {
   value: string | null | undefined;
-  options: { id: string; label: string; color?: string | null }[];
+  options: { id: string; label: string; color?: string | null; textColor?: string | null }[];
   onSave: (next: string) => void;
   style?: CSSProperties;
   disabled?: boolean;
@@ -366,14 +366,16 @@ export function InlineSelect({
   /** 進捗・NG理由等、選択肢ごとに色を持つ項目向け。選択中の値の色をボタン風の枠・背景に反映する(要望) */
   colored?: boolean;
 }) {
-  const rawColor = colored ? options.find((o) => o.id === value)?.color : undefined;
-  // セル背景は元色を白側に寄せて淡くする(要望: 濃くて見づらい)
-  const selectedColor = rawColor ? pastel(rawColor) : undefined;
+  const selectedOpt = colored ? options.find((o) => o.id === value) : undefined;
+  // マスタ管理で選んだ色をそのまま使う(要望: 淡くせず設定どおりの色に)
+  const selectedColor = selectedOpt?.color || undefined;
   // 既知の選択肢に一致しない値(例: Googleフォーム等の外部連携で選択肢外の文言が入った場合)でも
   // 空欄表示にせず、そのままの文言を選べる状態として表示する。
   const hasUnknownValue = !!value && !options.some((o) => o.id === value);
-  // 淡いパステル背景なので基本は黒文字。ごく暗い色だけ白にする(readableは淡色化後の色で判定)
-  const textColor = colored ? (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)') : 'inherit';
+  // 文字色はマスタで指定があればそれ、なければ塗りつぶし色から黒/白を自動選択
+  const textColor = colored
+    ? selectedOpt?.textColor || (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)')
+    : 'inherit';
 
   return (
     <select
@@ -393,11 +395,10 @@ export function InlineSelect({
         width: '100%',
         backgroundColor: colored ? (selectedColor ?? 'var(--color-bg)') : 'transparent',
         cursor: disabled ? 'default' : 'pointer',
-        // 淡い背景ではプルダウン矢印(既定は白)も暗くする
-        ...(colored && textColor === '#111827'
+        // プルダウン矢印も文字色に合わせる
+        ...(colored && textColor.startsWith('#')
           ? {
-              backgroundImage:
-                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23111827' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='${encodeURIComponent(textColor)}' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
             }
           : {}),
         ...style,

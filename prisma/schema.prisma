@@ -279,6 +279,7 @@ model StatusMaster {
   internalCode String // 自動処理判定用の固定コード(表示名変更の影響を受けない)
   displayName  String
   color        String?
+  textColor    String? // 文字色(未設定=塗りつぶし色から自動で黒/白)
   order        Int     @default(0)
   active       Boolean @default(true)
 

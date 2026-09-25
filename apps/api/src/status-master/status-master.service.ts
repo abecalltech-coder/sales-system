@@ -30,12 +30,13 @@ export class StatusMasterService {
         internalCode: dto.internalCode,
         displayName: dto.displayName,
         color: dto.color,
+        textColor: dto.textColor,
         order: dto.order ?? (maxOrder._max.order ?? 0) + 1,
       },
     });
   }
 
-  /** displayName/color/order/activeのみ変更可能。internalCodeは自動処理の判定基盤のため不変。 */
+  /** displayName/color/textColor/order/activeのみ変更可能。internalCodeは自動処理の判定基盤のため不変。 */
   async update(id: string, dto: UpdateStatusMasterDto) {
     const existing = await this.prisma.statusMaster.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('ステータスが見つかりません');

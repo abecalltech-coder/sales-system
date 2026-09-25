@@ -10,7 +10,7 @@ import { api, ApiError } from '../../lib/api';
 import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
-import { pastel } from '../../lib/color';
+import { masterRowColors } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
 import { tossProgressRank, compareByRankThenTime } from '../../lib/progressPriority';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
@@ -142,8 +142,8 @@ export function TossCasesListPage() {
   });
 
   // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
-  // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
-  const progressBg = (id: string | null) => pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) ?? '#ffffff';
+  // 行の塗りつぶし・文字色はマスタ管理の設定どおり(要望)
+  const progressRowColors = (id: string | null) => masterRowColors(progressOptions?.find((s) => s.id === id));
   const progressInternalCode = (id: string) => progressOptions?.find((s) => s.id === id)?.internalCode;
 
   const filterValueFns: Record<string, FilterValueFn> = {
@@ -388,7 +388,7 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => {
             // 「アポイント」に変えたら前連日時・商談日時・商談形式の入力を求め、アポ詳細を自動生成する
             if (progressInternalCode(v) === 'PROGRESS_APPOINTMENT') {
@@ -419,7 +419,7 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineSelect
           value={r.ngReasonStatusId}
-          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => save(r, { ngReasonStatusId: v })}
           colored
         />
@@ -576,7 +576,7 @@ export function TossCasesListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          rowStyle={(r) => ({ background: r.isCallingInProgress ? 'var(--color-danger-soft)' : progressBg(r.progressStatusId) })}
+          rowStyle={(r) => (r.isCallingInProgress ? { background: 'var(--color-danger-soft)' } : progressRowColors(r.progressStatusId))}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

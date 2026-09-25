@@ -39,12 +39,15 @@ export class CreateStatusMasterDto {
   displayName!: string;
 
   @IsOptional() @IsString() color?: string;
+  @IsOptional() @IsString() textColor?: string;
   @IsOptional() @IsInt() order?: number;
 }
 
 export class UpdateStatusMasterDto {
   @IsOptional() @IsString() displayName?: string;
   @IsOptional() @IsString() color?: string;
+  /** null で自動(塗りつぶし色から黒/白を自動選択)に戻す */
+  @IsOptional() @IsString() textColor?: string | null;
   @IsOptional() @IsInt() order?: number;
   @IsOptional() @IsBoolean() active?: boolean;
 }

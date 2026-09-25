@@ -64,6 +64,8 @@ interface DataTableProps<T> {
   extraRowMenuItems?: { label: (count: number) => string; onClick: (ids: string[]) => void; danger?: boolean }[];
   /** 合計行など。<tr> をそのまま渡す(セル数は 行番号ガター + columns.length に合わせる) */
   footerRow?: ReactNode;
+  /** 先頭列を横スクロール時に固定する(要望: 案件管理のみ) */
+  freezeFirstColumn?: boolean;
 }
 
 const DEFAULT_COLUMN_WIDTH = 120;
@@ -128,6 +130,7 @@ interface RowProps<T> {
   onCellMouseEnter: (r: number, c: number) => void;
   onCellFocus: (rowId: string, colKey: string) => void;
   onCellBlur: (rowId: string, colKey: string) => void;
+  freezeFirstColumn: boolean;
 }
 
 /**
@@ -160,13 +163,20 @@ function RowInner<T>({
   onCellMouseEnter,
   onCellFocus,
   onCellBlur,
+  freezeFirstColumn,
 }: RowProps<T>) {
   const restingBackground: string = String(
     rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
   );
   // 固定表示(sticky)セルは他列がスクロールして裏に隠れる際も不透明でないと
   // 文字が透けて重なって見えるため、transparentの代わりに不透明な地の色を使う(要望対応の副修正)
-  const stickyBackground = i % 2 === 1 ? 'var(--color-sunken)' : 'var(--color-surface)';
+  // 行に色がある場合はその色(マスタの塗りつぶし色)を固定セルにも使う
+  const stickyBackground =
+    rowStyle?.(row)?.background != null
+      ? restingBackground
+      : i % 2 === 1
+        ? 'var(--color-sunken)'
+        : 'var(--color-surface)';
   return (
     <Fragment>
       <tr
@@ -209,6 +219,7 @@ function RowInner<T>({
             ? i >= selBounds.r0 && i <= selBounds.r1 && colIdx >= selBounds.c0 && colIdx <= selBounds.c1
             : false;
           const isFocusCell = focusRow === i && focusCol === colIdx;
+          const frozen = freezeFirstColumn && colIdx === 0;
           // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
           const edgeBounds = selected ? selBounds : null;
           const selEdgeShadow = edgeBounds
@@ -233,14 +244,14 @@ function RowInner<T>({
               onMouseEnter={() => onCellMouseEnter(i, colIdx)}
               onContextMenu={(e) => onCellContextMenu(e, i)}
               style={{
-                position: colIdx === 0 ? 'sticky' : 'relative',
-                left: colIdx === 0 ? GUTTER_WIDTH : undefined,
-                zIndex: colIdx === 0 ? 1 : undefined,
+                position: frozen ? 'sticky' : 'relative',
+                left: frozen ? GUTTER_WIDTH : undefined,
+                zIndex: frozen ? 1 : undefined,
                 padding: '3px 8px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
+                borderRight: frozen ? '1px solid var(--color-border)' : undefined,
                 ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
                 boxShadow: isFocusCell
                   ? 'inset 0 0 0 2px var(--color-primary)'
@@ -254,7 +265,7 @@ function RowInner<T>({
                     ? 'var(--color-primary-soft)'
                     : cursor
                       ? `${cursor.color}1a`
-                      : colIdx === 0
+                      : frozen
                         ? stickyBackground
                         : undefined,
               }}
@@ -308,6 +319,7 @@ interface TableHeadProps<T> {
   onResizeStart: (e: ReactMouseEvent, col: Column<T>) => void;
   onResizeTouchStart: (e: ReactTouchEvent, col: Column<T>) => void;
   onResetColumn: (col: Column<T>) => void;
+  freezeFirstColumn: boolean;
 }
 
 /**
@@ -330,6 +342,7 @@ function TableHeadInner<T>({
   onResizeStart,
   onResizeTouchStart,
   onResetColumn,
+  freezeFirstColumn,
 }: TableHeadProps<T>) {
   return (
     <thead>
@@ -371,8 +384,8 @@ function TableHeadInner<T>({
             style={{
               position: 'sticky',
               top: 0,
-              left: colIdx === 0 ? GUTTER_WIDTH : undefined,
-              zIndex: colIdx === 0 ? 3 : 2,
+              left: freezeFirstColumn && colIdx === 0 ? GUTTER_WIDTH : undefined,
+              zIndex: freezeFirstColumn && colIdx === 0 ? 3 : 2,
               padding: '4px 8px',
               color: 'var(--color-text-muted)',
               fontWeight: 700,
@@ -384,7 +397,7 @@ function TableHeadInner<T>({
               cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
               background: 'var(--color-subtle)',
               borderBottom: '1px solid var(--color-border-strong)',
-              borderRight: colIdx === 0 ? '1px solid var(--color-border)' : undefined,
+              borderRight: freezeFirstColumn && colIdx === 0 ? '1px solid var(--color-border)' : undefined,
               borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,
               ...(colIdx < columns.length - 1 ? COLUMN_SEPARATOR : null),
             }}
@@ -447,6 +460,7 @@ export function DataTable<T>({
   onDeleteColumn,
   extraRowMenuItems,
   footerRow,
+  freezeFirstColumn = false,
 }: DataTableProps<T>) {
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
@@ -1334,7 +1348,7 @@ export function DataTable<T>({
         onScroll={onGridScroll}
         style={{ overflow: 'auto', maxHeight: 'calc(100vh - 230px)', outline: 'none' }}
       >
-        <table style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
+        <table className="data-table" style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
           <colgroup>
             <col style={{ width: GUTTER_WIDTH }} />
             {columns.map((col) => (
@@ -1356,6 +1370,7 @@ export function DataTable<T>({
             onResizeStart={onResizeStart}
             onResizeTouchStart={onResizeTouchStart}
             onResetColumn={resetColumn}
+            freezeFirstColumn={freezeFirstColumn}
           />
           <tbody>
             {loading ? (
@@ -1409,6 +1424,7 @@ export function DataTable<T>({
                       onCellMouseEnter={onCellMouseEnter}
                       onCellFocus={handleCellFocus}
                       onCellBlur={handleCellBlur}
+                      freezeFirstColumn={freezeFirstColumn}
                     />
                   );
                 })}

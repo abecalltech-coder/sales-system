@@ -414,3 +414,14 @@ table {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* 一覧の行はマスタの塗りつぶし色・文字色で塗るため、セル内の入力欄は行の文字色を継承する(要望) */
+.data-table tbody td input:not([type='checkbox']),
+.data-table tbody td textarea,
+.data-table tbody td .inline-select:not(.inline-select-colored) {
+  color: inherit;
+}
+.data-table tbody td input:not([type='checkbox']):focus,
+.data-table tbody td textarea:focus {
+  color: var(--color-text);
+}

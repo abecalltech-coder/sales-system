@@ -370,6 +370,7 @@ export function DealsListPage() {
 
         <DataTable
           tableKey="deals"
+          freezeFirstColumn
           columns={columns}
           rows={rows}
           total={rows.length}
