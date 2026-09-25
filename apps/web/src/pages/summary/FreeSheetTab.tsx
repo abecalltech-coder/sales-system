@@ -4,6 +4,7 @@ import { useSummarySheet, useSummarySheets, SummarySheetCell, useMe } from '../.
 import { api, ApiError } from '../../lib/api';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
+import { useCellStyles } from '../../hooks/useCellStyles';
 
 function buildCellMap(cells: SummarySheetCell[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -55,6 +56,22 @@ export function FreeSheetTab() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [grid, setGrid] = useState<string[][]>([]);
+  // 右クリック/Ctrl+Bでセルを太字に(要望: 全ての入力文字を太字にできるように。全員共有)
+  const cellStyles = useCellStyles(activeId ? `free-sheet:${activeId}` : '');
+  const [boldMenu, setBoldMenu] = useState<{ x: number; y: number; r: number; c: number } | null>(null);
+  const isBold = (r: number, c: number) => !!cellStyles.styleOf(String(r), String(c))?.bold;
+  const toggleBold = (r: number, c: number) =>
+    cellStyles.setStyle([{ rowId: String(r), columnKey: String(c) }], { bold: !isBold(r, c) });
+  useEffect(() => {
+    if (!boldMenu) return;
+    const close = () => setBoldMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [boldMenu]);
 
   useEffect(() => {
     if (!activeId && sheets && sheets.length > 0) setActiveId(sheets[0].id);
@@ -268,7 +285,24 @@ export function FreeSheetTab() {
                         value={value}
                         onChange={(e) => handleCellChange(r, c, e.target.value)}
                         onBlur={(e) => handleCellBlur(r, c, e.target.value)}
-                        style={{ width: 96, border: 'none', padding: '6px 8px', fontSize: 13, outline: 'none' }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setBoldMenu({ x: e.clientX, y: e.clientY, r, c });
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+                            e.preventDefault();
+                            toggleBold(r, c);
+                          }
+                        }}
+                        style={{
+                          width: 96,
+                          border: 'none',
+                          padding: '6px 8px',
+                          fontSize: 13,
+                          outline: 'none',
+                          fontWeight: isBold(r, c) ? 700 : 400,
+                        }}
                       />
                     </td>
                   ))}
@@ -276,6 +310,36 @@ export function FreeSheetTab() {
               ))}
             </tbody>
           </table>
+
+          {boldMenu && (
+            <div
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                top: Math.min(boldMenu.y, window.innerHeight - 60),
+                left: Math.min(boldMenu.x, window.innerWidth - 180),
+                zIndex: 3000,
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: 'var(--shadow-lg)',
+                padding: 4,
+                minWidth: 160,
+              }}
+            >
+              <button
+                onClick={() => {
+                  toggleBold(boldMenu.r, boldMenu.c);
+                  setBoldMenu(null);
+                }}
+                style={{ display: 'flex', gap: 8, width: '100%', padding: '6px 10px', border: 'none', background: 'transparent', fontSize: 12, cursor: 'pointer', textAlign: 'left' }}
+              >
+                <b>B</b>
+                {isBold(boldMenu.r, boldMenu.c) ? '太字を解除' : '太字'}
+                <span style={{ marginLeft: 'auto', color: 'var(--color-text-faint)', fontSize: 11 }}>Ctrl+B</span>
+              </button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={() => addRowMutation.mutate()} style={{ fontSize: 12, padding: '5px 10px' }}>

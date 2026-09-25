@@ -420,6 +420,15 @@ table {
 .data-table tbody td textarea,
 .data-table tbody td .inline-select:not(.inline-select-colored) {
   color: inherit;
+  font-weight: inherit;
+}
+/* 右クリック/Ctrl+Bで太字にしたセル(DataTableが --cell-font-weight を渡す)は入力欄・ピルも太字に */
+.data-table tbody td input:not([type='checkbox']),
+.data-table tbody td textarea {
+  font-weight: inherit;
+}
+.data-table tbody td .inline-select-colored {
+  font-weight: var(--cell-font-weight, 600) !important;
 }
 .data-table tbody td input:not([type='checkbox']):focus,
 .data-table tbody td textarea:focus {

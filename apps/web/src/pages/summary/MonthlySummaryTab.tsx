@@ -289,6 +289,7 @@ export function MonthlySummaryTab() {
 
       <DataTable
         tableKey={`monthly-summary:${activeDept}`}
+        cellTextColor
         columns={columns}
         rows={rows}
         total={rows.length}

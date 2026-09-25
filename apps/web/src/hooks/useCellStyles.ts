@@ -6,7 +6,8 @@ import { getSocket } from '../lib/useRealtimeSync';
 interface CellStyleRow {
   rowId: string;
   columnKey: string;
-  textColor: string;
+  textColor: string | null;
+  bold: boolean;
 }
 
 export interface CellRef {
@@ -14,10 +15,17 @@ export interface CellRef {
   columnKey: string;
 }
 
+export interface CellStyle {
+  textColor?: string;
+  bold?: boolean;
+}
+
+type StylePatch = { textColor?: string | null; bold?: boolean };
+
 const cellKey = (rowId: string, columnKey: string) => `${rowId}\u0000${columnKey}`;
 
 /**
- * 一覧のセルごとの文字色(要望: スプレッドシートのように画面上で文字色を変える。全員で共有)。
+ * 一覧のセルごとの書式(文字色・太字。要望: スプレッドシートのように画面上で変える。全員で共有)。
  * tableKey が空なら無効。他ユーザーの変更は Socket.IO の cell-styles.updated で再取得する。
  */
 export function useCellStyles(tableKey: string) {
@@ -44,21 +52,31 @@ export function useCellStyles(tableKey: string) {
   }, [tableKey, queryClient, queryKey]);
 
   const map = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of query.data ?? []) m.set(cellKey(r.rowId, r.columnKey), r.textColor);
+    const m = new Map<string, CellStyle>();
+    for (const r of query.data ?? []) {
+      m.set(cellKey(r.rowId, r.columnKey), { textColor: r.textColor ?? undefined, bold: r.bold || undefined });
+    }
     return m;
   }, [query.data]);
 
   const mutation = useMutation({
-    mutationFn: (vars: { cells: CellRef[]; textColor: string | null }) =>
-      api.put('/cell-styles', { tableKey, cells: vars.cells, textColor: vars.textColor }),
-    onMutate: async ({ cells, textColor }) => {
+    mutationFn: (vars: { cells: CellRef[]; patch: StylePatch }) => api.put('/cell-styles', { tableKey, cells: vars.cells, ...vars.patch }),
+    onMutate: async ({ cells, patch }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<CellStyleRow[]>(queryKey);
-      const targets = new Set(cells.map((c) => cellKey(c.rowId, c.columnKey)));
-      const next = (previous ?? []).filter((r) => !targets.has(cellKey(r.rowId, r.columnKey)));
-      if (textColor) next.push(...cells.map((c) => ({ ...c, textColor })));
-      queryClient.setQueryData<CellStyleRow[]>(queryKey, next);
+      const byKey = new Map((previous ?? []).map((r) => [cellKey(r.rowId, r.columnKey), r]));
+      for (const c of cells) {
+        const k = cellKey(c.rowId, c.columnKey);
+        const cur = byKey.get(k) ?? { ...c, textColor: null, bold: false };
+        const next = {
+          ...cur,
+          ...(patch.textColor !== undefined ? { textColor: patch.textColor } : {}),
+          ...(patch.bold !== undefined ? { bold: patch.bold } : {}),
+        };
+        if (!next.textColor && !next.bold) byKey.delete(k);
+        else byKey.set(k, next);
+      }
+      queryClient.setQueryData<CellStyleRow[]>(queryKey, [...byKey.values()]);
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -66,12 +84,12 @@ export function useCellStyles(tableKey: string) {
     },
   });
 
-  const textColorOf = useCallback((rowId: string, columnKey: string) => map.get(cellKey(rowId, columnKey)), [map]);
+  const styleOf = useCallback((rowId: string, columnKey: string) => map.get(cellKey(rowId, columnKey)), [map]);
 
   return {
-    textColorOf,
-    setTextColor: (cells: CellRef[], textColor: string | null) => {
-      if (cells.length > 0) mutation.mutate({ cells, textColor });
+    styleOf,
+    setStyle: (cells: CellRef[], patch: StylePatch) => {
+      if (cells.length > 0) mutation.mutate({ cells, patch });
     },
   };
 }

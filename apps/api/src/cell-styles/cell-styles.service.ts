@@ -12,23 +12,30 @@ export class CellStylesService {
   list(tableKey: string) {
     return this.prisma.cellStyle.findMany({
       where: { tableKey },
-      select: { rowId: true, columnKey: true, textColor: true },
+      select: { rowId: true, columnKey: true, textColor: true, bold: true },
     });
   }
 
-  async setTextColor(tableKey: string, cells: { rowId: string; columnKey: string }[], textColor: string | null) {
-    if (cells.length > 0) {
-      await this.prisma.$transaction(async (tx) => {
-        await tx.cellStyle.deleteMany({
-          where: { tableKey, OR: cells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })) },
-        });
-        if (textColor) {
-          await tx.cellStyle.createMany({
-            data: cells.map((c) => ({ tableKey, rowId: c.rowId, columnKey: c.columnKey, textColor })),
-            skipDuplicates: true,
-          });
-        }
-      });
+  /** 指定したセルの書式を変更する。patch で省略した項目はそのまま残す。 */
+  async setStyle(
+    tableKey: string,
+    cells: { rowId: string; columnKey: string }[],
+    patch: { textColor?: string | null; bold?: boolean },
+  ) {
+    const data: { textColor?: string | null; bold?: boolean } = {};
+    if (patch.textColor !== undefined) data.textColor = patch.textColor;
+    if (patch.bold !== undefined) data.bold = patch.bold;
+    if (cells.length > 0 && Object.keys(data).length > 0) {
+      const target = { tableKey, OR: cells.map((c) => ({ rowId: c.rowId, columnKey: c.columnKey })) };
+      await this.prisma.$transaction([
+        this.prisma.cellStyle.createMany({
+          data: cells.map((c) => ({ tableKey, rowId: c.rowId, columnKey: c.columnKey })),
+          skipDuplicates: true,
+        }),
+        this.prisma.cellStyle.updateMany({ where: target, data }),
+        // 書式が何も残っていないセルは行ごと消す
+        this.prisma.cellStyle.deleteMany({ where: { ...target, textColor: null, bold: false } }),
+      ]);
     }
     // 同じ一覧を開いている他ユーザーへ反映(全員共有)
     this.realtime.emitToAll('cell-styles.updated', { tableKey });

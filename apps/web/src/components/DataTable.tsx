@@ -17,7 +17,7 @@ import {
 } from 'react';
 import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
 import { useHiddenRows } from '../hooks/useHiddenRows';
-import { useCellStyles } from '../hooks/useCellStyles';
+import { useCellStyles, CellStyle } from '../hooks/useCellStyles';
 
 export interface Column<T> {
   key: string;
@@ -67,7 +67,7 @@ interface DataTableProps<T> {
   footerRow?: ReactNode;
   /** 先頭列を横スクロール時に固定する(要望: 案件管理のみ) */
   freezeFirstColumn?: boolean;
-  /** 右クリックメニューからセルごとの文字色を設定できるようにする(全員共有・tableKey 必須) */
+  /** 右クリックメニューからセルごとの文字色・太字を設定できるようにする(全員共有・tableKey 必須) */
   cellTextColor?: boolean;
 }
 
@@ -140,7 +140,7 @@ interface RowProps<T> {
   onCellFocus: (rowId: string, colKey: string) => void;
   onCellBlur: (rowId: string, colKey: string) => void;
   freezeFirstColumn: boolean;
-  textColorOf?: (rowId: string, colKey: string) => string | undefined;
+  styleOf?: (rowId: string, colKey: string) => CellStyle | undefined;
 }
 
 /**
@@ -174,7 +174,7 @@ function RowInner<T>({
   onCellFocus,
   onCellBlur,
   freezeFirstColumn,
-  textColorOf,
+  styleOf,
 }: RowProps<T>) {
   const restingBackground: string = String(
     rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
@@ -231,7 +231,8 @@ function RowInner<T>({
             : false;
           const isFocusCell = focusRow === i && focusCol === colIdx;
           const frozen = freezeFirstColumn && colIdx === 0;
-          const cellColor = textColorOf?.(rowId, col.key);
+          const cellStyle = styleOf?.(rowId, col.key);
+          const cellColor = cellStyle?.textColor;
           // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
           const edgeBounds = selected ? selBounds : null;
           const selEdgeShadow = edgeBounds
@@ -257,6 +258,7 @@ function RowInner<T>({
               onContextMenu={(e) => onCellContextMenu(e, i, colIdx)}
               style={{
                 ...(cellColor ? ({ color: cellColor, '--cell-text-color': cellColor } as CSSProperties) : null),
+                ...(cellStyle?.bold ? ({ fontWeight: 700, '--cell-font-weight': 700 } as CSSProperties) : null),
                 position: frozen ? 'sticky' : 'relative',
                 left: frozen ? GUTTER_WIDTH : undefined,
                 zIndex: frozen ? 1 : undefined,
@@ -477,7 +479,7 @@ export function DataTable<T>({
   cellTextColor = false,
 }: DataTableProps<T>) {
   const cellStyles = useCellStyles(cellTextColor && tableKey ? tableKey : '');
-  const textColorOf = cellTextColor && tableKey ? cellStyles.textColorOf : undefined;
+  const styleOf = cellTextColor && tableKey ? cellStyles.styleOf : undefined;
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
   const [draftWidths, setDraftWidths] = useState<ColumnWidths>({});
@@ -906,6 +908,12 @@ export function DataTable<T>({
     const inTextField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
     const mod = e.ctrlKey || e.metaKey;
 
+    // Ctrl+B(太字)は入力中でもセル単位で切り替える
+    if (inTextField && mod && (e.key === 'b' || e.key === 'B') && styleOf && sel) {
+      e.preventDefault();
+      toggleBold();
+      return;
+    }
     // テキスト入力欄はネイティブ挙動(文字のコピー・元に戻す等)に任せる。
     if (inTextField) return;
     if (!sel) return;
@@ -914,7 +922,7 @@ export function DataTable<T>({
     // (要望: プルダウンセルもコピー&ペーストに対応させる)
     if (isSelect) {
       const isShortcut =
-        (mod && 'zycxva'.includes(e.key.toLowerCase())) || e.key === 'Delete' || e.key === 'Backspace';
+        (mod && 'zycxvab'.includes(e.key.toLowerCase())) || e.key === 'Delete' || e.key === 'Backspace';
       if (!isShortcut) return;
     }
 
@@ -942,6 +950,11 @@ export function DataTable<T>({
     if (mod && (e.key === 'v' || e.key === 'V')) {
       e.preventDefault();
       void doPaste(sel);
+      return;
+    }
+    if (mod && (e.key === 'b' || e.key === 'B') && styleOf) {
+      e.preventDefault();
+      toggleBold();
       return;
     }
     if (mod && (e.key === 'a' || e.key === 'A')) {
@@ -1066,7 +1079,14 @@ export function DataTable<T>({
     return cells;
   };
   const applyTextColor = (color: string | null) => {
-    cellStyles.setTextColor(selectedCells(), color);
+    cellStyles.setStyle(selectedCells(), { textColor: color });
+    setMenu(null);
+  };
+  // 選択セルがすべて太字なら解除、そうでなければ太字にする(スプレッドシートと同じ挙動)
+  const toggleBold = () => {
+    const cells = selectedCells();
+    const allBold = cells.length > 0 && cells.every((c) => cellStyles.styleOf(c.rowId, c.columnKey)?.bold);
+    cellStyles.setStyle(cells, { bold: !allBold });
     setMenu(null);
   };
   const selectedRowIds = (): string[] => {
@@ -1280,7 +1300,7 @@ export function DataTable<T>({
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'fixed',
-            top: Math.min(menu.y, window.innerHeight - (textColorOf ? 280 : 160)),
+            top: Math.min(menu.y, window.innerHeight - (styleOf ? 310 : 160)),
             left: Math.min(menu.x, window.innerWidth - 200),
             zIndex: 3000,
             background: 'var(--color-surface)',
@@ -1292,8 +1312,31 @@ export function DataTable<T>({
             fontSize: 12,
           }}
         >
-          {textColorOf && (
+          {styleOf && (
             <>
+              <button
+                onClick={toggleBold}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  color: 'var(--color-text)',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-primary-soft)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <b style={{ width: 14, textAlign: 'center' }}>B</b>
+                太字 / 太字を解除
+                <span style={{ marginLeft: 'auto', color: 'var(--color-text-faint)', fontSize: 11 }}>Ctrl+B</span>
+              </button>
               <div style={{ padding: '4px 10px 2px', fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>文字色</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 22px)', gap: 4, padding: '2px 10px 6px' }}>
                 {TEXT_COLOR_PALETTE.map((c) => (
@@ -1499,7 +1542,7 @@ export function DataTable<T>({
                       onCellFocus={handleCellFocus}
                       onCellBlur={handleCellBlur}
                       freezeFirstColumn={freezeFirstColumn}
-                      textColorOf={textColorOf}
+                      styleOf={styleOf}
                     />
                   );
                 })}

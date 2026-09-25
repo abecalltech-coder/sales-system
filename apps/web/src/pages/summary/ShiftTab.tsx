@@ -282,6 +282,7 @@ export function ShiftTab() {
 
       <DataTable
         tableKey={`monthly-shift:${activeDept}`}
+        cellTextColor
         columns={columns}
         rows={rows}
         total={rows.length}
