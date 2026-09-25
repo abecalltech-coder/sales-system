@@ -1545,6 +1545,8 @@ export function DataTable<T>({
         <span style={{ color: 'var(--color-text-muted)' }}>
           全{total.toLocaleString()}件中 {total === 0 ? 0 : (page - 1) * pageSize + 1}〜{Math.min(page * pageSize, total)}件
         </span>
+        {/* 全件を1画面で表示している画面ではページ送りを出さない */}
+        {totalPages > 1 && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
             ← 前へ
@@ -1556,6 +1558,7 @@ export function DataTable<T>({
             次へ →
           </button>
         </div>
+        )}
       </div>
     </div>
   );

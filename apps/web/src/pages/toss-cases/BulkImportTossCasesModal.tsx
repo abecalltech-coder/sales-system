@@ -37,7 +37,7 @@ async function fetchAllTossCases(): Promise<TossCaseListItem[]> {
   const all: TossCaseListItem[] = [];
   let page = 1;
   for (;;) {
-    const res = await api.get<{ items: TossCaseListItem[]; total: number }>(`/toss-cases?page=${page}&pageSize=100`);
+    const res = await api.get<{ items: TossCaseListItem[]; total: number }>(`/toss-cases?page=${page}&pageSize=20000`);
     all.push(...res.items);
     if (all.length >= res.total || res.items.length === 0) break;
     page += 1;

@@ -33,7 +33,8 @@ export function TossCasesListPage() {
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   // 進捗ごとのグループ化・列フィルターをページ内で完結させるため、
   // 一覧APIの許容上限(ListQueryDto: 最大100件)いっぱいまで1ページで取得する
-  const pageSize = 100;
+  // 1画面で全件表示(要望)。描画は DataTable の仮想スクロールで画面付近の行だけに抑える
+  const pageSize = 20000;
   const queryClient = useQueryClient();
   const manualSort = useManualSort('toss-cases', '/toss-cases/reorder', 'toss-cases');
 
@@ -183,7 +184,7 @@ export function TossCasesListPage() {
   const filterHeader = (key: string, label: string) => () => (
     <ColumnFilterHeader
       label={label}
-      options={optionsFor(key)}
+      options={() => optionsFor(key)}
       selected={filters[key] ?? null}
       onChange={(sel) => setFilters((f) => ({ ...f, [key]: sel }))}
     />

@@ -5,7 +5,7 @@ import { useAuditLogs, AuditLogItem } from '../../hooks/useApi';
 
 export function AuditLogsPage() {
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 2000; // 1画面でまとめて表示(要望)。ログは増え続けるため最新2000件ずつ
   const { data, isLoading } = useAuditLogs({ page, pageSize });
 
   const columns: Column<AuditLogItem>[] = [

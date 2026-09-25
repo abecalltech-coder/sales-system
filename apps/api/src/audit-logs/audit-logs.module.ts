@@ -37,7 +37,7 @@ class AuditLogsController {
     @Query('action') action?: string,
     @Query('actorUserId') actorUserId?: string,
   ) {
-    return this.service.list({ page: Number(page), pageSize: Math.min(Number(pageSize), 200), action, actorUserId });
+    return this.service.list({ page: Number(page), pageSize: Math.min(Number(pageSize), 2000), action, actorUserId });
   }
 }
 

@@ -20,7 +20,7 @@ export class UsersController {
   ) {
     return this.usersService.list({
       page: Number(page),
-      pageSize: Math.min(Number(pageSize), 100),
+      pageSize: Math.min(Number(pageSize), 5000),
       keyword,
       departmentId,
       status,

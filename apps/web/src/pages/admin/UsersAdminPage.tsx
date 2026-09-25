@@ -456,7 +456,7 @@ function TabVisibilitySettings() {
 export function UsersAdminPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
-  const pageSize = 20;
+  const pageSize = 5000; // 1画面で全件表示(要望)
   const queryClient = useQueryClient();
   const { data, isLoading } = useUsers({ page, pageSize, keyword: keyword || undefined });
   const { data: departments } = useDepartments();

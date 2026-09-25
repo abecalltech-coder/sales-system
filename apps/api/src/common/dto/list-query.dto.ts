@@ -12,7 +12,8 @@ export class ListQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  // 一覧は1画面で全件表示する(要望)ため上限を大きく取る。画面側は仮想スクロールで描画を抑える
+  @Max(20000)
   pageSize: number = 20;
 
   @IsOptional()

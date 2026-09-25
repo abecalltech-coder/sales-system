@@ -119,7 +119,7 @@ export function CLCalendarPage() {
 
   const { data: departments } = useDepartments();
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
-  const { data: usersData } = useUsers({ page: 1, pageSize: 100 });
+  const { data: usersData } = useUsers({ page: 1, pageSize: 5000 });
   const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
   const { data: me } = useMe();
   const presence = usePresence('CL_CALENDAR', me?.id);
@@ -127,7 +127,7 @@ export function CLCalendarPage() {
   const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
   const { data, isLoading } = useAppointments({
     page: 1,
-    pageSize: 100,
+    pageSize: 20000, // 表示期間内のアポを取りこぼさない
     dateFrom: range.from.toISOString(),
     dateTo: range.to.toISOString(),
     departmentId: departmentId || undefined,

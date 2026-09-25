@@ -32,7 +32,8 @@ export function AppointmentsListPage() {
   const [includePrevMonth, setIncludePrevMonth] = useState(false);
   // 列フィルター(Googleスプレッドシート風、トスと同仕様)。自分の画面だけのローカルstateで他ユーザーには共有しない。
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
-  const pageSize = 100;
+  // 1画面で全件表示(要望)。描画は DataTable の仮想スクロールで画面付近の行だけに抑える
+  const pageSize = 20000;
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -106,7 +107,7 @@ export function AppointmentsListPage() {
   const filterHeader = (key: string, label: string) => () => (
     <ColumnFilterHeader
       label={label}
-      options={optionsFor(key)}
+      options={() => optionsFor(key)}
       selected={filters[key] ?? null}
       onChange={(sel) => setFilters((f) => ({ ...f, [key]: sel }))}
     />

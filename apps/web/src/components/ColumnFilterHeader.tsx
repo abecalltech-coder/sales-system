@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface ColumnFilterHeaderProps {
   label: string;
-  /** この列に現れる値の一覧(表示順、重複なし) */
-  options: string[];
+  /**
+   * この列に現れる値の一覧(表示順、重複なし)。関数を渡すとポップオーバーを開いた時だけ計算する
+   * (要望: 全件表示でも重くならないように。閉じている間は全行を走査しない)
+   */
+  options: string[] | (() => string[]);
   /** 現在選択中の値集合。null/undefinedは「絞り込みなし(全件表示)」を意味する */
   selected: Set<string> | null;
   onChange: (selected: Set<string> | null) => void;
@@ -24,7 +27,7 @@ interface ColumnFilterHeaderProps {
  */
 export function ColumnFilterHeader({
   label,
-  options,
+  options: optionsProp,
   selected,
   onChange,
   searchText: searchTextProp,
@@ -54,6 +57,12 @@ export function ColumnFilterHeader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const options = useMemo(
+    () => (open ? (typeof optionsProp === 'function' ? optionsProp() : optionsProp) : []),
+    // 関数の場合は開いた時点の一覧で固定(関数は毎レンダー新しくなるため依存に入れない)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, typeof optionsProp === 'function' ? null : optionsProp],
+  );
   const filteredOptions = options.filter((o) => o.toLowerCase().includes(searchText.toLowerCase()));
   const checkedSet = selected ?? new Set(options);
 

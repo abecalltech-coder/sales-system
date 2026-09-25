@@ -57,7 +57,7 @@ async function fetchAllAppointments(): Promise<AppointmentListItem[]> {
   const all: AppointmentListItem[] = [];
   let page = 1;
   for (;;) {
-    const res = await api.get<{ items: AppointmentListItem[]; total: number }>(`/appointments?page=${page}&pageSize=100`);
+    const res = await api.get<{ items: AppointmentListItem[]; total: number }>(`/appointments?page=${page}&pageSize=20000`);
     all.push(...res.items);
     if (all.length >= res.total || res.items.length === 0) break;
     page += 1;

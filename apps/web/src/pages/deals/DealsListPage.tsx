@@ -252,7 +252,7 @@ export function DealsListPage() {
   const filterHeaderFor = (col: Column<DealListItem>) => () => (
     <ColumnFilterHeader
       label={col.label}
-      options={optionsFor(col)}
+      options={() => optionsFor(col)}
       selected={filters[col.key] ?? null}
       onChange={(sel) => setFilters((f) => ({ ...f, [col.key]: sel }))}
       searchText={columnSearch[col.key] ?? ''}

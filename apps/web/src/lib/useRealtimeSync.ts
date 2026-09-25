@@ -36,16 +36,26 @@ export function useRealtimeSync() {
   useEffect(() => {
     const s = getSocket();
 
+    // 一覧は全件を取得するため、更新イベントごとに即再取得すると連続編集・一括投入時に重くなる。
+    // 短時間のイベントはまとめて、種類ごとに1回だけ再取得する(要望: 全件表示でも重くならないように)
+    const pending = new Set<string>();
+    let timer: number | undefined;
+    const flush = () => {
+      timer = undefined;
+      for (const key of pending) queryClient.invalidateQueries({ queryKey: [key] });
+      pending.clear();
+    };
     const handleCaseUpdated = (event: CaseUpdatedEvent) => {
       const key = ENTITY_QUERY_KEY[event.entityType];
-      if (key) {
-        queryClient.invalidateQueries({ queryKey: [key] });
-      }
+      if (!key) return;
+      pending.add(key);
+      if (timer === undefined) timer = window.setTimeout(flush, 800);
     };
 
     s.on('case.updated', handleCaseUpdated);
     return () => {
       s.off('case.updated', handleCaseUpdated);
+      if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [queryClient]);
 }
