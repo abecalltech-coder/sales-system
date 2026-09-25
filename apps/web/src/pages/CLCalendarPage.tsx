@@ -615,18 +615,41 @@ function TimeGrid({
     return map;
   }, [events]);
 
+  // 時間列と日付列を1つのスクロール領域に入れる(要望: スクロールすると時間表示が一緒に動かない)。
+  // 以前は日付列だけが横スクロール領域で、横スクロールバーの分だけ縦にもずれて単独スクロールしていた。
+  // 時間列は横スクロールしても左に固定、日付の見出しは縦スクロールしても上に固定する。
   return (
     <div
       style={{
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
-        overflow: 'hidden',
-        display: 'flex',
+        overflow: 'auto',
+        maxHeight: 'calc(var(--viewport-height, 100vh) - 190px)',
         background: 'var(--color-surface)',
       }}
     >
-      <div style={{ width: 48, flexShrink: 0, borderRight: '1px solid var(--color-border)' }}>
-        <div style={{ height: 28, borderBottom: '1px solid var(--color-border)' }} />
+      <div style={{ display: 'flex', minWidth: 48 + days.length * 90 }}>
+      <div
+        style={{
+          width: 48,
+          flexShrink: 0,
+          borderRight: '1px solid var(--color-border)',
+          position: 'sticky',
+          left: 0,
+          zIndex: 3,
+          background: 'var(--color-surface)',
+        }}
+      >
+        <div
+          style={{
+            height: 28,
+            borderBottom: '1px solid var(--color-border)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 4,
+            background: 'var(--color-surface)',
+          }}
+        />
         <div style={{ position: 'relative', height: gridHeight }}>
           {hours.map((h, hi) => (
             <span
@@ -638,7 +661,7 @@ function TimeGrid({
           ))}
         </div>
       </div>
-      <div style={{ display: 'flex', flex: 1, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', flex: 1 }}>
         {days.map((day, i) => {
           const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
           const dayEvents = eventsByDay.get(key) ?? [];
@@ -648,6 +671,10 @@ function TimeGrid({
                 style={{
                   height: 28,
                   borderBottom: '1px solid var(--color-border)',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                  background: 'var(--color-surface)',
                   fontSize: 11,
                   fontWeight: isToday(day) ? 800 : 600,
                   color: isToday(day) ? 'var(--color-primary)' : 'inherit',
@@ -716,6 +743,7 @@ function TimeGrid({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
