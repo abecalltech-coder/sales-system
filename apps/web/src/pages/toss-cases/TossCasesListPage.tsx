@@ -12,6 +12,7 @@ import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
+import { tossProgressRank, compareByRankThenTime } from '../../lib/progressPriority';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
 import { BulkImportTossCasesModal } from './BulkImportTossCasesModal';
@@ -143,7 +144,6 @@ export function TossCasesListPage() {
   // トスの状況管理は進捗(TOSS_PROGRESS)に一本化。グループ順・行色も進捗から取る。
   // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
   const progressBg = (id: string | null) => pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) ?? '#ffffff';
-  const progressGroupOrder = (id: string | null) => progressOptions?.find((s) => s.id === id)?.order ?? 999;
   const progressInternalCode = (id: string) => progressOptions?.find((s) => s.id === id)?.internalCode;
 
   const filterValueFns: Record<string, FilterValueFn> = {
@@ -197,13 +197,15 @@ export function TossCasesListPage() {
       }),
     );
     if (manualSort.manual) return manualSort.applySort(filtered);
-    return [...filtered].sort((a, b) => {
-      const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
-      if (groupDiff !== 0) return groupDiff;
-      const at = a.nextActionAt ? new Date(a.nextActionAt).getTime() : Infinity;
-      const bt = b.nextActionAt ? new Date(b.nextActionAt).getTime() : Infinity;
-      return at - bt;
-    });
+    // 前確OK→折り返し待ち→メール対応中→新規/追い/不在→NG の順、各グループ内は次回対応日時の昇順(要望)
+    return [...filtered].sort((a, b) =>
+      compareByRankThenTime(
+        tossProgressRank(progressOptions, a.progressStatusId),
+        tossProgressRank(progressOptions, b.progressStatusId),
+        a.nextActionAt,
+        b.nextActionAt,
+      ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawRows, filters, progressOptions, manualSort.manual]);
 

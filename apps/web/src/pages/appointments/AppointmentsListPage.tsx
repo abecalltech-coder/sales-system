@@ -12,6 +12,7 @@ import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 import { pastel } from '../../lib/color';
 import { useManualSort } from '../../hooks/useManualSort';
+import { appointmentProgressRank, compareByRankThenTime } from '../../lib/progressPriority';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth, formatPeriodMonth } from '../../lib/usePeriodMonth';
 import { BulkImportAppointmentsModal } from './BulkImportAppointmentsModal';
@@ -65,8 +66,6 @@ export function AppointmentsListPage() {
   const { data: deliveryStatusOptions } = useStatuses('APPOINTMENT_DELIVERY_STATUS');
 
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
-  // 進捗の並び順(ET→成約→保留→失注→リスケ→新規訪問等)はStatusMaster.orderで表現している
-  const progressGroupOrder = (id: string | null) => (id ? progressOptions?.find((s) => s.id === id)?.order ?? 999 : 999);
   // 行の塗りつぶしは淡くする(要望: 濃くて見づらい)
   const progressBg = (id: string | null) =>
     (id ? pastel(progressOptions?.find((s) => s.id === id)?.color, 0.88) : null) ?? '#ffffff';
@@ -446,7 +445,7 @@ export function AppointmentsListPage() {
     textColumn('specialNotes', 'メモ・特記事項', 150),
   ];
 
-  // 進捗のグループ(ET→成約→保留→失注→リスケ→新規訪問等)順に並べ、グループ内は商談日時昇順(要望)。
+  // 進捗のグループ(ET→成約→保留A→保留B→新規→その他→NG/失注)順に並べ、グループ内は商談日時昇順(要望)。
   // 手動並び替えモード時は manualOrder 昇順にする。
   const rows = useMemo(() => {
     const filtered = rawRows.filter((r) =>
@@ -457,13 +456,14 @@ export function AppointmentsListPage() {
       }),
     );
     if (manualSort.manual) return manualSort.applySort(filtered);
-    return [...filtered].sort((a, b) => {
-      const groupDiff = progressGroupOrder(a.progressStatusId) - progressGroupOrder(b.progressStatusId);
-      if (groupDiff !== 0) return groupDiff;
-      const at = a.meetingStartAt ? new Date(a.meetingStartAt).getTime() : Infinity;
-      const bt = b.meetingStartAt ? new Date(b.meetingStartAt).getTime() : Infinity;
-      return at - bt;
-    });
+    return [...filtered].sort((a, b) =>
+      compareByRankThenTime(
+        appointmentProgressRank(progressOptions, a.progressStatusId),
+        appointmentProgressRank(progressOptions, b.progressStatusId),
+        a.meetingStartAt,
+        b.meetingStartAt,
+      ),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawRows, filters, progressOptions, manualSort.manual]);
 
