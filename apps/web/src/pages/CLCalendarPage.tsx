@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
-import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS, useMe } from '../hooks/useApi';
+import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS, useMe, useCalendarSettings, StatusMasterItem } from '../hooks/useApi';
 import { api, ApiError } from '../lib/api';
 import { parseDateText, parseTimeText, isoToDateInput, isoToTimeInput } from '../lib/dateInput';
 import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, addMonths, startOfDay } from '../lib/calendarGrid';
@@ -17,7 +17,7 @@ const COLOR_PALETTE = [
 ];
 const DEFAULT_COLOR = '#3b82f6';
 // 前連(30分ブロック)の予定は常にフラミンゴ色(Googleカレンダーのフラミンゴ)にする(要望)
-const PRECONTACT_COLOR = '#ff887c';
+const DEFAULT_PRECONTACT_COLOR = '#ff887c';
 const HOUR_HEIGHT = 48; // 週/日表示: 1時間あたりの高さ(px)
 const DAY_START_HOUR = 7;
 const DAY_END_HOUR = 24;
@@ -56,8 +56,10 @@ interface DraftEvent {
   memo: string;
   reminderEnabled: boolean;
   reminderMinutesBefore: number;
-  // 既存アポを開いたときに表示する自動組み立て済みの題名(読み取り専用)
+  // 自動組み立ての題名
   titlePreview: string;
+  // 手入力の題名(空=自動)。カレンダーで編集できる(要望)
+  titleCustom: string;
   meetingUrl: string;
 }
 
@@ -79,6 +81,7 @@ function eventToDraft(ev: AppointmentListItem, titlePreview: string): DraftEvent
     reminderEnabled: ev.reminderEnabled,
     reminderMinutesBefore: ev.reminderMinutesBefore ?? 30,
     titlePreview,
+    titleCustom: ev.calendarTitleCustom ?? '',
     meetingUrl: ev.meetingUrl ?? '',
   };
 }
@@ -97,11 +100,13 @@ function slotToDraft(slot: Date): DraftEvent {
     closerStatusId: '',
     snapshotDepartmentId: '',
     meetingUserId: '',
-    calendarColor: DEFAULT_COLOR,
+    // 空 = マスタ管理の部署色を使う
+    calendarColor: '',
     memo: '',
     reminderEnabled: false,
     reminderMinutesBefore: 30,
     titlePreview: '',
+    titleCustom: '',
     meetingUrl: '',
   };
 }
@@ -121,6 +126,8 @@ export function CLCalendarPage() {
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: usersData } = useUsers({ page: 1, pageSize: 5000 });
   const { data: departmentBranchOptions } = useStatuses('DEPARTMENT_BRANCH');
+  const { data: calendarSettings } = useCalendarSettings();
+  const preContactColor = calendarSettings?.preContactColor || DEFAULT_PRECONTACT_COLOR;
   const { data: me } = useMe();
   const presence = usePresence('CL_CALENDAR', me?.id);
 
@@ -136,8 +143,8 @@ export function CLCalendarPage() {
   });
   const events = useMemo(() => (data?.items ?? []).filter((e) => e.meetingStartAt || e.preContactAt), [data]);
   const displayEvents = useMemo(
-    () => buildDisplayEvents(events, departmentBranchOptions, closerOptions),
-    [events, departmentBranchOptions, closerOptions],
+    () => buildDisplayEvents(events, departmentBranchOptions, closerOptions, preContactColor),
+    [events, departmentBranchOptions, closerOptions, preContactColor],
   );
 
   const closerLabel = (id: string | null) => closerOptions?.find((s) => s.id === id)?.displayName ?? '';
@@ -194,6 +201,8 @@ export function CLCalendarPage() {
           meetingStartAt,
           meetingEndAt,
           calendarColor: d.calendarColor,
+          // 自動の題名と同じなら手入力扱いにしない(空文字で自動に戻す)
+          calendarTitleCustom: d.titleCustom.trim() && d.titleCustom.trim() !== d.titlePreview ? d.titleCustom.trim() : '',
           memo: d.memo || undefined,
           reminderEnabled: d.reminderEnabled,
           reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
@@ -208,7 +217,8 @@ export function CLCalendarPage() {
         closerStatusId: d.closerStatusId || undefined,
         snapshotDepartmentId: d.snapshotDepartmentId || undefined,
         meetingUserId: d.meetingUserId || undefined,
-        calendarColor: d.calendarColor,
+        calendarColor: d.calendarColor || undefined,
+        calendarTitleCustom: d.titleCustom.trim() || undefined,
         memo: d.memo || undefined,
         reminderEnabled: d.reminderEnabled,
         reminderMinutesBefore: d.reminderEnabled ? d.reminderMinutesBefore : undefined,
@@ -355,6 +365,8 @@ interface CalendarEvent {
   start: Date;
   end: Date | null;
   title: string;
+  // 自動組み立ての題名(編集モーダルで手入力と比較するため)
+  autoTitle: string;
   color: string;
   appointment: AppointmentListItem;
 }
@@ -420,14 +432,26 @@ function layoutOverlaps(events: CalendarEvent[]): PositionedEvent[] {
  * Appointmentごとに、商談予定(メイン)に加えて前連日時が入力されている場合は
  * 30分の前連予定を表示用に合成する(DBには保存しない派生イベント)。
  */
+/** オンライン商談か(HPZOOM等のフック、またはGoogle Meet形式) */
+function isOnlineAppointment(ev: AppointmentListItem): boolean {
+  if (ev.meetingType === 'GOOGLE_MEET') return true;
+  const hook = (ev.hook ?? '').toUpperCase();
+  return hook.includes('ZOOM') || hook.includes('オンライン');
+}
+
 function buildDisplayEvents(
   events: AppointmentListItem[],
-  departmentBranchOptions: { id: string; displayName: string; color: string | null }[] | undefined,
+  departmentBranchOptions: StatusMasterItem[] | undefined,
   closerOptions: { id: string; displayName: string }[] | undefined,
+  preContactColor: string,
 ): CalendarEvent[] {
   const result: CalendarEvent[] = [];
   for (const ev of events) {
-    const departmentStatus = departmentBranchOptions?.find((s) => s.id === ev.department);
+    // 部署は id で持つ案件と表示名(自由記述)で持つ案件があるため両方で照合する
+    const dept = (ev.department ?? '').trim();
+    const departmentStatus = dept
+      ? departmentBranchOptions?.find((s) => s.id === dept) ?? departmentBranchOptions?.find((s) => s.displayName.trim() === dept)
+      : undefined;
     const branchLabel = departmentStatus?.displayName ?? '';
     const closerName = closerOptions?.find((s) => s.id === ev.closerStatusId)?.displayName ?? '';
     if (ev.meetingStartAt) {
@@ -435,9 +459,14 @@ function buildDisplayEvents(
         key: ev.id,
         start: new Date(ev.meetingStartAt),
         end: ev.meetingEndAt ? new Date(ev.meetingEndAt) : null,
-        title: eventLabel(ev, branchLabel, closerName),
-        // 商談予定の色は案件ごとに設定した calendarColor を優先(未設定時のみ部署色)
-        color: ev.calendarColor || departmentStatus?.color || DEFAULT_COLOR,
+        // 題名はカレンダーで手入力したものを優先(要望)
+        title: ev.calendarTitleCustom || eventLabel(ev, branchLabel, closerName),
+        autoTitle: eventLabel(ev, branchLabel, closerName),
+        // 色: 案件ごとに指定した色 → マスタ管理の部署色(オンラインならオンライン色、無ければ訪問色)
+        color:
+          ev.calendarColor ||
+          (isOnlineAppointment(ev) ? departmentStatus?.onlineColor || departmentStatus?.color : departmentStatus?.color) ||
+          DEFAULT_COLOR,
         appointment: ev,
       });
     }
@@ -453,8 +482,10 @@ function buildDisplayEvents(
           prefecture: ev.prefecture,
           storeName: ev.storeName ?? '',
         }),
-        // 前連は常にフラミンゴ色(要望)
-        color: PRECONTACT_COLOR,
+        // 前連をクリックしても編集するのは商談予定の題名
+        autoTitle: eventLabel(ev, branchLabel, closerName),
+        // 前連は全件統一の1色(マスタ管理 > 部署 で指定)
+        color: preContactColor,
         appointment: ev,
       });
     }
@@ -530,7 +561,7 @@ function MonthGrid({
                   key={ev.key}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEventClick(ev.appointment, ev.title);
+                    onEventClick(ev.appointment, ev.autoTitle);
                   }}
                   title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                   style={{
@@ -655,7 +686,7 @@ function TimeGrid({
                       key={ev.key}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onEventClick(ev.appointment, ev.title);
+                        onEventClick(ev.appointment, ev.autoTitle);
                       }}
                       title={`${closerLabel(ev.appointment.closerStatusId)} ${ev.title}`}
                       style={{
@@ -725,15 +756,29 @@ function EventFormModal({
               borderRadius: 6,
             }}
           >
-            <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginBottom: 4 }}>
-              カレンダー題名(自動 / 部署・CL・フックはアポ実績で編集)
+            <div style={{ display: 'flex', alignItems: 'center', fontSize: 10, color: 'var(--color-text-faint)', marginBottom: 4 }}>
+              カレンダー題名{draft.titleCustom.trim() && draft.titleCustom.trim() !== draft.titlePreview ? '(手入力)' : '(自動)'}
+              {draft.titleCustom.trim() && draft.titleCustom.trim() !== draft.titlePreview && (
+                <button type="button" onClick={() => set({ titleCustom: '' })} style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 6px' }}>
+                  自動に戻す
+                </button>
+              )}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 700, wordBreak: 'break-word' }}>{draft.titlePreview || '(未設定)'}</div>
+            <input
+              value={draft.titleCustom || draft.titlePreview}
+              onChange={(e) => set({ titleCustom: e.target.value })}
+              placeholder={draft.titlePreview || '題名'}
+              style={{ width: '100%', fontSize: 12, fontWeight: 700 }}
+            />
           </div>
         ) : (
           <>
             <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>店舗名</label>
             <input value={draft.corporateName} onChange={(e) => set({ corporateName: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
+            <label style={{ fontSize: 12, color: 'var(--color-text-faint)', display: 'block', marginBottom: 3 }}>
+              カレンダー題名(空欄なら自動)
+            </label>
+            <input value={draft.titleCustom} onChange={(e) => set({ titleCustom: e.target.value })} style={{ width: '100%', marginBottom: 10 }} />
           </>
         )}
 
@@ -833,7 +878,7 @@ function EventFormModal({
           </button>
         </div>
         <p style={{ fontSize: 11, color: 'var(--color-text-faint)', margin: '0 0 16px' }}>
-          ※ 前連（30分）の予定は常にフラミンゴ色で表示されます。
+          ※ 未指定ならマスタ管理 &gt; 部署 の色(訪問/オンライン)で表示。前連（30分）の予定は全件同じ色(マスタ管理で指定)です。
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: draft.reminderEnabled ? 8 : 16 }}>

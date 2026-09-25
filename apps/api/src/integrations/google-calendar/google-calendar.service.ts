@@ -222,7 +222,7 @@ export class GoogleCalendarService {
     if (!appt) throw new NotFoundException('アポ詳細が見つかりません');
     if (!appt.meetingStartAt) throw new BadRequestException('商談日時が未設定です');
 
-    const summary = title?.trim() || appt.calendarTitle || appt.customer?.corporateName || 'オンライン商談';
+    const summary = title?.trim() || appt.calendarTitleCustom || appt.calendarTitle || appt.customer?.corporateName || 'オンライン商談';
     const { meetUrl, eventId } = await this.createMeet({
       summary,
       startAt: appt.meetingStartAt,

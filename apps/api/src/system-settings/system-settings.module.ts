@@ -76,6 +76,8 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   tossAppointmentMemoTemplate: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE,
   // 訪問用(HPZOOM以外)の詳細フォーマット
   tossAppointmentMemoTemplateVisit: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT,
+  // CLカレンダーの前連(30分予定)の色。全前連で統一(要望)。マスタ管理 > 部署 で変更
+  calendarPreContactColor: '#ff887c',
 };
 
 class SetSettingDto {
@@ -119,6 +121,12 @@ class SystemSettingsController {
   @Get()
   list() {
     return this.service.list();
+  }
+
+  /** CLカレンダー表示用の設定(ログインユーザーなら誰でも取得可。system:view 権限が無いCLでも使うため) */
+  @Get('calendar')
+  async calendar() {
+    return { preContactColor: await this.service.getOne('calendarPreContactColor') };
   }
 
   @RequirePermissions({ resource: 'system', action: 'edit' })

@@ -91,6 +91,7 @@ interface StatusRow {
   internalCode: string;
   displayName: string;
   color: string | null;
+  onlineColor?: string | null;
   order: number;
   active: boolean;
 }
@@ -406,6 +407,34 @@ function TemplateEditors() {
   );
 }
 
+/** CLカレンダーの前連(30分予定)の色。全前連で統一の1色(要望) */
+function PreContactColorSetting() {
+  const { data: settings } = useSystemSettings();
+  const queryClient = useQueryClient();
+  const current = settings?.find((x) => x.key === 'calendarPreContactColor')?.value;
+  const color = typeof current === 'string' ? current : '#ff887c';
+  const save = useMutation({
+    mutationFn: (value: string) => api.put('/system-settings/calendarPreContactColor', { value }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['system-settings'] }),
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--color-border)', fontSize: 12 }}>
+      <span>前連(30分予定)の色 ※全部署共通</span>
+      <input
+        key={color}
+        type="color"
+        defaultValue={color}
+        // ピッカーを閉じた時点で保存(ドラッグ中に何度も保存しない)
+        ref={(el) => {
+          if (el) el.onchange = () => save.mutate(el.value);
+        }}
+        style={{ width: 24, height: 24, padding: 0 }}
+      />
+      {save.isSuccess && <span style={{ color: '#16a34a', fontSize: 11 }}>保存しました</span>}
+    </div>
+  );
+}
+
 function CategoryCard({
   category,
   label,
@@ -429,11 +458,13 @@ function CategoryCard({
 
   const updateMutation = useMutation({
     // id はURLに載せる。bodyへ入れると forbidNonWhitelisted で弾かれる(「property id should not exist」)。
-    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; active?: boolean }) =>
+    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; onlineColor?: string; active?: boolean }) =>
       api.patch(`/status-master/${id}`, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
+
+  const isDepartment = category === 'DEPARTMENT_BRANCH';
 
   const genCode = () =>
     simpleLabel ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode;
@@ -517,13 +548,37 @@ function CategoryCard({
                 onBlur={(e) => e.target.value !== s.displayName && updateMutation.mutate({ id: s.id, displayName: e.target.value })}
                 style={{ flex: 1, padding: 4, fontSize: 12, minWidth: 0 }}
               />
-              <input
-                type="color"
-                defaultValue={s.color ?? '#9ca3af'}
-                onChange={(e) => updateMutation.mutate({ id: s.id, color: e.target.value })}
-                title="塗りつぶし色"
-                style={{ width: 24, height: 24, padding: 0, flexShrink: 0 }}
-              />
+              {isDepartment ? (
+                // 部署はCLカレンダーの色: 訪問/オンラインで別の色を指定できる(要望)
+                <>
+                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontWeight: 400 }} title="訪問の予定の色">
+                    訪問
+                    <input
+                      type="color"
+                      defaultValue={s.color ?? '#3b82f6'}
+                      onChange={(e) => updateMutation.mutate({ id: s.id, color: e.target.value })}
+                      style={{ width: 24, height: 24, padding: 0 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontWeight: 400 }} title="オンライン(HPZOOM等)の予定の色">
+                    オンライン
+                    <input
+                      type="color"
+                      defaultValue={s.onlineColor ?? s.color ?? '#3b82f6'}
+                      onChange={(e) => updateMutation.mutate({ id: s.id, onlineColor: e.target.value })}
+                      style={{ width: 24, height: 24, padding: 0 }}
+                    />
+                  </label>
+                </>
+              ) : (
+                <input
+                  type="color"
+                  defaultValue={s.color ?? '#9ca3af'}
+                  onChange={(e) => updateMutation.mutate({ id: s.id, color: e.target.value })}
+                  title="塗りつぶし色"
+                  style={{ width: 24, height: 24, padding: 0, flexShrink: 0 }}
+                />
+              )}
               <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} title="有効">
                 <input
                   type="checkbox"
@@ -583,6 +638,7 @@ function CategoryCard({
           {bulkCreateMutation.isPending ? '追加中…' : '追加'}
         </button>
       </div>
+      {isDepartment && <PreContactColorSetting />}
     </div>
   );
 }

@@ -45,6 +45,7 @@ export class CreateStatusMasterDto {
 export class UpdateStatusMasterDto {
   @IsOptional() @IsString() displayName?: string;
   @IsOptional() @IsString() color?: string;
+  @IsOptional() @IsString() onlineColor?: string;
   @IsOptional() @IsInt() order?: number;
   @IsOptional() @IsBoolean() active?: boolean;
 }

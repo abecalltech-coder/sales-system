@@ -165,7 +165,7 @@ export class AppointmentsService {
       hook,
       storeName: customer?.corporateName ?? '(店舗名未設定)',
     });
-    const calendarColor = departmentStatus?.color ?? undefined;
+    // カレンダー色は案件へ複写せず、表示時にマスタの部署色(訪問/オンライン)を使う(要望: マスタの色が反映されない)
 
     // 詳細フォーマット(備考の雛形)はフックから自動選択: HPZOOM=オンライン用、それ以外=訪問用(要望)
     const memoTemplate = isOnline ? zoomTemplate : visitTemplate;
@@ -214,7 +214,6 @@ export class AppointmentsService {
           // 対象月は前連日時 → 商談日時 → 現在 の順で確定
           periodMonth: toPeriodMonth(preContactAt ?? tossCase.confirmedStartAt ?? new Date()),
           calendarTitle,
-          calendarColor,
           memo,
           // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
           // ただし備考はトス側の通話メモとアポ側のメモが別用途のため引き継がない(上記テンプレートで別途生成する)
@@ -301,7 +300,8 @@ export class AppointmentsService {
         meetingEndAt: dto.meetingEndAt ? new Date(dto.meetingEndAt) : undefined,
         meetingType: dto.meetingType,
         visitAddress: dto.visitAddress,
-        calendarColor: dto.calendarColor,
+        calendarColor: dto.calendarColor || undefined,
+        calendarTitleCustom: dto.calendarTitleCustom?.trim() || undefined,
         reminderEnabled: dto.reminderEnabled,
         reminderMinutesBefore: dto.reminderMinutesBefore,
         memo: dto.memo,
@@ -516,6 +516,7 @@ export class AppointmentsService {
           ...rest,
           ...(hasCustomerChanges && !existing.customerId ? { customerId } : {}),
           calendarTitle: nextCalendarTitle,
+          ...(dto.calendarTitleCustom !== undefined ? { calendarTitleCustom: dto.calendarTitleCustom?.trim() || null } : {}),
           meetingStartAt: toDateOrUndefined(meetingStartAt),
           meetingEndAt: toDateOrUndefined(meetingEndAt),
           nextActionAt: toDateOrUndefined(nextActionAt),

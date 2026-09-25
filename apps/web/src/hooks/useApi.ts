@@ -36,6 +36,8 @@ export interface StatusMasterItem {
   internalCode: string;
   displayName: string;
   color: string | null;
+  /** 部署(DEPARTMENT_BRANCH)のオンライン商談のカレンダー色。color は訪問の色 */
+  onlineColor?: string | null;
   order: number;
 }
 
@@ -159,6 +161,7 @@ export interface AppointmentListItem {
   deliveredAt: string | null;
   specialNotes: string | null;
   calendarColor: string | null;
+  calendarTitleCustom: string | null;
   calendarTitle: string | null;
   calendarBracketLabel: string | null;
   preContactAt: string | null;
@@ -730,6 +733,15 @@ export function useAuditLogs(params: { page: number; pageSize: number }) {
 export interface SystemSettingItem {
   key: string;
   value: unknown;
+}
+
+/** CLカレンダー表示用の設定(前連の色など)。system:view 権限が無くても取得できる */
+export function useCalendarSettings() {
+  return useQuery({
+    queryKey: ['system-settings', 'calendar'],
+    queryFn: () => api.get<{ preContactColor: string | null }>('/system-settings/calendar'),
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useSystemSettings() {

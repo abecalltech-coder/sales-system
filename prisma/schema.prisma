@@ -293,6 +293,7 @@ model StatusMaster {
   internalCode String // 自動処理判定用の固定コード(表示名変更の影響を受けない)
   displayName  String
   color        String?
+  onlineColor  String? // 部署(DEPARTMENT_BRANCH)のカレンダー色: color=訪問, onlineColor=オンライン
   order        Int     @default(0)
   active       Boolean @default(true)
 
@@ -425,6 +426,8 @@ model Appointment {
   // 常に自動組み立てする(要望)。calendarTitleはその組み立て結果のキャッシュ(将来のGoogle
   // カレンダー連携用に保存しておくだけで、表示側は都度組み立てる)。
   calendarTitle          String?
+  // CLカレンダーで手入力した題名(要望)。設定時は自動組み立てより優先。null=自動
+  calendarTitleCustom    String?
   // 題名の【】に入るラベル。既定はトスのフック→ラベル変換の変換後ラベル、以降はプルダウンで変更可
   calendarBracketLabel   String?
 

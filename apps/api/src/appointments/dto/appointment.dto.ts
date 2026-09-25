@@ -20,6 +20,7 @@ export class CreateAppointmentDto {
   @IsOptional() @IsEnum(MeetingTypeDto) meetingType?: MeetingTypeDto;
   @IsOptional() @IsString() visitAddress?: string;
   @IsOptional() @IsString() calendarColor?: string;
+  @IsOptional() @IsString() calendarTitleCustom?: string; // CLカレンダーで手入力した題名
   @IsOptional() @IsString() memo?: string;
   @IsOptional() @IsBoolean() reminderEnabled?: boolean;
   @IsOptional() @IsInt() @Min(0) reminderMinutesBefore?: number;
@@ -88,8 +89,9 @@ export class UpdateAppointmentDto {
   @IsOptional() @IsDateString() deliveredAt?: string;
   @IsOptional() @IsString() specialNotes?: string;
   @IsOptional() @IsString() calendarColor?: string; // CLカレンダー表示色
-  // calendarTitleは「部署 CL名字 都道府県【フック】店舗名」で常に自動組み立てるため手編集不可。
-  // 【】に入るのは hook(商談形式)。
+  // calendarTitleは「部署 CL名字 都道府県【フック】店舗名」で自動組み立て。【】に入るのは hook(商談形式)。
+  // CLカレンダーで手入力した題名は calendarTitleCustom に保存し、自動より優先する(null/空で自動に戻す)
+  @IsOptional() @IsString() calendarTitleCustom?: string | null;
   @IsOptional() @IsString() meetingUrl?: string;
   @IsOptional() @IsDateString() preContactAt?: string; // 前連日時
   @IsOptional() @IsBoolean() reminderEnabled?: boolean;
