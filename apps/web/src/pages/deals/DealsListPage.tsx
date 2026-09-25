@@ -370,6 +370,7 @@ export function DealsListPage() {
 
         <DataTable
           tableKey="deals"
+          cellTextColor
           freezeFirstColumn
           columns={columns}
           rows={rows}

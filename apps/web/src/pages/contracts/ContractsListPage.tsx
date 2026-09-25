@@ -231,7 +231,7 @@ export function ContractsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.matchingStatusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
+          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { matchingStatusId: v })}
           colored
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
@@ -321,6 +321,7 @@ export function ContractsListPage() {
 
         <DataTable
           tableKey="contracts"
+          cellTextColor
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

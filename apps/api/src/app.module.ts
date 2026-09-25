@@ -36,6 +36,7 @@ import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.modul
 import { FinalReportsModule } from './final-reports/final-reports.module';
 import { DealsModule } from './deals/deals.module';
 import { CustomReportsModule } from './custom-reports/custom-reports.module';
+import { CellStylesModule } from './cell-styles/cell-styles.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { CustomReportsModule } from './custom-reports/custom-reports.module';
     FinalReportsModule,
     DealsModule,
     CustomReportsModule,
+    CellStylesModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

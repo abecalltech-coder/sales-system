@@ -17,6 +17,7 @@ import {
 } from 'react';
 import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
 import { useHiddenRows } from '../hooks/useHiddenRows';
+import { useCellStyles } from '../hooks/useCellStyles';
 
 export interface Column<T> {
   key: string;
@@ -66,7 +67,15 @@ interface DataTableProps<T> {
   footerRow?: ReactNode;
   /** 先頭列を横スクロール時に固定する(要望: 案件管理のみ) */
   freezeFirstColumn?: boolean;
+  /** 右クリックメニューからセルごとの文字色を設定できるようにする(全員共有・tableKey 必須) */
+  cellTextColor?: boolean;
 }
+
+// 文字色パレット(スプレッドシート風)
+const TEXT_COLOR_PALETTE = [
+  '#000000', '#ffffff', '#6b7280', '#dc2626', '#ea580c', '#ca8a04',
+  '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#92400e',
+];
 
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
@@ -125,12 +134,13 @@ interface RowProps<T> {
   onRowDrop: (index: number) => void;
   onRowDragEnd: () => void;
   onSelectRow: (index: number, extend: boolean) => void;
-  onCellContextMenu: (e: ReactMouseEvent, index: number) => void;
+  onCellContextMenu: (e: ReactMouseEvent, index: number, colIdx?: number) => void;
   onCellMouseDown: (e: ReactMouseEvent, r: number, c: number) => void;
   onCellMouseEnter: (r: number, c: number) => void;
   onCellFocus: (rowId: string, colKey: string) => void;
   onCellBlur: (rowId: string, colKey: string) => void;
   freezeFirstColumn: boolean;
+  textColorOf?: (rowId: string, colKey: string) => string | undefined;
 }
 
 /**
@@ -164,6 +174,7 @@ function RowInner<T>({
   onCellFocus,
   onCellBlur,
   freezeFirstColumn,
+  textColorOf,
 }: RowProps<T>) {
   const restingBackground: string = String(
     rowStyle?.(row)?.background ?? (i % 2 === 1 ? 'var(--color-sunken)' : 'transparent'),
@@ -220,6 +231,7 @@ function RowInner<T>({
             : false;
           const isFocusCell = focusRow === i && focusCol === colIdx;
           const frozen = freezeFirstColumn && colIdx === 0;
+          const cellColor = textColorOf?.(rowId, col.key);
           // 複数選択時は範囲の外周のみ線を引き、セル同士の内側の罫線は出さない(要望)
           const edgeBounds = selected ? selBounds : null;
           const selEdgeShadow = edgeBounds
@@ -242,8 +254,9 @@ function RowInner<T>({
               onBlurCapture={() => onCellBlur(rowId, col.key)}
               onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
               onMouseEnter={() => onCellMouseEnter(i, colIdx)}
-              onContextMenu={(e) => onCellContextMenu(e, i)}
+              onContextMenu={(e) => onCellContextMenu(e, i, colIdx)}
               style={{
+                ...(cellColor ? ({ color: cellColor, '--cell-text-color': cellColor } as CSSProperties) : null),
                 position: frozen ? 'sticky' : 'relative',
                 left: frozen ? GUTTER_WIDTH : undefined,
                 zIndex: frozen ? 1 : undefined,
@@ -461,7 +474,10 @@ export function DataTable<T>({
   extraRowMenuItems,
   footerRow,
   freezeFirstColumn = false,
+  cellTextColor = false,
 }: DataTableProps<T>) {
+  const cellStyles = useCellStyles(cellTextColor && tableKey ? tableKey : '');
+  const textColorOf = cellTextColor && tableKey ? cellStyles.textColorOf : undefined;
   const resizable = Boolean(tableKey);
   const { widths: savedWidths, saveWidths } = useTablePreference(tableKey ?? '');
   const [draftWidths, setDraftWidths] = useState<ColumnWidths>({});
@@ -1039,6 +1055,20 @@ export function DataTable<T>({
   }, []);
 
   // --- 右クリックメニュー(行削除・非表示) ------------------------
+  const selectedCells = (): { rowId: string; columnKey: string }[] => {
+    if (!sel) return [];
+    const b = bounds(sel);
+    const cells: { rowId: string; columnKey: string }[] = [];
+    for (let r = b.r0; r <= b.r1 && r < rowsRef.current.length; r++) {
+      const rowId = getRowId(rowsRef.current[r]);
+      for (let c = b.c0; c <= b.c1 && c < columnsRef.current.length; c++) cells.push({ rowId, columnKey: columnsRef.current[c].key });
+    }
+    return cells;
+  };
+  const applyTextColor = (color: string | null) => {
+    cellStyles.setTextColor(selectedCells(), color);
+    setMenu(null);
+  };
   const selectedRowIds = (): string[] => {
     if (!sel) return [];
     const b = bounds(sel);
@@ -1046,12 +1076,15 @@ export function DataTable<T>({
     for (let r = b.r0; r <= b.r1 && r < rowsRef.current.length; r++) ids.push(getRowId(rowsRef.current[r]));
     return ids;
   };
-  const onCellContextMenu = useCallback((e: ReactMouseEvent, r: number) => {
+  const onCellContextMenu = useCallback((e: ReactMouseEvent, r: number, c?: number) => {
     e.preventDefault();
-    // 右クリックした行が選択範囲外なら、その行だけを行選択する
+    // 右クリックした位置が選択範囲外なら、セルならそのセルだけ、行番号ならその行を選択する
     const curSel = selRef.current;
-    if (!curSel || !(r >= bounds(curSel).r0 && r <= bounds(curSel).r1)) {
-      setSel({ ar: r, ac: 0, fr: r, fc: columnsRef.current.length - 1 });
+    const b = curSel ? bounds(curSel) : null;
+    const inside = b && r >= b.r0 && r <= b.r1 && (c === undefined || (c >= b.c0 && c <= b.c1));
+    if (!inside) {
+      if (c === undefined) setSel({ ar: r, ac: 0, fr: r, fc: columnsRef.current.length - 1 });
+      else setSel({ ar: r, ac: c, fr: r, fc: c });
     }
     setMenu({ x: e.clientX, y: e.clientY });
   }, []);
@@ -1247,7 +1280,7 @@ export function DataTable<T>({
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'fixed',
-            top: Math.min(menu.y, window.innerHeight - 160),
+            top: Math.min(menu.y, window.innerHeight - (textColorOf ? 280 : 160)),
             left: Math.min(menu.x, window.innerWidth - 200),
             zIndex: 3000,
             background: 'var(--color-surface)',
@@ -1259,6 +1292,47 @@ export function DataTable<T>({
             fontSize: 12,
           }}
         >
+          {textColorOf && (
+            <>
+              <div style={{ padding: '4px 10px 2px', fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 600 }}>文字色</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 22px)', gap: 4, padding: '2px 10px 6px' }}>
+                {TEXT_COLOR_PALETTE.map((c) => (
+                  <button
+                    key={c}
+                    title={c}
+                    onClick={() => applyTextColor(c)}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      padding: 0,
+                      borderRadius: 4,
+                      border: '1px solid var(--color-border-strong)',
+                      background: c,
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 4px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, cursor: 'pointer' }}>
+                  <input
+                    type="color"
+                    defaultValue="#000000"
+                    // ネイティブのカラーピッカーを閉じた時点(change)で1回だけ適用する
+                    ref={(el) => {
+                      if (el) el.onchange = () => applyTextColor(el.value);
+                    }}
+                    style={{ width: 22, height: 22, padding: 0 }}
+                  />
+                  その他の色
+                </label>
+                <button onClick={() => applyTextColor(null)} style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px' }}>
+                  文字色を解除
+                </button>
+              </div>
+              <div style={{ borderTop: '1px solid var(--color-border)', margin: '4px 0' }} />
+            </>
+          )}
           <MenuItem
             label={`選択した ${menuIds.length} 行を非表示`}
             onClick={() => {
@@ -1425,6 +1499,7 @@ export function DataTable<T>({
                       onCellFocus={handleCellFocus}
                       onCellBlur={handleCellBlur}
                       freezeFirstColumn={freezeFirstColumn}
+                      textColorOf={textColorOf}
                     />
                   );
                 })}

@@ -356,7 +356,7 @@ export function InlineSelect({
   colored,
 }: {
   value: string | null | undefined;
-  options: { id: string; label: string; color?: string | null; textColor?: string | null }[];
+  options: { id: string; label: string; color?: string | null }[];
   onSave: (next: string) => void;
   style?: CSSProperties;
   disabled?: boolean;
@@ -372,10 +372,8 @@ export function InlineSelect({
   // 既知の選択肢に一致しない値(例: Googleフォーム等の外部連携で選択肢外の文言が入った場合)でも
   // 空欄表示にせず、そのままの文言を選べる状態として表示する。
   const hasUnknownValue = !!value && !options.some((o) => o.id === value);
-  // 文字色はマスタで指定があればそれ、なければ塗りつぶし色から黒/白を自動選択
-  const textColor = colored
-    ? selectedOpt?.textColor || (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)')
-    : 'inherit';
+  // 文字色は塗りつぶし色から黒/白を自動選択
+  const textColor = colored ? (selectedColor ? readableTextColor(selectedColor) : 'var(--color-text-muted)') : 'inherit';
 
   return (
     <select
@@ -391,7 +389,8 @@ export function InlineSelect({
       }}
       style={{
         font: 'inherit',
-        color: textColor,
+        // 一覧でセルに文字色が設定されていればそれを優先(DataTableが --cell-text-color を渡す)
+        color: colored ? `var(--cell-text-color, ${textColor})` : textColor,
         width: '100%',
         backgroundColor: colored ? (selectedColor ?? 'var(--color-bg)') : 'transparent',
         cursor: disabled ? 'default' : 'pointer',

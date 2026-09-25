@@ -98,6 +98,19 @@ model User {
 
 // ユーザーごとのUI設定(一覧の列幅など)。全アカウント共通ではなく本人だけに紐づく。
 // key例: "tableWidths:toss-cases"、value: { "<列key>": <px幅> }
+/// 一覧のセルごとの文字色(スプレッドシート風。全員で共有)。tableKey は DataTable の tableKey
+model CellStyle {
+  id        String   @id @default(uuid())
+  tableKey  String
+  rowId     String
+  columnKey String
+  textColor String
+  updatedAt DateTime @updatedAt
+
+  @@unique([tableKey, rowId, columnKey])
+  @@index([tableKey])
+}
+
 model UserPreference {
   id        String   @id @default(uuid())
   userId    String
@@ -279,7 +292,6 @@ model StatusMaster {
   internalCode String // 自動処理判定用の固定コード(表示名変更の影響を受けない)
   displayName  String
   color        String?
-  textColor    String? // 文字色(未設定=塗りつぶし色から自動で黒/白)
   order        Int     @default(0)
   active       Boolean @default(true)
 

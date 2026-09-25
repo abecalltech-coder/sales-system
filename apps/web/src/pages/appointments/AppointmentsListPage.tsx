@@ -353,7 +353,7 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { progressStatusId: v })}
           colored
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
@@ -487,6 +487,7 @@ export function AppointmentsListPage() {
 
         <DataTable
           tableKey="appointments"
+          cellTextColor
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

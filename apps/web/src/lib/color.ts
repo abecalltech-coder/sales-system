@@ -18,15 +18,13 @@ export function pastel(bg: string | null | undefined, ratio = 0.82): string | nu
 
 /** 背景色に対して読みやすい文字色(明るい背景なら黒、暗い背景なら白) */
 /**
- * マスタ(塗りつぶし色・文字色)から行の色を作る。マスタの色をそのまま使い(要望: 淡くしない)、
- * 文字色は指定があればそれ、なければ背景から黒/白を自動選択。
+ * マスタの塗りつぶし色から行の色を作る。マスタの色をそのまま使い(要望: 淡くしない)、
+ * 文字は背景から黒/白を自動選択(セルごとの文字色は一覧画面で別途設定)。
  */
-export function masterRowColors(
-  opt: { color?: string | null; textColor?: string | null } | undefined,
-): { background: string; color?: string } {
+export function masterRowColors(opt: { color?: string | null } | undefined): { background: string; color?: string } {
   const bg = parseHex(opt?.color) ? (opt!.color as string) : null;
-  if (!bg) return { background: '#ffffff', color: opt?.textColor || undefined };
-  return { background: bg, color: opt?.textColor || readableTextColor(bg) };
+  if (!bg) return { background: '#ffffff' };
+  return { background: bg, color: readableTextColor(bg) };
 }
 
 export function readableTextColor(bg: string | null | undefined): string {

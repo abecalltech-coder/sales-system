@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useProducts, useSources, useSystemSettings } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { readableTextColor } from '../../lib/color';
 
 interface CategoryDef {
   value: string;
@@ -92,7 +91,6 @@ interface StatusRow {
   internalCode: string;
   displayName: string;
   color: string | null;
-  textColor?: string | null;
   order: number;
   active: boolean;
 }
@@ -249,7 +247,7 @@ function CategoryCard({
 
   const updateMutation = useMutation({
     // id はURLに載せる。bodyへ入れると forbidNonWhitelisted で弾かれる(「property id should not exist」)。
-    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; textColor?: string | null; active?: boolean }) =>
+    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; active?: boolean }) =>
       api.patch(`/status-master/${id}`, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
@@ -344,45 +342,6 @@ function CategoryCard({
                 title="塗りつぶし色"
                 style={{ width: 24, height: 24, padding: 0, flexShrink: 0 }}
               />
-              {/* 文字色(要望)。未設定なら塗りつぶし色から黒/白を自動選択 */}
-              <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontWeight: 400 }} title="文字色">
-                文字
-                <input
-                  key={`${s.id}-${s.textColor ?? 'auto'}`}
-                  type="color"
-                  defaultValue={s.textColor ?? readableTextColor(s.color)}
-                  onChange={(e) => updateMutation.mutate({ id: s.id, textColor: e.target.value })}
-                  style={{ width: 24, height: 24, padding: 0 }}
-                />
-              </label>
-              {s.textColor && (
-                <button
-                  onClick={() => updateMutation.mutate({ id: s.id, textColor: null })}
-                  title="文字色を自動(背景に合わせて黒/白)に戻す"
-                  style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11 }}
-                >
-                  自動
-                </button>
-              )}
-              <span
-                title="表示見本"
-                style={{
-                  flexShrink: 0,
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  background: s.color ?? 'var(--color-bg)',
-                  color: s.textColor || readableTextColor(s.color),
-                  border: '1px solid rgba(23, 28, 38, 0.09)',
-                  maxWidth: 120,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {s.displayName}
-              </span>
               <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} title="有効">
                 <input
                   type="checkbox"

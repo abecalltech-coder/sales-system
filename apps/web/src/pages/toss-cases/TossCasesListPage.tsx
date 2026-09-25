@@ -388,7 +388,7 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => {
             // 「アポイント」に変えたら前連日時・商談日時・商談形式の入力を求め、アポ詳細を自動生成する
             if (progressInternalCode(v) === 'PROGRESS_APPOINTMENT') {
@@ -419,7 +419,7 @@ export function TossCasesListPage() {
       render: (r) => (
         <InlineSelect
           value={r.ngReasonStatusId}
-          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
+          options={ngReasonOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
           onSave={(v) => save(r, { ngReasonStatusId: v })}
           colored
         />
@@ -568,6 +568,7 @@ export function TossCasesListPage() {
 
         <DataTable
           tableKey="toss-cases"
+          cellTextColor
           columns={columns}
           rows={rows}
           total={data?.total ?? 0}

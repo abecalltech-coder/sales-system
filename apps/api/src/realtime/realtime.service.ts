@@ -25,6 +25,11 @@ export class RealtimeService {
     }
   }
 
+  /** 接続中の全ユーザーへ配信する(一覧のセル文字色など全員共有の見た目設定) */
+  emitToAll(eventName: string, payload: unknown) {
+    this.gateway.server.emit(eventName, payload);
+  }
+
   emitToUser(userId: string, eventName: string, payload: unknown) {
     this.gateway.server.to(`user:${userId}`).emit(eventName, payload);
   }
