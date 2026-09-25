@@ -12,6 +12,8 @@ interface PriorityGroup {
   includes?: string[];
   /** 進捗未設定の行をこのグループとして扱う */
   includesEmpty?: boolean;
+  /** グループ内をさらに進捗の種類ごとにまとめる(NGの種類別など) */
+  subgroupByStatus?: boolean;
 }
 
 // 前確OK → 折り返し待ち → メール対応中 → 新規/追い/不在 → (その他) → NG
@@ -27,14 +29,14 @@ const TOSS_GROUPS: PriorityGroup[] = [
   { codes: ['PROGRESS_NG'], names: ['NG'] },
 ];
 
-// ET → 成約 → 保留A → 保留B → 新規 → (その他) → NG(失注系)
+// ET → 成約 → 保留A → 保留B → 新規 → (その他) → NG(失注系。種類ごとにまとめる)
 const APPOINTMENT_GROUPS: PriorityGroup[] = [
   { codes: ['PROG_ET'], names: ['ET'] },
   { codes: ['PROG_CONTRACTED'], names: ['成約'] },
   { codes: ['PROG_HOLD_A'], names: ['保留A'] },
   { codes: ['PROG_HOLD_B'], names: ['保留B'] },
   { codes: ['PROG_NEW_VISIT'], names: ['新規', '新規訪問'], includesEmpty: true },
-  { codes: [], names: ['NG'], includes: ['NG', '失注'] },
+  { codes: [], names: ['NG'], includes: ['NG', '失注'], subgroupByStatus: true },
 ];
 
 function matches(g: PriorityGroup, s: StatusMasterItem): boolean {
@@ -55,6 +57,11 @@ function makeRank(groups: PriorityGroup[]) {
     const idx = groups.findIndex((g) => matches(g, s));
     // 未分類の進捗は NG の直前。その中ではマスタの order 順
     if (idx < 0) return (last - 1) * 1000 + 500 + Math.min(Math.max(s.order ?? 0, 0), 499);
+    // NGは種類ごとにまとめる(マスタの並び順→表示名順)。各種類の中は日時順
+    if (groups[idx].subgroupByStatus && options) {
+      const sorted = [...options].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.displayName.localeCompare(b.displayName, 'ja'));
+      return idx * 1000 + 1 + Math.min(sorted.findIndex((o) => o.id === s.id), 998);
+    }
     return idx * 1000;
   };
 }

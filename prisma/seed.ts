@@ -47,7 +47,7 @@ const STATUS_DEFS: { category: string; internalCode: string; displayName: string
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_ZENREN', displayName: '前連失注', color: '#fecaca', order: 40 },
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_LOST_MONTHLY', displayName: '月内失注', color: '#fecaca', order: 40 },
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_RESCHEDULE', displayName: 'リスケ', color: '#fed7aa', order: 50 },
-  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NEW_VISIT', displayName: '新規訪問', color: '#ffffff', order: 60 },
+  { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NEW_VISIT', displayName: '新規', color: '#ffffff', order: 60 },
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NO_TRANSFER', displayName: '取次不可', color: '#ffffff', order: 60 },
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_NEXT_MONTH_APPO', displayName: '来月アポ', color: '#ffffff', order: 60 },
   { category: 'APPOINTMENT_PROGRESS', internalCode: 'PROG_BACK_TO_AP', displayName: 'AP戻し', color: '#ffffff', order: 60 },

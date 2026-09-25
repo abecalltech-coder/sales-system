@@ -277,6 +277,8 @@ export class AppointmentsService {
   async create(dto: CreateAppointmentDto, userId: string) {
     const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');
     const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
+    // CLカレンダーからの直接作成も進捗は「新規」から始める
+    const progressStatusId = await this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT').catch(() => undefined);
 
     let customerId: string | undefined;
     if (dto.corporateName) {
@@ -290,6 +292,7 @@ export class AppointmentsService {
       data: {
         caseNumber,
         customerId,
+        progressStatusId,
         snapshotDepartmentId: dto.snapshotDepartmentId,
         meetingUserId: dto.meetingUserId,
         fieldSalesUserId: dto.fieldSalesUserId,
@@ -347,6 +350,8 @@ export class AppointmentsService {
    */
   async bulkCreate(rows: CreateAppointmentBulkRowDto[], actorUserId: string) {
     const meetingStatusId = await this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED');
+    // 進捗が空欄の行は「新規」にする(要望: 新規がアポ実績に出ない)
+    const newProgressId = await this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT').catch(() => undefined);
     let count = 0;
     for (const dto of rows) {
       const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');
@@ -386,7 +391,7 @@ export class AppointmentsService {
           electronicContractAt: dto.electronicContractAt ? new Date(dto.electronicContractAt) : undefined,
           nextActionAt: dto.nextActionAt ? new Date(dto.nextActionAt) : undefined,
           typeStatusId: dto.typeStatusId,
-          progressStatusId: dto.progressStatusId,
+          progressStatusId: dto.progressStatusId ?? newProgressId,
           listName: dto.listName,
           acquisitionMethodStatusId: dto.acquisitionMethodStatusId,
           proposalLocation: dto.proposalLocation,
