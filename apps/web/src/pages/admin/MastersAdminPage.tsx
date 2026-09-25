@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useProducts, useSources, useSystemSettings } from '../../hooks/useApi';
@@ -155,18 +155,104 @@ export function MastersAdminPage() {
 }
 
 /**
+ * アポ詳細FMTに差し込める項目(要望: {{storeName}}のようなコードではなく、どこの情報を引くか分かるように)。
+ * 名称はAPI側 TEMPLATE_FIELD_ALIASES(toss-appointment-automation.util.ts)と揃えること。
+ */
+const TEMPLATE_FIELDS: { key: string; label: string; source: string; group: string }[] = [
+  { key: 'storeName', label: '店舗名', source: 'トス実績の「店舗名」', group: 'トス実績の列' },
+  { key: 'contactName', label: '担当者名', source: 'トス実績の「担当者名」', group: 'トス実績の列' },
+  { key: 'storePhone', label: '店舗連絡先', source: 'トス実績の「店舗連絡先」', group: 'トス実績の列' },
+  { key: 'address', label: '住所', source: 'トス実績の「住所」', group: 'トス実績の列' },
+  { key: 'industry', label: '業種', source: 'トス実績の「業種」', group: 'トス実績の列' },
+  { key: 'apStaffName', label: 'アポインター', source: 'トス実績の「AP」', group: 'トス実績の列' },
+  { key: 'preConfirmName', label: '前確者', source: 'トス実績の「前確」', group: 'トス実績の列' },
+  { key: 'listName', label: 'リスト名', source: 'トス実績の「リスト」', group: 'トス実績の列' },
+  { key: 'nextActionAt', label: '取り次ぎ日時', source: 'トス実績の「次回対応日」+「対応時間」(例: 9/25(木) 14:00)', group: 'トス実績の列' },
+  { key: 'hook', label: 'フック', source: 'アポ変換時に選ぶ「商談形式(フック)」', group: 'アポイントに変更するときの入力' },
+  { key: 'acquisitionAngle', label: '獲得角度', source: 'アポ変換時に選ぶ「商談形式(フック)」(フックと同じ値)', group: 'アポイントに変更するときの入力' },
+  { key: 'meetingAt', label: '商談日時', source: 'アポ変換時に入力する「商談日時」(例: 9/30(火) 15:00)', group: 'アポイントに変更するときの入力' },
+  { key: 'preContactAt', label: '前連日時', source: 'アポ変換時に入力する「前連日時」', group: 'アポイントに変更するときの入力' },
+  { key: 'meetingUrl', label: 'GoogleMeetURL', source: 'Google Meet 連携で自動発行されたURL(HPZOOMのみ。発行後に自動で入ります)', group: '自動' },
+];
+const FIELD_BY_KEY = new Map(TEMPLATE_FIELDS.map((f) => [f.key, f]));
+const FIELD_BY_LABEL = new Map(TEMPLATE_FIELDS.map((f) => [f.label, f]));
+const TOKEN_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+/** 旧形式の {{storeName}} を {{店舗名}} に置き換えて表示する */
+function toJapaneseTokens(text: string): string {
+  return text.replace(TOKEN_RE, (m, name: string) => {
+    const f = FIELD_BY_KEY.get(name);
+    return f ? `{{${f.label}}}` : m;
+  });
+}
+
+/** テンプレートを「文字」と「差し込み項目」に分けてプレビュー表示する */
+function TemplatePreview({ text }: { text: string }) {
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let i = 0;
+  for (const m of text.matchAll(TOKEN_RE)) {
+    const idx = m.index ?? 0;
+    if (idx > last) parts.push(text.slice(last, idx));
+    const f = FIELD_BY_LABEL.get(m[1]) ?? FIELD_BY_KEY.get(m[1]);
+    parts.push(
+      <span
+        key={i++}
+        title={f ? `引用元: ${f.source}` : 'この項目名は差し込み項目にありません(空欄になります)'}
+        style={{
+          display: 'inline-block',
+          padding: '0 6px',
+          margin: '0 1px',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 600,
+          background: f ? 'var(--color-primary-soft)' : 'var(--color-danger-soft)',
+          color: f ? 'var(--color-primary)' : 'var(--color-danger)',
+          border: `1px solid ${f ? 'var(--color-primary)' : 'var(--color-danger)'}`,
+        }}
+      >
+        {f ? f.label : `?${m[1]}`}
+        {f && <span style={{ fontWeight: 400, opacity: 0.8 }}> ← {f.source.replace(/\(.*\)$/, '')}</span>}
+      </span>,
+    );
+    last = idx + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return (
+    <div
+      style={{
+        whiteSpace: 'pre-wrap',
+        fontSize: 12,
+        lineHeight: 1.9,
+        padding: 10,
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)',
+        background: 'var(--color-sunken)',
+        minHeight: 300,
+        maxHeight: 560,
+        overflowY: 'auto',
+      }}
+    >
+      {parts}
+    </div>
+  );
+}
+
+/**
  * 自動作成される備考欄のテンプレートを編集する共通部品(要望)。system-settingsの指定キーを利用する
  * (値は自由な複数行文字列のためステータスマスタの表示名欄には収まらず、system-settingsのJSON値
  * ストアを流用している)。テンプレートが複数あるため、キー・説明文を差し替えて使い回す。
+ * 差し込み項目は {{店舗名}} のような日本語名で書く(旧形式 {{storeName}} も表示時に日本語へ変換)。
  */
 function TemplateEditor({ settingKey, title, description }: { settingKey: string; title: string; description: string }) {
   const { data: settings, isLoading } = useSystemSettings();
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const current = settings?.find((s) => s.key === settingKey);
-  const value = draft ?? (typeof current?.value === 'string' ? current.value : '');
+  const value = draft ?? toJapaneseTokens(typeof current?.value === 'string' ? current.value : '');
 
   const saveMutation = useMutation({
     mutationFn: () => api.put(`/system-settings/${settingKey}`, { value }),
@@ -177,29 +263,121 @@ function TemplateEditor({ settingKey, title, description }: { settingKey: string
     },
   });
 
+  // カーソル位置に差し込み項目を入れる
+  const insertField = (label: string) => {
+    const token = `{{${label}}}`;
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? value.length;
+    const end = el?.selectionEnd ?? value.length;
+    setDraft(value.slice(0, start) + token + value.slice(end));
+    setMessage(null);
+    requestAnimationFrame(() => {
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+
   if (isLoading) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>;
 
+  const groups = [...new Set(TEMPLATE_FIELDS.map((f) => f.group))];
+
   return (
-    <div style={{ maxWidth: 600, marginBottom: 32 }}>
+    <div style={{ marginBottom: 32 }}>
       <h2 style={{ fontSize: 15, marginBottom: 6 }}>{title}</h2>
-      <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 8 }}>
-        {description} <code>{'{{storeName}}'}</code> のような二重中括弧の項目は実データに置き換わり、それ以外はそのまま残ります。
-      </p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginBottom: 8 }}>{description}</p>
       {message && <p style={{ color: '#16a34a', fontSize: 12, marginBottom: 8 }}>{message}</p>}
-      <textarea
-        value={value}
-        onChange={(e) => {
-          setDraft(e.target.value);
-          setMessage(null);
+
+      {/* 差し込み項目パレット: クリックでカーソル位置に挿入 */}
+      <div
+        style={{
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '8px 10px',
+          marginBottom: 8,
+          background: 'var(--color-surface)',
         }}
-        style={{ width: '100%', minHeight: 300, fontSize: 12, fontFamily: 'monospace', padding: 10 }}
-      />
+      >
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+          差し込み項目(クリックでカーソル位置に入ります。アポに変換したとき、引用元の値に置き換わります。ボタンにマウスを乗せると引用元が出ます)
+        </div>
+        {groups.map((g) => (
+          <div key={g} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--color-text-faint)', width: 170, flexShrink: 0 }}>{g}</span>
+            {TEMPLATE_FIELDS.filter((f) => f.group === g).map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => insertField(f.label)}
+                title={`引用元: ${f.source}`}
+                style={{
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  border: '1px solid var(--color-primary)',
+                  background: 'var(--color-primary-soft)',
+                  color: 'var(--color-primary)',
+                  fontWeight: 600,
+                }}
+              >
+                ＋{f.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>編集</div>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setMessage(null);
+            }}
+            style={{ width: '100%', minHeight: 300, fontSize: 12, padding: 10, lineHeight: 1.9 }}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 4 }}>
+            見え方(青い部分が自動で入る項目。← の後ろが引用元。赤は存在しない項目名)
+          </div>
+          <TemplatePreview text={value} />
+        </div>
+      </div>
       <div style={{ marginTop: 8 }}>
         <button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
           保存する
         </button>
       </div>
     </div>
+  );
+}
+
+function TemplateFieldsTable() {
+  const th = { textAlign: 'left', padding: '4px 10px', borderBottom: '1px solid var(--color-border)' } as const;
+  return (
+    <details style={{ marginBottom: 20, fontSize: 12 }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--color-text-muted)' }}>差し込み項目と引用元の一覧</summary>
+      <table style={{ marginTop: 8, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>書き方</th>
+            <th style={th}>引用元(どこの情報が入るか)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {TEMPLATE_FIELDS.map((f) => (
+            <tr key={f.key}>
+              <td style={{ padding: '3px 10px', whiteSpace: 'nowrap', fontWeight: 600 }}>{`{{${f.label}}}`}</td>
+              <td style={{ padding: '3px 10px' }}>{f.source}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
   );
 }
 
@@ -210,6 +388,10 @@ function TemplateEditors() {
         トス実績を「アポイント」に変更したとき、選ばれた<b>商談形式</b>によってどちらかのフォーマットが
         アポ詳細(備考)へ自動的に入ります。HPZOOM = オンライン用、それ以外(撮＆訪 / HP＆訪 / 電気フック) = 訪問用。
       </p>
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 8, lineHeight: 1.7 }}>
+        <b>{'{{店舗名}}'}</b> のように二重中括弧で囲んだ項目が、トス実績などの実際の値に置き換わります。それ以外の文字はそのまま入ります。
+      </p>
+      <TemplateFieldsTable />
       <TemplateEditor
         settingKey="tossAppointmentMemoTemplate"
         title="アポ詳細FMT: オンライン用(HPZOOM)"

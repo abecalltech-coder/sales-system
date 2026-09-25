@@ -6,19 +6,19 @@ import { IsNotEmpty } from 'class-validator';
 // トス→アポイント自動作成時に備考欄(アポ実績・CLカレンダー詳細で共用)へ流し込むテンプレート。
 // {{token}}部分だけ実データに置換され、それ以外はそのまま雛形として残る(要望:
 // このフォーマットをマスタ管理から都度変更できるようにしたい)。
-const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE = `獲得角度：{{acquisitionAngle}}
-取り次ぎ日時：{{nextActionAt}}
-商談日時：{{meetingAt}}
-店舗名：{{storeName}}
-住所：{{address}}
-業種：{{industry}}
-店舗番号：{{storePhone}}
+const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE = `獲得角度：{{獲得角度}}
+取り次ぎ日時：{{取り次ぎ日時}}
+商談日時：{{商談日時}}
+店舗名：{{店舗名}}
+住所：{{住所}}
+業種：{{業種}}
+店舗番号：{{店舗連絡先}}
 携帯番号：
-担当者名：{{contactName}}様　歳前後　男性/女性
+担当者名：{{担当者名}}様　歳前後　男性/女性
 対応者：オーナー
 利用電気：
-アポインター：{{apStaffName}}
-前確者：{{preConfirmName}}
+アポインター：{{アポインター}}
+前確者：{{前確者}}
 料金：
 明細準備：WEB/紙
 法人or屋号：法人/屋号
@@ -26,31 +26,31 @@ const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE = `獲得角度：{{acquisitionAngl
 地点数：従量（地点）/動力（地点）
 支払方法、印鑑・支払情報の準備：無
 提案：店舗/自宅/事務所
-リスト名：{{listName}}
-前連：{{preContactAt}}
-フック：{{hook}}
+リスト名：{{リスト名}}
+前連：{{前連日時}}
+フック：{{フック}}
 SMS送付番号(orメアド)：
 店舗HPのURL：
 HP：
-GoogleMeetURL：{{meetingUrl}}
+GoogleMeetURL：{{GoogleMeetURL}}
 備考：`;
 
 // 訪問系(HPZOOM以外)の詳細フォーマット。アポ変換時にフック(商談形式)がHPZOOM以外なら
 // こちらが備考へ入る(要望)。
-const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT = `【{{hook}}】獲得角度：{{acquisitionAngle}}
-取り次ぎ日時：{{nextActionAt}}
-訪問日時：{{meetingAt}}
-店舗名：{{storeName}}
-住所：{{address}}
-業種：{{industry}}
+const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT = `【{{フック}}】獲得角度：{{獲得角度}}
+取り次ぎ日時：{{取り次ぎ日時}}
+訪問日時：{{商談日時}}
+店舗名：{{店舗名}}
+住所：{{住所}}
+業種：{{業種}}
 最寄り駅：　駅　徒歩　分
-店舗番号：{{storePhone}}
+店舗番号：{{店舗連絡先}}
 携帯番号：
-担当者名：{{contactName}}
+担当者名：{{担当者名}}
 対応者：
 利用電気：
-アポインター：{{apStaffName}}
-前確者：{{preConfirmName}}
+アポインター：{{アポインター}}
+前確者：{{前確者}}
 料金：
 明細準備：
 法人or屋号：
@@ -58,9 +58,9 @@ const DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT = `【{{hook}}】獲得角度
 地点数：従量（地点）/動力（地点）
 支払方法、印鑑・支払情報の準備：クレカor口座orコンビニ払い/有or無
 提案：
-リスト名：{{listName}}
-前連：{{preContactAt}}
-フック：{{hook}}
+リスト名：{{リスト名}}
+前連：{{前連日時}}
+フック：{{フック}}
 インドアビュー：
 GoogleビジネスURL：
 備考：`;

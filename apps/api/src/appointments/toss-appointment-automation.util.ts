@@ -59,7 +59,31 @@ export function buildPreContactCalendarTitle(params: {
   return `${head.join(' ')} 【前連】${params.storeName}`.replace(/\s+/g, ' ').trim();
 }
 
-/** テンプレート文字列中の{{token}}をtokensの値に置換する(未指定のtokenは空文字扱い) */
+/**
+ * アポ詳細FMTの差し込み項目の日本語名 → 内部キー(要望: コードではなく日本語で直感的に書けるように)。
+ * マスタ管理の画面(web: MastersAdminPage の TEMPLATE_FIELDS)と名称を揃えること。
+ */
+export const TEMPLATE_FIELD_ALIASES: Record<string, string> = {
+  獲得角度: 'acquisitionAngle',
+  取り次ぎ日時: 'nextActionAt',
+  商談日時: 'meetingAt',
+  店舗名: 'storeName',
+  住所: 'address',
+  業種: 'industry',
+  店舗連絡先: 'storePhone',
+  担当者名: 'contactName',
+  アポインター: 'apStaffName',
+  前確者: 'preConfirmName',
+  リスト名: 'listName',
+  前連日時: 'preContactAt',
+  フック: 'hook',
+  GoogleMeetURL: 'meetingUrl',
+};
+
+/** テンプレート文字列中の{{項目}}をtokensの値に置換する。{{店舗名}}のような日本語名と{{storeName}}の両方に対応(未指定は空文字) */
 export function renderTemplate(template: string, tokens: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => tokens[key] ?? '');
+  return template.replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, name: string) => {
+    const key = TEMPLATE_FIELD_ALIASES[name] ?? name;
+    return tokens[key] ?? '';
+  });
 }
