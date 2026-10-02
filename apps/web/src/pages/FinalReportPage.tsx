@@ -176,7 +176,7 @@ export function FinalReportPage() {
                   <tr key={f.id}>
                     <td style={labelCell} title={f.computed ? '自動計算' : undefined}>
                       {f.label}
-                      {f.unit ? <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}> ({f.unit})</span> : null}
+                      {f.unit ? <span style={{ color: 'var(--color-text-faint)' }}> ({f.unit})</span> : null}
                     </td>
                     {days.map((d) => {
                       const isToday = d === today;

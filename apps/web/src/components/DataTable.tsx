@@ -1357,7 +1357,7 @@ export function DataTable<T>({
                 ))}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px 4px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 400, cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
                   <input
                     type="color"
                     defaultValue="#000000"

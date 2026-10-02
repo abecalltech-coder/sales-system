@@ -111,7 +111,6 @@ export function ColumnFilterHeader({
             maxHeight: 320,
             display: 'flex',
             flexDirection: 'column',
-            fontWeight: 400,
             fontSize: 12,
           }}
         >

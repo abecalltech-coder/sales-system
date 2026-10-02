@@ -213,7 +213,7 @@ function TemplatePreview({ text }: { text: string }) {
         }}
       >
         {f ? f.label : `?${m[1]}`}
-        {f && <span style={{ fontWeight: 400, opacity: 0.8 }}> ← {f.source.replace(/\(.*\)$/, '')}</span>}
+        {f && <span style={{ opacity: 0.8 }}> ← {f.source.replace(/\(.*\)$/, '')}</span>}
       </span>,
     );
     last = idx + m[0].length;
@@ -551,7 +551,7 @@ function CategoryCard({
               {isDepartment ? (
                 // 部署はCLカレンダーの色: 訪問/オンラインで別の色を指定できる(要望)
                 <>
-                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontWeight: 400 }} title="訪問の予定の色">
+                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} title="訪問の予定の色">
                     訪問
                     <input
                       type="color"
@@ -560,7 +560,7 @@ function CategoryCard({
                       style={{ width: 24, height: 24, padding: 0 }}
                     />
                   </label>
-                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, fontWeight: 400 }} title="オンライン(HPZOOM等)の予定の色">
+                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} title="オンライン(HPZOOM等)の予定の色">
                     オンライン
                     <input
                       type="color"
