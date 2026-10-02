@@ -25,11 +25,16 @@ function refreshAccessToken(): Promise<boolean> {
   return refreshPromise;
 }
 
+/** 操作ログで「どのタブからの操作か」を残すため、今いる画面のパスを送る */
+function pageHeader(): Record<string, string> {
+  return typeof window === 'undefined' ? {} : { 'X-Page-Path': encodeURIComponent(window.location.pathname) };
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...options,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: { 'Content-Type': 'application/json', ...pageHeader(), ...options.headers },
   });
 
   if (res.status === 401) {
@@ -39,7 +44,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       const retry = await fetch(`/api${path}`, {
         ...options,
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...options.headers },
+        headers: { 'Content-Type': 'application/json', ...pageHeader(), ...options.headers },
       });
       if (!retry.ok) {
         const body = await retry.json().catch(() => ({ message: retry.statusText }));

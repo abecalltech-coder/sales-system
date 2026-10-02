@@ -393,13 +393,18 @@ function TabVisibilitySettings() {
     onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
   });
 
-  // 対象は役職として選べる5ロールのうち、SUPER_ADMIN(常に全表示のため対象外)を除いたもの。
-  const configurableRoles = (roles ?? []).filter((r) => ROLE_OPTIONS.includes(r.code) && r.code !== 'SUPER_ADMIN');
+  // 対象は役職として選べる5ロール(要望: システム管理者も設定対象に含める)。
+  const configurableRoles = (roles ?? [])
+    .filter((r) => ROLE_OPTIONS.includes(r.code))
+    .sort((a, b) => ROLE_OPTIONS.indexOf(a.code) - ROLE_OPTIONS.indexOf(b.code));
+  // システム管理者が設定を戻せなくなる締め出しを防ぐため、ユーザー管理だけは常に表示(サーバー側でも強制)
+  const isLocked = (role: RoleItem, tabKey: string) => role.code === 'SUPER_ADMIN' && tabKey === '/admin/users';
   const groups = Array.from(new Set(ALL_NAV_TABS.map((t) => t.group)));
 
   const toggle = (role: RoleItem, tabKey: string) => {
     // null(制限なし)の状態でどれか1つ外す時は、まず「全タブ」から出発して該当タブだけ外す
     const current = role.visibleTabs ?? ALL_NAV_TABS.map((t) => t.key);
+    if (isLocked(role, tabKey)) return;
     const next = current.includes(tabKey) ? current.filter((k) => k !== tabKey) : [...current, tabKey];
     updateMutation.mutate({ id: role.id, visibleTabs: next });
   };
@@ -410,7 +415,7 @@ function TabVisibilitySettings() {
     <div style={{ marginTop: 28 }}>
       <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示設定</h2>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-        チェックを外すと、そのロールを持つユーザーのサイドナビからタブが消えます(未チェック=非表示)。SUPER_ADMINは締め出し防止のため常に全タブ表示です。
+        チェックを外すと、そのロールを持つユーザーのサイドナビからタブが消えます(未チェック=非表示)。システム管理者の「ユーザー管理」は締め出し防止のため常に表示です。
       </p>
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 10 }}>{error}</p>}
       {isLoading ? (
@@ -437,7 +442,12 @@ function TabVisibilitySettings() {
                     <div key={g}>
                       {ALL_NAV_TABS.filter((t) => t.group === g).map((t) => (
                         <label key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, padding: '1px 0', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={current.includes(t.key)} onChange={() => toggle(role, t.key)} />
+                          <input
+                            type="checkbox"
+                            checked={isLocked(role, t.key) || current.includes(t.key)}
+                            disabled={isLocked(role, t.key)}
+                            onChange={() => toggle(role, t.key)}
+                          />
                           {t.label}
                         </label>
                       ))}

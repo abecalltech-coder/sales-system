@@ -13,10 +13,11 @@ function cookieExtractor(req: Request): string | null {
 /**
  * ユーザーが持つ全ロールのvisibleTabsを合成する。いずれかのロールが未設定(null)なら
  * そのロールは無制限を意味するため全体も無制限にする(=OR条件で「見せる」側に倒す)。
- * SUPER_ADMINは自分自身のタブ設定を誤って絞って締め出されないよう常に無制限。
+ * SUPER_ADMINもタブを絞れるが、設定を戻せなくなる締め出しを防ぐため「ユーザー管理」は常に表示する。
  */
+const ALWAYS_VISIBLE_FOR_SUPER_ADMIN = '/admin/users';
+
 function computeVisibleTabs(roleCodes: string[], tabSets: unknown[]): string[] | null {
-  if (roleCodes.includes('SUPER_ADMIN')) return null;
   if (tabSets.length === 0) return null;
   if (tabSets.some((t) => t === null || t === undefined)) return null;
   const union = new Set<string>();
@@ -25,6 +26,7 @@ function computeVisibleTabs(roleCodes: string[], tabSets: unknown[]): string[] |
       for (const key of t) if (typeof key === 'string') union.add(key);
     }
   }
+  if (roleCodes.includes('SUPER_ADMIN')) union.add(ALWAYS_VISIBLE_FOR_SUPER_ADMIN);
   return Array.from(union);
 }
 

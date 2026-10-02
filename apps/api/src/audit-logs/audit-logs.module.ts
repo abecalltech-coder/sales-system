@@ -1,6 +1,8 @@
 import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { AuditTrailInterceptor } from './audit-trail.interceptor';
 
 @Injectable()
 class AuditLogsService {
@@ -17,7 +19,17 @@ class AuditLogsService {
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
-        include: { actor: { select: { name: true, email: true } } },
+        // 変更前スナップショット(before)は件数が多いと重いため一覧では返さない。表示に必要なのは after の整形済み情報のみ
+        select: {
+          id: true,
+          action: true,
+          targetType: true,
+          after: true,
+          success: true,
+          errorMessage: true,
+          createdAt: true,
+          actor: { select: { name: true, email: true } },
+        },
       }),
       this.prisma.auditLog.count({ where }),
     ]);
@@ -42,7 +54,8 @@ class AuditLogsController {
 }
 
 @Module({
-  providers: [AuditLogsService],
+  // 全タブの更新操作を操作ログへ記録する(要望: どのタブで何を何に変えたか)
+  providers: [AuditLogsService, { provide: APP_INTERCEPTOR, useClass: AuditTrailInterceptor }],
   controllers: [AuditLogsController],
 })
 export class AuditLogsModule {}

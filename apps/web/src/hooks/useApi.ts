@@ -711,9 +711,18 @@ export function useCustomReport(id: string | undefined) {
 // ============================================================
 // 操作ログ・システム設定
 // ============================================================
+export interface AuditLogChange {
+  label: string;
+  before?: string;
+  after: string;
+}
+
 export interface AuditLogItem {
   id: string;
   action: string;
+  targetType: string | null;
+  /** 操作ログ(要望)の整形済み情報。旧形式のログでは別の形やnullのことがある */
+  after: { page?: string | null; op?: string; target?: string | null; changes?: AuditLogChange[]; count?: number } | Record<string, unknown> | null;
   success: boolean;
   errorMessage: string | null;
   createdAt: string;
