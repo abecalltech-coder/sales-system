@@ -196,8 +196,8 @@ export function DealsListPage() {
               }
               save(r, { [key]: v || null });
             }}
-            colored
-            style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
+            // 要望: 丸い枠(ピル)は付けず、文字と下矢印だけのシンプルな表示にする(ホバー時も枠を出さない)
+            style={{ border: 'none', borderRadius: 0 }}
           />
         ),
         copyValue: (r) => labelOf(r.values[key] as string | null),
