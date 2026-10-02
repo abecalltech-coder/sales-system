@@ -316,6 +316,77 @@ table {
   max-width: 1720px;
 }
 
+/* ---- 携帯レイアウト(下メニュー・＋ボタン・コンパクト一覧) ---- */
+.phone-nav-scroll {
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.phone-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+.phone-nav-scroll > a {
+  scroll-snap-align: start;
+}
+.phone-fab {
+  position: fixed;
+  right: 14px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  z-index: 301;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(52, 83, 209, 0.4);
+}
+@media (max-width: 767px) {
+  .page {
+    padding: 8px 8px 16px;
+  }
+  .page-title {
+    font-size: 15px;
+  }
+}
+.m-card-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.m-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 5px 10px 5px 12px;
+  border: none;
+  border-bottom: 1px solid var(--color-sunken);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  /* 全件表示でも重くならないよう、画面外の行は描画を省く */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 46px;
+}
+.m-chip-link {
+  flex-shrink: 0;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-active);
+  font-size: 11px;
+  text-decoration: none;
+}
+.m-card:active {
+  background: var(--color-primary-soft);
+}
+
 /* 各タブ内の文字はすべて太字(要望)。携帯操作モードの画面(.mobile-page)も同様。
    入力欄・プルダウン・ボタンは既定で太さを継承しないため明示する */
 main,

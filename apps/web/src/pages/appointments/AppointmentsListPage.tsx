@@ -490,6 +490,12 @@ export function AppointmentsListPage() {
           tableKey="appointments"
           cellTextColor
           columns={columns}
+          mobileCard={{
+            title: 'storeName',
+            badge: 'progressStatusId',
+            badgeColor: (r) => progressOptions?.find((s) => s.id === r.progressStatusId)?.color,
+            meta: ['meetingDate', 'meetingTime', 'hook', 'closerStatusId', 'apStaffName'],
+          }}
           rows={rows}
           total={data?.total ?? 0}
           page={page}

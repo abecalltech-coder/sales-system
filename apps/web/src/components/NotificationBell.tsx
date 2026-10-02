@@ -7,7 +7,8 @@ import { api } from '../lib/api';
  * 部署責任者(MANAGER)向けの実施報告確認通知(セクション追加要望)。
  * 確認完了を押すまで一覧に残り続ける。
  */
-export function NotificationBell({ collapsed }: { collapsed: boolean }) {
+/** align: 一覧ポップオーバーをボタンの左端(サイドバー)/右端(携帯の下メニュー右端)どちらに揃えるか */
+export function NotificationBell({ collapsed, align = 'left' }: { collapsed: boolean; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
   const { data: pending } = usePendingReports();
   const queryClient = useQueryClient();
@@ -73,9 +74,9 @@ export function NotificationBell({ collapsed }: { collapsed: boolean }) {
           style={{
             position: 'absolute',
             bottom: '100%',
-            left: 0,
+            ...(align === 'right' ? { right: 0 } : { left: 0 }),
             marginBottom: 6,
-            width: 320,
+            width: 'min(320px, calc(100vw - 16px))',
             maxHeight: 420,
             overflowY: 'auto',
             zIndex: 500,

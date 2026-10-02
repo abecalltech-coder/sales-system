@@ -18,6 +18,8 @@ import {
 import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
 import { useHiddenRows } from '../hooks/useHiddenRows';
 import { useCellStyles, CellStyle } from '../hooks/useCellStyles';
+import { useIsPhone } from '../lib/useIsPhone';
+import { MobileCardConfig, MobileCardList } from './MobileCardList';
 
 export interface Column<T> {
   key: string;
@@ -69,6 +71,8 @@ interface DataTableProps<T> {
   freezeFirstColumn?: boolean;
   /** 右クリックメニューからセルごとの文字色・太字を設定できるようにする(全員共有・tableKey 必須) */
   cellTextColor?: boolean;
+  /** 指定すると携帯では1件2行のコンパクト表示にする(要望)。「表で見る」で従来の表にも切り替えられる */
+  mobileCard?: MobileCardConfig<T>;
 }
 
 // 文字色パレット(スプレッドシート風)
@@ -451,7 +455,64 @@ function TableHeadInner<T>({
 }
 const TableHead = memo(TableHeadInner) as typeof TableHeadInner;
 
-export function DataTable<T>({
+const MOBILE_TABLE_MODE_KEY = 'mobileTableMode:';
+
+/**
+ * 一覧。携帯で mobileCard が指定されていればコンパクト表示、それ以外は表(DataTableGrid)。
+ * 表示方式は画面ごとに端末へ記憶する。
+ */
+export function DataTable<T>(props: DataTableProps<T>) {
+  const isPhone = useIsPhone();
+  const storageKey = MOBILE_TABLE_MODE_KEY + (props.tableKey ?? '_');
+  const [tableMode, setTableMode] = useState(() => {
+    try {
+      return localStorage.getItem(storageKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const switchMode = (table: boolean) => {
+    setTableMode(table);
+    try {
+      localStorage.setItem(storageKey, table ? '1' : '0');
+    } catch {
+      // 保存できなくても表示の切り替え自体は効く
+    }
+  };
+
+  if (!isPhone || !props.mobileCard) return <DataTableGrid {...props} />;
+
+  const modeBar = (label: string, toTable: boolean) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px 4px', fontSize: 11, color: 'var(--color-text-muted)' }}>
+      <span>{props.rows.length}件</span>
+      <button type="button" onClick={() => switchMode(toTable)} style={{ fontSize: 11, padding: '2px 8px', color: 'var(--color-primary)' }}>
+        {label}
+      </button>
+    </div>
+  );
+
+  if (tableMode) {
+    return (
+      <div>
+        {modeBar('コンパクト表示に戻す', false)}
+        <DataTableGrid {...props} />
+      </div>
+    );
+  }
+  return (
+    <MobileCardList
+      columns={props.columns}
+      rows={props.rows}
+      getRowId={props.getRowId}
+      config={props.mobileCard}
+      loading={props.loading}
+      rowStyle={props.rowStyle}
+      toolbar={modeBar('表で見る', true)}
+    />
+  );
+}
+
+function DataTableGrid<T>({
   columns,
   rows,
   total,

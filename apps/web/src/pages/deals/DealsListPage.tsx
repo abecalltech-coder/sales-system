@@ -2,6 +2,7 @@ import { CSSProperties, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
+import type { MobileCardConfig } from '../../components/MobileCardList';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate } from '../../components/InlineEdit';
 import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions, useMe } from '../../hooks/useApi';
@@ -260,6 +261,21 @@ export function DealsListPage() {
     />
   );
 
+  // 携帯のコンパクト表示(要望): 先頭の列を見出し、最初のプルダウン列をラベル、残りの数列を2行目に出す
+  const mobileCard = useMemo<MobileCardConfig<DealListItem> | undefined>(() => {
+    const sorted = [...(fields ?? [])].sort((a, b) => a.order - b.order);
+    if (sorted.length === 0) return undefined;
+    const title = sorted[0];
+    const badge = sorted.find((f) => f.dataType === 'SELECT' && f !== title);
+    const meta = sorted.filter((f) => f !== title && f !== badge && f.dataType !== 'SELECT').slice(0, 4);
+    return {
+      title: title.fieldKey,
+      badge: badge?.fieldKey,
+      badgeColor: badge ? (r) => badge.options.find((o) => o.id === r.values[badge.fieldKey])?.color : undefined,
+      meta: meta.map((f) => f.fieldKey),
+    };
+  }, [fields]);
+
   const columns: Column<DealListItem>[] = useMemo(() => {
     const cols = (fields ?? []).map(fieldColumn).map((col) => ({ ...col, renderHeader: filterHeaderFor(col) }));
     cols.push({
@@ -373,6 +389,7 @@ export function DealsListPage() {
           cellTextColor
           freezeFirstColumn
           columns={columns}
+          mobileCard={mobileCard}
           rows={rows}
           total={rows.length}
           page={page}

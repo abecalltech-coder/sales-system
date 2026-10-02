@@ -115,11 +115,11 @@ const PATHS: Record<IconName, JSX.Element> = {
   ),
 };
 
-export function NavIcon({ name, active }: { name: IconName; active?: boolean }) {
+export function NavIcon({ name, active, size = 16 }: { name: IconName; active?: boolean; size?: number }) {
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

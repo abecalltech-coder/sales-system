@@ -1,5 +1,6 @@
-import { ReactNode, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useIsPhone } from '../lib/useIsPhone';
 import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationBell } from './NotificationBell';
@@ -51,6 +52,93 @@ const ADMIN_NAV_GROUP: NavGroup = {
 
 const COLLAPSE_STORAGE_KEY = 'nav.collapsed';
 
+/** 携帯の下メニューは幅が狭いため短い呼び名にする */
+const PHONE_LABELS: Record<string, string> = {
+  '/toss-cases': 'トス実績',
+  '/appointments': 'アポ実績',
+  '/contracts': 'エントリー',
+  '/admin/users': 'ユーザー',
+  '/admin/organizations': '組織',
+  '/admin/masters': 'マスタ',
+  '/admin/toss-form': 'トスフォーム',
+  '/admin/final-report-fields': '報告項目',
+  '/admin/custom-fields': 'カスタム項目',
+  '/admin/integrations': '連携',
+  '/admin/system-settings': 'システム',
+};
+
+/**
+ * 携帯の下メニュー(要望: 横スクロールで全タブを表示)。表示中のタブは自動で見える位置へスクロールする。
+ * 通知ベル等はスクロール領域の外(右端)に固定し、ポップオーバーが切れないようにする。
+ */
+function PhoneBottomNav({ items, isManager }: { items: NavItem[]; isManager: boolean }) {
+  const { pathname } = useLocation();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    el?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [pathname]);
+
+  return (
+    <nav
+      aria-label="タブ"
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 300,
+        display: 'flex',
+        alignItems: 'stretch',
+        background: 'var(--color-surface)',
+        borderTop: '1px solid var(--color-border)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      <div ref={scrollRef} className="phone-nav-scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', padding: '0 4px' }}>
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            style={({ isActive }) => ({
+              position: 'relative',
+              flex: '0 0 auto',
+              minWidth: 56,
+              height: 52,
+              padding: '7px 4px 0',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 3,
+              textDecoration: 'none',
+              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+            })}
+          >
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <span
+                    aria-hidden
+                    style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 3, borderRadius: '0 0 3px 3px', background: 'var(--color-primary)' }}
+                  />
+                )}
+                <NavIcon name={item.icon} active={isActive} size={19} />
+                <span style={{ fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
+                  {PHONE_LABELS[item.to] ?? item.label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', borderLeft: '1px solid var(--color-border)', padding: '0 2px' }}>
+        <PushNotificationToggle collapsed />
+        {isManager && <NotificationBell collapsed align="right" />}
+      </div>
+    </nav>
+  );
+}
+
 function renderNavItem(item: NavItem, collapsed: boolean) {
   return (
     <NavLink
@@ -101,6 +189,8 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   useRealtimeSync();
+  const isPhone = useIsPhone();
+  const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
@@ -114,6 +204,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const navGroups = allGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => isTabVisible(i.to)) }))
     .filter((g) => g.items.length > 0);
+
+  if (isPhone) {
+    const phoneItems = [...topNav, ...navGroups.flatMap((g) => g.items)];
+    const showFab = phoneItems.some((i) => i.to === '/toss/new') && pathname !== '/toss/new';
+    return (
+      <div style={{ minHeight: 'var(--viewport-height)' }}>
+        <main style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>{children}</main>
+        {showFab && (
+          <NavLink to="/toss/new" aria-label="トス登録" className="phone-fab">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </NavLink>
+        )}
+        <PhoneBottomNav items={phoneItems} isManager={isManager} />
+      </div>
+    );
+  }
 
   const toggle = () => {
     setCollapsed((v) => {

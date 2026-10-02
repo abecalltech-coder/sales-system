@@ -324,6 +324,12 @@ export function ContractsListPage() {
           tableKey="contracts"
           cellTextColor
           columns={columns}
+          mobileCard={{
+            title: 'storeName',
+            badge: 'status',
+            badgeColor: (r) => statuses?.find((s) => s.id === r.matchingStatusId)?.color,
+            meta: ['contractedAt', 'contractAmount', 'nextActionAt'],
+          }}
           rows={rows}
           total={data?.total ?? 0}
           page={page}

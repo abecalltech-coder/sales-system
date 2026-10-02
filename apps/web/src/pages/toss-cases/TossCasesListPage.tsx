@@ -571,6 +571,12 @@ export function TossCasesListPage() {
           tableKey="toss-cases"
           cellTextColor
           columns={columns}
+          mobileCard={{
+            title: 'corporateName',
+            badge: 'progress',
+            badgeColor: (r) => progressOptions?.find((s) => s.id === r.progressStatusId)?.color,
+            meta: ['tossDate', 'tossTime', 'apStaffName', 'department', 'nextActionDate'],
+          }}
           rows={rows}
           total={data?.total ?? 0}
           page={page}

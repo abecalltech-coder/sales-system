@@ -8,6 +8,7 @@ import { monthGridDays, weekGridDays, visibleRange, isToday, snapTo15, addDays, 
 import { buildCalendarTitle, buildPreContactTitle, closerSurname } from '../lib/calendarTitle';
 import { PresenceBar } from '../components/PresenceBar';
 import { usePresence } from '../lib/usePresence';
+import { useIsPhone } from '../lib/useIsPhone';
 
 const COLOR_PALETTE = [
   '#ff887c', '#ef4444', '#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6',
@@ -131,7 +132,10 @@ export function CLCalendarPage() {
   const { data: me } = useMe();
   const presence = usePresence('CL_CALENDAR', me?.id);
 
-  const range = useMemo(() => visibleRange(viewMode, anchor), [viewMode, anchor]);
+  // 携帯は週の日付から1日を選び、その日の予定を時間順のリストで出す(要望)。データは週単位で取る
+  const isPhone = useIsPhone();
+  const effectiveMode: ViewMode = isPhone ? 'week' : viewMode;
+  const range = useMemo(() => visibleRange(effectiveMode, anchor), [effectiveMode, anchor]);
   const { data, isLoading } = useAppointments({
     page: 1,
     pageSize: 20000, // 表示期間内のアポを取りこぼさない
@@ -227,7 +231,7 @@ export function CLCalendarPage() {
   };
 
   const navigate = (dir: -1 | 1) => {
-    setAnchor((a) => (viewMode === 'month' ? addMonths(a, dir) : viewMode === 'week' ? addDays(a, dir * 7) : addDays(a, dir)));
+    setAnchor((a) => (effectiveMode === 'month' ? addMonths(a, dir) : effectiveMode === 'week' ? addDays(a, dir * 7) : addDays(a, dir)));
   };
 
   const title =
@@ -245,7 +249,7 @@ export function CLCalendarPage() {
       <div className="page">
         <div className="page-header">
           <h1 className="page-title">CLカレンダー</h1>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: isPhone ? 'none' : 'flex', gap: 8 }}>
             {(['month', 'week', 'day'] as ViewMode[]).map((v) => (
               <button
                 key={v}
@@ -274,7 +278,7 @@ export function CLCalendarPage() {
             <button onClick={() => navigate(-1)}>← 前へ</button>
             <button onClick={() => setAnchor(new Date())}>今日</button>
             <button onClick={() => navigate(1)}>次へ →</button>
-            <span style={{ fontWeight: 700, fontSize: 15, marginLeft: 8 }}>{title}</span>
+            {!isPhone && <span style={{ fontWeight: 700, fontSize: 15, marginLeft: 8 }}>{title}</span>}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={{ fontSize: 12, padding: 4 }}>
@@ -306,7 +310,16 @@ export function CLCalendarPage() {
 
         {isLoading && <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
 
-        {viewMode === 'month' && (
+        {isPhone && (
+          <PhoneAgenda
+            anchor={anchor}
+            events={displayEvents}
+            closerLabel={closerLabel}
+            onSelectDay={setAnchor}
+            onEventClick={(ev, title) => setDraft(eventToDraft(ev, title))}
+          />
+        )}
+        {!isPhone && viewMode === 'month' && (
           <MonthGrid
             anchor={anchor}
             events={displayEvents}
@@ -315,7 +328,7 @@ export function CLCalendarPage() {
             onEventClick={(ev, title) => setDraft(eventToDraft(ev, title))}
           />
         )}
-        {viewMode !== 'month' && (
+        {!isPhone && viewMode !== 'month' && (
           <TimeGrid
             days={viewMode === 'week' ? weekGridDays(anchor) : [startOfDay(anchor)]}
             events={displayEvents}
@@ -491,6 +504,113 @@ function buildDisplayEvents(
     }
   }
   return result;
+}
+
+/** 携帯用: 週の日付ストリップ + 選んだ日の予定リスト(時間順)。予定を押すと従来の編集モーダルを開く。 */
+function PhoneAgenda({
+  anchor,
+  events,
+  closerLabel,
+  onSelectDay,
+  onEventClick,
+}: {
+  anchor: Date;
+  events: CalendarEvent[];
+  closerLabel: (id: string | null) => string;
+  onSelectDay: (day: Date) => void;
+  onEventClick: (ev: AppointmentListItem, title: string) => void;
+}) {
+  const days = weekGridDays(anchor);
+  const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const dayEvents = events.filter((e) => sameDay(e.start, anchor)).sort((a, b) => a.start.getTime() - b.start.getTime());
+  const hm = (d: Date) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const dow = (d: Date) => '日月火水木金土'[d.getDay()];
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3, marginBottom: 8 }}>
+        {days.map((d) => {
+          const on = sameDay(d, anchor);
+          const has = events.some((e) => sameDay(e.start, d));
+          return (
+            <button
+              key={d.toISOString()}
+              type="button"
+              onClick={() => onSelectDay(d)}
+              style={{
+                height: 48,
+                padding: 0,
+                border: 'none',
+                borderRadius: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 1,
+                background: on ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: on ? '#fff' : isToday(d) ? 'var(--color-primary)' : 'var(--color-text)',
+              }}
+            >
+              <span style={{ fontSize: 10 }}>{dow(d)}</span>
+              <span style={{ fontSize: 15, fontWeight: 900 }}>{d.getDate()}</span>
+              <span style={{ width: 4, height: 4, borderRadius: 2, background: has ? (on ? '#fff' : 'var(--color-primary)') : 'transparent' }} />
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 2px 4px' }}>
+        {anchor.getMonth() + 1}/{anchor.getDate()}({dow(anchor)}) の予定 {dayEvents.length}件
+      </div>
+      <div className="m-card-list">
+        {dayEvents.length === 0 && (
+          <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--color-text-faint)' }}>予定はありません</div>
+        )}
+        {dayEvents.map((ev) => {
+          const a = ev.appointment;
+          const phone = a.customer?.phone;
+          const address = a.visitAddress ?? a.customer?.address;
+          return (
+            <div key={ev.key} style={{ display: 'flex', gap: 8, padding: '6px 10px', borderBottom: '1px solid var(--color-sunken)' }}>
+              <div style={{ width: 40, flexShrink: 0, textAlign: 'right', paddingTop: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 900 }}>{hm(ev.start)}</div>
+                {ev.end && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{hm(ev.end)}</div>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => onEventClick(a, ev.autoTitle)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: 0, border: 'none', background: 'transparent', textAlign: 'left', font: 'inherit', color: 'inherit' }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: 4, flexShrink: 0, background: ev.color }} />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {ev.title}
+                  </span>
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{closerLabel(a.closerStatusId)}</span>
+                  {phone && (
+                    <a href={`tel:${phone}`} className="m-chip-link">
+                      電話
+                    </a>
+                  )}
+                  {address && (
+                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="m-chip-link">
+                      地図
+                    </a>
+                  )}
+                  {a.meetingUrl && (
+                    <a href={a.meetingUrl} target="_blank" rel="noreferrer" className="m-chip-link">
+                      Meet
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function MonthGrid({
