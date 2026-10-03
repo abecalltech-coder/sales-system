@@ -30,7 +30,7 @@ jobs:
       - name: Wait for Railway deploy and verify /health
         env:
           # 既定は本番の公開URL。別環境を見たい場合のみ secrets.API_HEALTHCHECK_URL で上書きする。
-          HEALTHCHECK_URL: ${{ secrets.API_HEALTHCHECK_URL || 'https://sales-systemapi-production.up.railway.app/health' }}
+          HEALTHCHECK_URL: ${{ secrets.API_HEALTHCHECK_URL || 'https://chpartners.up.railway.app/health' }}
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           # Railwayのビルド+デプロイは数分かかる。最大15分待つ。
