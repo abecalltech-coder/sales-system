@@ -56,7 +56,7 @@ class DepartmentSummaryService {
         orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
         select: { id: true, name: true, departmentId: true, roles: { select: { role: { select: { code: true } } } } },
       }),
-      this.prisma.statusMaster.findMany({ select: { id: true, category: true, internalCode: true, displayName: true } }),
+      this.prisma.statusMaster.findMany({ select: { id: true, category: true, internalCode: true, displayName: true, active: true, order: true } }),
       this.prisma.monthlyShiftRow.findMany({ where: { sheet: { periodMonth: period }, userId: { not: null } }, select: { userId: true, days: true } }),
       this.prisma.finalReportField.findMany({ where: { code: { in: ['callSf', 'callBlank'] } }, select: { id: true } }),
       this.prisma.finalReportEntry.findMany({ where: { date: { startsWith: period } }, select: { userId: true, values: true } }),
@@ -146,8 +146,14 @@ class DepartmentSummaryService {
     };
 
     const rows = users.map(rowFor);
+    // 前確者のサマリー(枠のみ)用: マスタ管理の「前確担当者」
+    const preConfirmers = statuses
+      .filter((x) => x.category === 'TOSS_PRE_CONFIRM' && x.active)
+      .sort((a, b) => a.order - b.order)
+      .map((x) => ({ id: x.id, name: x.displayName }));
     return {
       period,
+      preConfirmers,
       departments: [
         ...departments.map((d) => ({ id: d.id, name: d.name, rows: rows.filter((r) => r.departmentId === d.id) })),
         { id: 'none', name: '所属なし', rows: rows.filter((r) => !r.departmentId || !departments.some((d) => d.id === r.departmentId)) },

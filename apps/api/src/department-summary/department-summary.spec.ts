@@ -3,7 +3,7 @@ import { DepartmentSummaryModule } from './department-summary.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 
-const S = (id: string, category: string, internalCode: string, displayName: string) => ({ id, category, internalCode, displayName });
+const S = (id: string, category: string, internalCode: string, displayName: string) => ({ id, category, internalCode, displayName, active: true, order: 0 });
 
 function prismaMock() {
   return {

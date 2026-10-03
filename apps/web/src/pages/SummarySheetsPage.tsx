@@ -8,7 +8,7 @@ import { logCopy } from '../lib/copyLog';
 
 /**
  * サマリー(要望: アプリで作るのではなくこちらで作成。旧「実績/フリーシート/カスタムレポート」は廃止)。
- * 部署ごとに、1人1行で月の実績を並べる。集計の定義は API department-summary.module.ts を参照。
+ * 1画面に上から 前確者サマリー → CLサマリー → 部署ごとのAPサマリー を並べる(前確者・CLは枠のみ)。集計の定義は API department-summary.module.ts を参照。
  */
 
 interface Row {
@@ -31,6 +31,7 @@ interface Row {
 
 interface SummaryResponse {
   period: string;
+  preConfirmers: { id: string; name: string }[];
   departments: { id: string; name: string; rows: Row[] }[];
 }
 
@@ -105,32 +106,35 @@ function totalRow(rows: Row[]): Row {
   };
 }
 
+/** AP として部署別サマリーに載せる役職 */
+const AP_ROLES = ['AP', 'AP_LEADER'];
+
 export function SummarySheetsPage() {
   const [period] = usePeriodMonth();
   const { data, isLoading, error } = useQuery({
     queryKey: ['department-summary', period],
     queryFn: () => api.get<SummaryResponse>(`/department-summary?period=${period}`),
   });
-  const [deptId, setDeptId] = useState<string | null>(null);
-  const departments = data?.departments ?? [];
-  const current = departments.find((d) => d.id === deptId) ?? departments[0];
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!deptId && departments[0]) setDeptId(departments[0].id);
-  }, [deptId, departments]);
-
   const metrics = metricsFor();
-  const copyTable = async () => {
-    if (!current) return;
+
+  // 部署ごとのサマリーは各部署のAPだけ(要望)
+  const apDepartments = (data?.departments ?? [])
+    .map((d) => ({ ...d, rows: d.rows.filter((r) => r.roles.some((c) => AP_ROLES.includes(c))) }))
+    .filter((d) => d.rows.length > 0);
+  // CLだけのサマリー(全部署)
+  const clRows = (data?.departments ?? []).flatMap((d) => d.rows.filter((r) => r.roles.includes('CL')).map((r) => ({ ...r, deptName: d.name })));
+  const preConfirmers = data?.preConfirmers ?? [];
+
+  const copyDepartment = async (dept: { name: string; rows: Row[] }) => {
     const header = ['氏名', '役職', '部署', ...metrics.map((m) => m.label)];
-    const lines = [...current.rows, totalRow(current.rows)].map((r) =>
-      [r.name, roleLabel(r.roles), r.userId === 'total' ? '' : current.name, ...metrics.map((m) => m.value(r))].join('\t'),
+    const lines = [...dept.rows, totalRow(dept.rows)].map((r) =>
+      [r.name, roleLabel(r.roles), r.userId === 'total' ? '' : dept.name, ...metrics.map((m) => m.value(r))].join('\t'),
     );
     const text = [header.join('\t'), ...lines].join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      logCopy('サマリー(表のコピー)', text, { target: `${period} ${current.name}`, cells: lines.length });
+      logCopy('サマリー(表のコピー)', text, { target: `${period} ${dept.name}`, cells: lines.length });
       setToast('表をコピーしました(スプレッドシートに貼り付けできます)');
     } catch {
       setToast('コピーできませんでした');
@@ -146,42 +150,97 @@ export function SummarySheetsPage() {
             <h1 className="page-title">サマリー</h1>
             <MonthSwitcher />
           </div>
-          <button type="button" onClick={() => void copyTable()} disabled={!current} style={{ fontSize: 12 }}>
-            表をコピー
-          </button>
         </div>
-
-        {departments.length > 0 && (
-          <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--color-border)', marginBottom: 8, overflowX: 'auto' }}>
-            {departments.map((d) => (
-              <button
-                key={d.id}
-                type="button"
-                onClick={() => setDeptId(d.id)}
-                style={{
-                  padding: '6px 14px',
-                  fontSize: 13,
-                  border: 'none',
-                  boxShadow: 'none',
-                  background: 'transparent',
-                  whiteSpace: 'nowrap',
-                  borderBottom: current?.id === d.id ? '2px solid var(--color-primary)' : '2px solid transparent',
-                  color: current?.id === d.id ? 'var(--color-primary)' : 'var(--color-text-muted)',
-                }}
-              >
-                {d.name}
-              </button>
-            ))}
-          </div>
-        )}
 
         {isLoading && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
         {error && <p style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error instanceof ApiError ? error.message : '読み込めませんでした'}</p>}
-        {!isLoading && departments.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>表示できるアカウントがありません</p>}
-        {current && <DepartmentTable period={period} deptName={current.name} rows={current.rows} metrics={metrics} />}
+
+        {data && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* 上から 前確者 → CL → 部署ごとのAP(要望)。前確者・CLは列が決まるまで枠のみ */}
+            <SummarySection title="前確者サマリー" note="列の内容は今後決めます(枠のみ)">
+              <NameOnlyTable names={preConfirmers.map((p) => ({ key: p.id, name: p.name }))} empty="マスタ管理の「前確担当者」が登録されていません" />
+            </SummarySection>
+
+            <SummarySection title="CLサマリー" note="列の内容は今後決めます(枠のみ)">
+              <NameOnlyTable
+                names={clRows.map((r) => ({ key: r.userId, name: r.name, sub: r.deptName }))}
+                subLabel="部署"
+                empty="役職がCLのアカウントがありません"
+              />
+            </SummarySection>
+
+            {apDepartments.length === 0 && (
+              <SummarySection title="APサマリー">
+                <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>役職がAPのアカウントがありません</p>
+              </SummarySection>
+            )}
+            {apDepartments.map((d) => (
+              <SummarySection
+                key={d.id}
+                title={`${d.name} APサマリー`}
+                actions={
+                  <button type="button" onClick={() => void copyDepartment(d)} style={{ fontSize: 11, padding: '2px 10px' }}>
+                    表をコピー
+                  </button>
+                }
+              >
+                <DepartmentTable period={period} deptName={d.name} rows={d.rows} metrics={metrics} />
+              </SummarySection>
+            ))}
+          </div>
+        )}
         {toast && <div className="chat-toast">{toast}</div>}
       </div>
     </AppLayout>
+  );
+}
+
+function SummarySection({ title, note, actions, children }: { title: string; note?: string; actions?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 900 }}>{title}</h2>
+        {note && <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{note}</span>}
+        <span style={{ flex: 1 }} />
+        {actions}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** 列が未定のサマリーの枠: 氏名(と部署)だけの表 */
+function NameOnlyTable({ names, subLabel, empty }: { names: { key: string; name: string; sub?: string }[]; subLabel?: string; empty: string }) {
+  const th: React.CSSProperties = { background: 'var(--color-subtle)', fontSize: 10.5, padding: '4px 8px', borderBottom: '1px solid var(--color-border-strong)', borderRight: '1px solid var(--color-border)', textAlign: 'left' };
+  const td: React.CSSProperties = { fontSize: 12, padding: '3px 8px', borderBottom: '1px solid var(--color-sunken)', borderRight: '1px solid var(--color-sunken)', whiteSpace: 'nowrap' };
+  if (names.length === 0) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>{empty}</p>;
+  return (
+    <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
+      <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%' }}>
+        <thead>
+          <tr>
+            <th style={{ ...th, width: 120 }}>氏名</th>
+            {subLabel && <th style={{ ...th, width: 80 }}>{subLabel}</th>}
+            <th style={{ ...th, color: 'var(--color-text-faint)', fontWeight: 500 }}>(列は未設定)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {names.map((n) => (
+            <tr key={n.key}>
+              <td style={td}>{n.name}</td>
+              {subLabel && <td style={td}>{n.sub ?? ''}</td>}
+              <td style={td} />
+            </tr>
+          ))}
+          <tr style={{ fontWeight: 900 }}>
+            <td style={{ ...td, background: 'var(--color-primary-soft)' }}>合計</td>
+            {subLabel && <td style={{ ...td, background: 'var(--color-primary-soft)' }} />}
+            <td style={{ ...td, background: 'var(--color-primary-soft)' }} />
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -204,7 +263,7 @@ function DepartmentTable({ period, deptName, rows, metrics }: { period: string; 
   const sticky = (left: number, w: number, bg = 'var(--color-surface)'): React.CSSProperties => ({ position: 'sticky', left, zIndex: 1, background: bg, minWidth: w, maxWidth: w });
 
   return (
-    <div style={{ overflow: 'auto', maxHeight: 'calc(var(--viewport-height, 100vh) - 190px)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
+    <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
       <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content' }}>
         <thead>
           <tr>
