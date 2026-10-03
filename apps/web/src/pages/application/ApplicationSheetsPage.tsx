@@ -368,6 +368,7 @@ function billPatch(text: string, doryoku: boolean): Section {
     if (v) patch[key] = v;
   };
   put('company', fields['契約電力会社']);
+  put('holder', fields['ご契約名義']);
   put('spid', fields['供給地点特定番号']);
   put('customerNo', fields['お客さま番号']);
   put('capacity', fields['契約容量・電力']);
@@ -443,19 +444,29 @@ function SheetPhotos({
   const progress = (p: number, status: string) =>
     setState(status === 'recognizing text' ? `読み取り中 ${Math.round(p * 100)}%` : status.includes('traineddata') ? '日本語データ読込中(初回のみ)' : '読み取り準備中...');
 
+  // 写真を撮る/選ぶとすぐに読み取りを始める(要望)。案件への写真の保存は並行して行い、保存に失敗しても読み取りは続ける
   const add = async (file: File | undefined) => {
     if (!file) return;
-    try {
-      setState('写真を保存しています...');
+    setState('読み取り準備中...');
+    const saving = (async () => {
       const id = await ensureSaved();
       const [image, thumb] = await Promise.all([resizeImage(file, 1800, { quality: 0.82 }), resizeImage(file, 240, { quality: 0.7 })]);
       await api.post(`/application-sheets/${id}/photos`, { section, image, thumb });
       queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', id] });
       queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
-      const text = await recognizeBill(file, progress);
-      setState(applyText(text));
+    })();
+    try {
+      const [text, saved] = await Promise.all([
+        recognizeBill(file, progress),
+        saving.then(
+          () => null,
+          (e: unknown) => (e instanceof ApiError ? e.message : e instanceof Error ? e.message : '写真を保存できませんでした'),
+        ),
+      ]);
+      const msg = applyText(text);
+      setState(saved ? `${msg}(写真の保存に失敗: ${saved})` : msg);
     } catch (e) {
-      setState(e instanceof ApiError ? e.message : e instanceof Error ? e.message : '写真を追加できませんでした');
+      setState(e instanceof Error ? e.message : '読み取りに失敗しました');
     } finally {
       if (fileRef.current) fileRef.current.value = '';
       if (cameraRef.current) cameraRef.current.value = '';

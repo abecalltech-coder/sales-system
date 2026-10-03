@@ -129,11 +129,47 @@ export function extractBillFields(text: string): BillField[] {
   add('請求金額', /(?:請求.{0,3}金額|請求額|今月の(?:電気)?料金|お支払.{0,2}金額)[^0-9]{0,8}([\d,.]+)\s*円/, (m) => `${m[1].replace(/\./g, ',')} 円`);
   add('使用期間', /(\d{1,2}月\d{1,2}日\s*[~〜～-]\s*\d{1,2}月\d{1,2}日)/);
   add('検針日', /検針(?:日|月日)[\s:：]*((?:\d{4}年)?\d{1,2}月\d{1,2}日)/);
-  // 契約電力会社(明細に社名が載っていることが多い)
+  // 契約電力会社(要望: 電力会社名と思われるものを拾う)。主要な社名を優先し、無ければ「○○電力/でんき/エナジー」などの社名らしい語
   {
-    const companies = ['東京電力', '関西電力', '中部電力', '九州電力', '東北電力', '北海道電力', '北陸電力', '中国電力', '四国電力', '沖縄電力', 'エネット', 'ENEOSでんき', '東京ガス', '大阪ガス', 'Looopでんき', 'auでんき'];
-    const hit = companies.find((c) => flat.includes(c));
-    if (hit) out.push({ label: '契約電力会社', value: hit });
+    const known = [
+      '東京電力エナジーパートナー', '東京電力', '関西電力', '中部電力ミライズ', '中部電力', '九州電力', '東北電力', '北海道電力', '北陸電力', '中国電力', '四国電力', '沖縄電力',
+      'エネット', 'ENEOSでんき', 'ENEOS', '東京ガス', '大阪ガス', '東邦ガス', '西部ガス', 'Looopでんき', 'Looop', 'auでんき', 'ソフトバンクでんき', '楽天でんき', 'idemitsuでんき',
+      'HTBエナジー', 'イーレックス', 'エバーグリーン', 'シン・エナジー', 'ハルエネ', 'CDエナジー', 'ミツウロコでんき', 'オクトパスエナジー',
+    ];
+    const hit = known.find((c) => flat.includes(c));
+    if (hit) {
+      out.push({ label: '契約電力会社', value: hit });
+    } else {
+      // 社名でない電力の用語(使用電力量・契約電力など)は除外する
+      const NOT_COMPANY = /^(?:ご?使用|契約|基本|最大|最低|従量|電力量|発電|再エネ|燃料|託送|供給|お?支払|今月|前月|前年|合計|請求|料金|低圧|高圧|動力|電灯|夜間|昼間|力率|割引|検針|計量|需要|購入|ご)/;
+      const re = /((?:株式会社|[(（]株[)）])?\s*[^\s:：、。・,0-9()（）「」【】]{1,14}(?:電力|でんき|電気|エナジー|エネルギー|パワー|ガス)(?:株式会社|[(（]株[)）])?)/g;
+      for (const m of flat.matchAll(re)) {
+        const name = m[1].replace(/\s+/g, '').replace(/^(?:株式会社|[(（]株[)）])/, '').replace(/(?:株式会社|[(（]株[)）])$/, '');
+        if (name.length >= 3 && !NOT_COMPANY.test(name) && !/(?:電力量|使用電力|契約電力)/.test(name)) {
+          out.push({ label: '契約電力会社', value: name });
+          break;
+        }
+      }
+    }
+  }
+  // ご契約名義(要望)。「ご契約名義」「契約者名」「お客さま名」などの見出しの後ろ、無ければ「○○ 様」の行
+  {
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const LABEL = /(?:ご?契約名義|ご?契約者(?:名|様|氏名)?|お客(?:さま|様)(?:名|氏名)|ご?名義(?:人)?|お名前)\s*[:：]?\s*/;
+    let name: string | null = null;
+    for (let i = 0; i < lines.length && !name; i++) {
+      const m = lines[i].match(LABEL);
+      if (!m) continue;
+      const rest = lines[i].slice((m.index ?? 0) + m[0].length).replace(/\s*(?:様|殿)\s*$/, '').trim();
+      // 見出しだけの行なら次の行が名前
+      const cand = rest || (lines[i + 1] ?? '').replace(/\s*(?:様|殿)\s*$/, '').trim();
+      if (cand && !/番号|住所|電話|\d{4,}/.test(cand)) name = cand.split(/\s{2,}/)[0];
+    }
+    if (!name) {
+      const sama = lines.find((l) => /(?:様|殿)\s*$/.test(l) && !/お客(?:さま|様)$|皆様|各位/.test(l) && l.replace(/\s*(?:様|殿)\s*$/, '').length >= 2);
+      if (sama) name = sama.replace(/\s*(?:様|殿)\s*$/, '').replace(/^.*?[:：]\s*/, '').trim();
+    }
+    if (name) out.push({ label: 'ご契約名義', value: name.slice(0, 40) });
   }
   add('力率', /力率[^0-9]{0,4}(\d{2,3})\s*%/, (m) => `${m[1]}%`);
   add('明細月', /((?:\d{4}年)?\d{1,2}月)分/);
