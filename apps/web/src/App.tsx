@@ -9,7 +9,6 @@ import { DealsListPage } from './pages/deals/DealsListPage';
 import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
-import { CustomFieldsAdminPage } from './pages/admin/CustomFieldsAdminPage';
 import { MobileHomePage } from './pages/mobile/MobileHomePage';
 import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
 import { SummarySheetsPage } from './pages/SummarySheetsPage';
@@ -57,7 +56,6 @@ export function App() {
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
-        <Route path="/admin/custom-fields" element={protectAdmin(<CustomFieldsAdminPage />)} />
         <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
         <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
         <Route path="/m" element={protect(<MobileHomePage />)} />

@@ -67,7 +67,6 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/masters', label: 'マスタ管理', icon: 'sliders' },
     { to: '/admin/toss-form', label: 'トスフォーム設定', icon: 'form' },
     { to: '/admin/final-report-fields', label: '最終報告項目', icon: 'clipboard' },
-    { to: '/admin/custom-fields', label: 'カスタム項目管理', icon: 'puzzle' },
     { to: '/admin/integrations', label: '連携設定', icon: 'link' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },
     { to: '/admin/system-settings', label: 'システム設定', icon: 'gear' },
@@ -87,7 +86,6 @@ const PHONE_LABELS: Record<string, string> = {
   '/admin/masters': 'マスタ',
   '/admin/toss-form': 'トスフォーム',
   '/admin/final-report-fields': '報告項目',
-  '/admin/custom-fields': 'カスタム項目',
   '/admin/integrations': '連携',
   '/admin/system-settings': 'システム',
 };
