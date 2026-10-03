@@ -427,20 +427,15 @@ table {
   background: var(--color-primary-soft);
 }
 
-/* 各タブ内の文字はすべて太字(要望)。携帯操作モードの画面(.mobile-page)も同様。
+/* 各タブ内の文字はすべて太字(要望)。
    入力欄・プルダウン・ボタンは既定で太さを継承しないため明示する */
-main,
-.mobile-page {
+main {
   font-weight: 700;
 }
 main input,
 main select,
 main textarea,
-main button,
-.mobile-page input,
-.mobile-page select,
-.mobile-page textarea,
-.mobile-page button {
+main button {
   font-weight: inherit;
 }
 .page-header {

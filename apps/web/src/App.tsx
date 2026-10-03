@@ -9,8 +9,6 @@ import { DealsListPage } from './pages/deals/DealsListPage';
 import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
-import { MobileHomePage } from './pages/mobile/MobileHomePage';
-import { MobileVisitDetailPage } from './pages/mobile/MobileVisitDetailPage';
 import { SummarySheetsPage } from './pages/SummarySheetsPage';
 import { ShiftPage } from './pages/ShiftPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
@@ -57,8 +55,6 @@ export function App() {
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
         <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
         <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
-        <Route path="/m" element={protect(<MobileHomePage />)} />
-        <Route path="/m/visits/:id" element={protect(<MobileVisitDetailPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
         <Route path="/admin/integrations" element={protectAdmin(<IntegrationsPage />)} />
         <Route path="/" element={<Navigate to="/toss-cases" replace />} />
