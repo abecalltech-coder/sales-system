@@ -47,10 +47,13 @@ class AuditLogsService {
     return { ok: true };
   }
 
-  async list(params: { page: number; pageSize: number; action?: string; actorUserId?: string }) {
+  async list(params: { page: number; pageSize: number; action?: string; actorUserId?: string; kind?: string }) {
+    // コピー・CSV出力(情報の持ち出しにつながる操作)だけ/それ以外だけ の絞り込み(要望)
+    const copyLike = { OR: [{ action: 'copy' }, { action: { endsWith: '.export' } }] };
     const where = {
       ...(params.action ? { action: params.action } : {}),
       ...(params.actorUserId ? { actorUserId: params.actorUserId } : {}),
+      ...(params.kind === 'copy' ? copyLike : params.kind === 'other' ? { NOT: copyLike } : {}),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.auditLog.findMany({
@@ -93,8 +96,9 @@ class AuditLogsController {
     @Query('pageSize') pageSize = '50',
     @Query('action') action?: string,
     @Query('actorUserId') actorUserId?: string,
+    @Query('kind') kind?: string,
   ) {
-    return this.service.list({ page: Number(page), pageSize: Math.min(Number(pageSize), 2000), action, actorUserId });
+    return this.service.list({ page: Number(page), pageSize: Math.min(Number(pageSize), 2000), action, actorUserId, kind });
   }
 }
 

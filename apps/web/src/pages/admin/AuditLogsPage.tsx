@@ -129,7 +129,8 @@ function ChangeDetail({ row }: { row: AuditLogItem }) {
 export function AuditLogsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 2000; // 1画面でまとめて表示(要望)。ログは増え続けるため最新2000件ずつ
-  const { data, isLoading } = useAuditLogs({ page, pageSize });
+  const [kind, setKind] = useState<'' | 'copy' | 'other'>('');
+  const { data, isLoading } = useAuditLogs({ page, pageSize, kind: kind || undefined });
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const columns: Column<AuditLogItem>[] = [
@@ -183,6 +184,35 @@ export function AuditLogsPage() {
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 10 }}>
           行をクリックすると変更・入力内容を全項目表示します。
         </p>
+        <div role="radiogroup" aria-label="表示する操作" style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+          {(
+            [
+              ['', 'すべて'],
+              ['copy', 'コピー・CSV出力だけ'],
+              ['other', 'コピー以外'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={kind === value}
+              onClick={() => {
+                setKind(value);
+                setPage(1);
+              }}
+              style={{
+                fontSize: 12,
+                padding: '4px 12px',
+                background: kind === value ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: kind === value ? '#fff' : 'var(--color-text)',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          {data && <span style={{ alignSelf: 'center', fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 6 }}>{data.total}件</span>}
+        </div>
         <DataTable
           columns={columns}
           rows={data?.items ?? []}

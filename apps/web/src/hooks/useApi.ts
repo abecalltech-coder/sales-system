@@ -762,8 +762,8 @@ export interface AuditLogItem {
   actor: { name: string; email: string } | null;
 }
 
-export function useAuditLogs(params: { page: number; pageSize: number }) {
-  const query = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) });
+export function useAuditLogs(params: { page: number; pageSize: number; kind?: 'copy' | 'other' }) {
+  const query = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize), ...(params.kind ? { kind: params.kind } : {}) });
   return useQuery({
     queryKey: ['audit-logs', params],
     queryFn: () => api.get<{ items: AuditLogItem[]; total: number; page: number; pageSize: number }>(
