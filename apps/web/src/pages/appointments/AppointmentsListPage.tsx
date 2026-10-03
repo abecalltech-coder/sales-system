@@ -5,7 +5,7 @@ import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { PresenceBar } from '../../components/PresenceBar';
-import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem } from '../../hooks/useApi';
+import { useAppointments, useStatuses, useMe, StatusMasterItem, AppointmentListItem, useAppointmentCategory } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
@@ -42,13 +42,15 @@ export function AppointmentsListPage() {
   const { data, isLoading } = useAppointments({ page, pageSize, periodMonth, includePrevMonth });
   const { data: me } = useMe();
   const presence = usePresence('APPOINTMENT', me?.id);
-  const { data: preConfirmOptions } = useStatuses('TOSS_PRE_CONFIRM');
+  // 共通をオフにした項目は、アポ実績用に独立した選択肢を使う(要望)
+  const appoCat = useAppointmentCategory();
+  const { data: preConfirmOptions } = useStatuses(appoCat('TOSS_PRE_CONFIRM'));
   const { data: preContactOptions } = useStatuses('APPOINTMENT_PRE_CONTACT');
   const { data: closerOptions } = useStatuses('APPOINTMENT_CLOSER');
   const { data: departmentOptions } = useStatuses('DEPARTMENT_BRANCH');
-  const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
-  const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
-  const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
+  const { data: meetingFormatOptions } = useStatuses(appoCat('MEETING_FORMAT'));
+  const { data: existingContractOptions } = useStatuses(appoCat('EXISTING_CONTRACT'));
+  const { data: proposalOptions } = useStatuses(appoCat('PROPOSAL_LOCATION'));
   const { data: typeOptions } = useStatuses('APPOINTMENT_TYPE');
   const { data: progressOptions } = useStatuses('APPOINTMENT_PROGRESS');
   const { data: acquisitionMethodOptions } = useStatuses('APPOINTMENT_ACQUISITION_METHOD');
@@ -85,7 +87,7 @@ export function AppointmentsListPage() {
     APPOINTMENT_CONSENT_FORM_TYPE: (r) => r.consentFormTypeStatusId,
     APPOINTMENT_DELIVERY_METHOD: (r) => r.deliveryMethodStatusId,
     APPOINTMENT_DELIVERY_STATUS: (r) => r.deliveryStatusStatusId,
-  });
+  }, appoCat);
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>

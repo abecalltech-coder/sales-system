@@ -25,6 +25,12 @@ const CATEGORIES = [
   'APPOINTMENT_DELIVERY_STATUS',
   'DEPARTMENT_BRANCH',
   'TOSS_HOOK_LABEL_MAP',
+  // 共通をオフにした項目のアポ実績用(master-share.ts)
+  'MEETING_FORMAT@APPOINTMENT',
+  'TOSS_PRE_CONFIRM@APPOINTMENT',
+  'INDUSTRY@APPOINTMENT',
+  'EXISTING_CONTRACT@APPOINTMENT',
+  'PROPOSAL_LOCATION@APPOINTMENT',
 ] as const;
 
 export class CreateStatusMasterDto {
@@ -40,6 +46,10 @@ export class CreateStatusMasterDto {
 
   @IsOptional() @IsString() color?: string;
   @IsOptional() @IsInt() order?: number;
+}
+
+export class SetShareDto {
+  @IsBoolean() shared!: boolean;
 }
 
 export class UpdateStatusMasterDto {

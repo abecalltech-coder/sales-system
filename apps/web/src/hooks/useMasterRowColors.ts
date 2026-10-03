@@ -11,6 +11,8 @@ import { rowColorStyle } from '../lib/rowColors';
 export function useMasterRowColors<T>(
   tabTitle: string,
   fieldOf: Record<string, (row: T) => string | null | undefined>,
+  /** 共通をオフにした項目はアポ用のカテゴリを引く(useAppointmentCategory) */
+  categoryOf: (category: string) => string = (c) => c,
 ): (row: T) => CSSProperties | undefined {
   const { data: statuses } = useStatuses();
   const { data: order } = useMasterOrder();
@@ -37,7 +39,7 @@ export function useMasterRowColors<T>(
     rowColorStyle(
       categories.map((c) => {
         const v = fieldOf[c](row);
-        return v ? lookup.get(c)?.get(v) : undefined;
+        return v ? lookup.get(categoryOf(c))?.get(v) : undefined;
       }),
     );
 }

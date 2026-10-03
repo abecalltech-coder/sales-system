@@ -223,7 +223,7 @@ export class AppointmentsService {
           industry: tossCase.industry,
           hook: tossCase.hook,
           existingContract: tossCase.existingContract,
-          preConfirmStatusId: tossCase.preConfirmStatusId,
+          preConfirmStatusId: await this.appointmentPreConfirmId(preConfirmStatus),
           createdBy: actorUserId,
           updatedBy: actorUserId,
         },
@@ -611,5 +611,24 @@ export class AppointmentsService {
       data: { calendarSyncStatus: 'SYNCING', calendarSyncError: null },
     });
     return { ok: true, message: 'カレンダー再連携ジョブをキューへ投入しました(Phase5実装予定)' };
+  }
+
+  /**
+   * 前確の「共通」がオフ(アポ実績で独立)なら、トスで選んだ前確をアポ用の同名の選択肢へ置き換える(無ければ作る)。
+   */
+  private async appointmentPreConfirmId(preConfirm: { id: string; internalCode: string; displayName: string } | null) {
+    if (!preConfirm) return null;
+    const setting = await this.prisma.systemSetting.findUnique({ where: { key: 'masterShareOff' } });
+    const off = Array.isArray(setting?.value) ? (setting!.value as string[]) : [];
+    if (!off.includes('TOSS_PRE_CONFIRM')) return preConfirm.id;
+    const category = 'TOSS_PRE_CONFIRM@APPOINTMENT';
+    const found = await this.prisma.statusMaster.findFirst({ where: { category, displayName: preConfirm.displayName } });
+    if (found) return found.id;
+    const created = await this.prisma.statusMaster.upsert({
+      where: { category_internalCode: { category, internalCode: preConfirm.internalCode } },
+      update: {},
+      create: { category, internalCode: preConfirm.internalCode, displayName: preConfirm.displayName },
+    });
+    return created.id;
   }
 }

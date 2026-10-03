@@ -5,7 +5,7 @@ import { DataTable, Column } from '../../components/DataTable';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { PresenceBar } from '../../components/PresenceBar';
-import { useTossCases, useStatuses, useMe, TossCaseListItem } from '../../hooks/useApi';
+import { useTossCases, useStatuses, useMe, TossCaseListItem, useAppointmentCategory } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
@@ -45,6 +45,9 @@ export function TossCasesListPage() {
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
+  // アポイントに変更するときに選ぶ商談形式はアポ実績側の選択肢(共通オフならアポ用)
+  const appoCat = useAppointmentCategory();
+  const { data: appoMeetingFormatOptions } = useStatuses(appoCat('MEETING_FORMAT'));
   const { data: industryOptions } = useStatuses('INDUSTRY');
   const { data: existingContractOptions } = useStatuses('EXISTING_CONTRACT');
   const { data: proposalOptions } = useStatuses('PROPOSAL_LOCATION');
@@ -638,12 +641,12 @@ export function TossCasesListPage() {
               style={{ display: 'block', width: '100%', marginBottom: 12 }}
             >
               <option value="">選択してください</option>
-              {(meetingFormatOptions ?? []).map((o) => (
+              {(appoMeetingFormatOptions ?? []).map((o) => (
                 <option key={o.id} value={o.displayName}>
                   {o.displayName}
                 </option>
               ))}
-              {meetingFormatInput && !(meetingFormatOptions ?? []).some((o) => o.displayName === meetingFormatInput) && (
+              {meetingFormatInput && !(appoMeetingFormatOptions ?? []).some((o) => o.displayName === meetingFormatInput) && (
                 <option value={meetingFormatInput}>{meetingFormatInput}</option>
               )}
             </select>

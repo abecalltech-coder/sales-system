@@ -52,6 +52,25 @@ export function useMasterOrder() {
   });
 }
 
+/** 共通をオフ(トスとアポで独立)にしている項目(要望) */
+export function useMasterShare() {
+  return useQuery({
+    queryKey: ['status-master', 'share'],
+    queryFn: () => api.get<{ off: string[] }>('/status-master/share'),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * アポ実績(とCLカレンダー)で使うカテゴリ名。共通がオフなら独立したアポ用(<カテゴリ>@APPOINTMENT)。
+ * 共通設定の読み込み前は元のカテゴリを返す。
+ */
+export function useAppointmentCategory(): (category: string) => string {
+  const { data } = useMasterShare();
+  const off = data?.off ?? [];
+  return (category: string) => (off.includes(category) ? `${category}@APPOINTMENT` : category);
+}
+
 export function useStatuses(category?: string) {
   return useQuery({
     queryKey: ['statuses', category],

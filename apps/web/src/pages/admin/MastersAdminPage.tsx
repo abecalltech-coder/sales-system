@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
-import { useProducts, useSources, useSystemSettings, useMasterOrder, useDealFields, DealFieldItem } from '../../hooks/useApi';
+import { useProducts, useSources, useSystemSettings, useMasterOrder, useDealFields, DealFieldItem, useMasterShare } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { MASTER_TAB_GROUPS, orderedCategories } from '../../lib/masterTabs';
 import { applySavedOrder } from '../../lib/rowColors';
@@ -26,6 +26,14 @@ interface StatusRow {
   order: number;
   active: boolean;
 }
+
+/** 共通のオン/オフを切り替えられる項目(API master-share.ts と揃える) */
+const SPLITTABLE = new Set(['MEETING_FORMAT', 'TOSS_PRE_CONFIRM', 'INDUSTRY', 'EXISTING_CONTRACT', 'PROPOSAL_LOCATION']);
+/** 共通だが切り替えられない項目とその理由 */
+const FIXED_SHARED_REASON: Record<string, string> = {
+  DEPARTMENT_BRANCH: '部署は月次サマリーの部署別シートやCLカレンダーの色にも使うため、常に共通です',
+  APPOINTMENT_CLOSER: 'アポ実績とCLカレンダーは同じデータを表示しているため、常に共通です',
+};
 
 const DEALS_TAB = '案件管理';
 // カテゴリ一覧以外の特殊タブ(案件管理のプルダウン、商材・流入元の閲覧、自動作成テンプレートの編集)
@@ -55,6 +63,27 @@ export function MastersAdminPage() {
   const saveOrder = useSaveCardOrder();
   const currentTitle = allTitles[tabIndex];
   const cards = tabIndex < MASTER_TAB_GROUPS.length ? orderedCategories(currentTitle, savedOrder) : [];
+  const { data: share } = useMasterShare();
+  const shareOff = new Set(share?.off ?? []);
+  const queryClient = useQueryClient();
+  const [shareError, setShareError] = useState<string | null>(null);
+  const shareMutation = useMutation({
+    mutationFn: (v: { category: string; shared: boolean }) => api.put(`/status-master/share/${v.category}`, { shared: v.shared }),
+    onSuccess: () => {
+      setShareError(null);
+      queryClient.invalidateQueries({ queryKey: ['status-master'] });
+      queryClient.invalidateQueries({ queryKey: ['statuses'] });
+    },
+    onError: (err) => setShareError(err instanceof ApiError ? err.message : '共通の切り替えに失敗しました'),
+  });
+  const toggleShare = (category: string, label: string, shared: boolean) => {
+    const msg = shared
+      ? `「${label}」を共通に戻します。アポ実績の選択肢はトス実績の同じ名前の選択肢にまとめられ、トス側に無いものは追加されます。よろしいですか？`
+      : `「${label}」の共通をオフにします。アポ実績(CLカレンダー含む)は現在の選択肢をコピーした独立のリストになり、以後トス実績とは別々に編集できます。よろしいですか？`;
+    if (window.confirm(msg)) shareMutation.mutate({ category, shared });
+  };
+  // 共通オフの項目は、アポ実績/CLカレンダーのタブではアポ用(独立)の選択肢を編集する
+  const effectiveCategory = (c: string) => (currentTitle !== 'トス実績' && shareOff.has(c) ? `${c}@APPOINTMENT` : c);
 
   return (
     <AppLayout>
@@ -85,13 +114,26 @@ export function MastersAdminPage() {
         {tabIndex < MASTER_TAB_GROUPS.length && (
           <>
             <ColorHelp />
+            {shareError && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{shareError}</p>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
               {cards.map((c, i) => (
                 <CategoryCard
-                  key={c.value}
-                  category={c.value}
-                  label={c.label}
+                  key={effectiveCategory(c.value)}
+                  category={effectiveCategory(c.value)}
+                  label={
+                    shareOff.has(c.value) ? `${c.label}(${currentTitle === 'トス実績' ? 'トス実績用' : 'アポ実績用'})` : c.label
+                  }
                   shared={c.shared}
+                  shareControl={
+                    c.shared ? (
+                      <ShareToggle
+                        on={!shareOff.has(c.value)}
+                        fixedReason={FIXED_SHARED_REASON[c.value]}
+                        disabled={!SPLITTABLE.has(c.value) || shareMutation.isPending}
+                        onToggle={(next) => toggleShare(c.value, c.label, next)}
+                      />
+                    ) : undefined
+                  }
                   simpleLabel={SIMPLE_LABEL_CATEGORIES.has(c.value)}
                   rowColor={!NO_ROW_COLOR_CATEGORIES.has(c.value)}
                   moveButtons={
@@ -121,8 +163,45 @@ function ColorHelp() {
     <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
       各項目カードで選択肢の追加・名前変更・並び替え・削除と、選んだときの<strong>文字色</strong>・<strong>行の塗りつぶし色</strong>を設定できます。
       1行に色付きの選択肢が複数あるときは、<strong>このページで上にある項目ほど優先</strong>されます(カード右上の↑↓で並び替え)。
-      <span style={{ color: 'var(--color-primary)' }}> 共通</span> の項目は他の画面と連動します。
+      <span style={{ color: 'var(--color-primary)' }}> 共通 ON</span> の項目は他の画面と連動します。OFF にするとトス実績とアポ実績で別々の選択肢になります。
     </p>
+  );
+}
+
+/** 共通のオン/オフ(要望)。オフ=トス実績とアポ実績で独立した選択肢 */
+function ShareToggle({
+  on,
+  disabled,
+  fixedReason,
+  onToggle,
+}: {
+  on: boolean;
+  disabled: boolean;
+  fixedReason?: string;
+  onToggle: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onToggle(!on)}
+      title={
+        fixedReason ??
+        (on ? 'トス実績・アポ実績で共通の選択肢です。押すと独立(別々の選択肢)にします' : 'トス実績・アポ実績で別々の選択肢です。押すと共通に戻します')
+      }
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: '1px 7px',
+        borderRadius: 4,
+        border: '1px solid ' + (on ? 'var(--color-primary-border)' : 'var(--color-border-strong)'),
+        background: on ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+        color: on ? 'var(--color-primary)' : 'var(--color-text-muted)',
+        cursor: disabled ? 'default' : 'pointer',
+      }}
+    >
+      {on ? '共通 ON' : '共通 OFF(独立)'}
+    </button>
   );
 }
 
@@ -536,6 +615,7 @@ function CategoryCard({
   label,
   simpleLabel,
   shared,
+  shareControl,
   rowColor,
   moveButtons,
 }: {
@@ -543,6 +623,7 @@ function CategoryCard({
   label: string;
   simpleLabel: boolean;
   shared?: boolean;
+  shareControl?: ReactNode;
   rowColor: boolean;
   moveButtons?: ReactNode;
 }) {
@@ -621,7 +702,7 @@ function CategoryCard({
   };
 
   return (
-    <CardFrame title={label} badge={shared && <SharedBadge />} moveButtons={moveButtons}>
+    <CardFrame title={label} badge={shareControl ?? (shared && <SharedBadge />)} moveButtons={moveButtons}>
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
       {isLoading ? (
