@@ -77,6 +77,8 @@ export function useRealtimeSync() {
     s.on('application-sheets.updated', handleSheets);
     const handleSummary = () => queryClient.invalidateQueries({ queryKey: ['department-summary'] });
     s.on('department-summary.updated', handleSummary);
+    const handleTasks = () => queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    s.on('tasks.updated', handleTasks);
     s.on('chat.updated', handleChat);
     s.on('users.updated', handleUsers);
     return () => {
@@ -84,6 +86,7 @@ export function useRealtimeSync() {
       s.off('chat.updated', handleChat);
       s.off('application-sheets.updated', handleSheets);
       s.off('department-summary.updated', handleSummary);
+      s.off('tasks.updated', handleTasks);
       s.off('users.updated', handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };

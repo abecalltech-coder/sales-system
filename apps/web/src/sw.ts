@@ -27,6 +27,10 @@ interface PushPayload {
   body: string;
   url?: string;
   tag?: string;
+  /** 押すまで消えない(タスクの通知) */
+  requireInteraction?: boolean;
+  actions?: { action: string; title: string }[];
+  data?: Record<string, unknown>;
 }
 
 // 商談リマインド・実施報告の通知を表示する。
@@ -42,7 +46,9 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      data: { url: payload.url ?? '/' },
+      data: { url: payload.url ?? '/', ...(payload.data ?? {}) },
+      requireInteraction: payload.requireInteraction ?? false,
+      actions: payload.actions ?? [],
       // 同じ種類の通知が来たら上書き(通知が積み上がらない)
       tag: payload.tag ?? payload.title,
       renotify: true,
@@ -52,10 +58,35 @@ self.addEventListener('push', (event) => {
   );
 });
 
+/** 期限切れのアクセストークンを1回だけ更新して API を呼ぶ(通知のボタンはアプリを開かずに処理する) */
+async function callApi(path: string): Promise<boolean> {
+  const run = () => fetch(`/api${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  let res = await run();
+  if (res.status === 401) {
+    const refreshed = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    if (refreshed.ok) res = await run();
+  }
+  return res.ok;
+}
+
 // 通知クリックで該当画面(CLカレンダー等)を開く/前面化する
 self.addEventListener('notificationclick', (event) => {
+  const data = (event.notification.data ?? {}) as { url?: string; taskId?: string };
+  // タスクの通知のボタン(要望: 対応完了・5分後再通知はその場で処理、編集はタスク画面を開く)
+  if (data.taskId && (event.action === 'task-done' || event.action === 'task-snooze')) {
+    event.notification.close();
+    const path = event.action === 'task-done' ? `/tasks/${data.taskId}/complete` : `/tasks/${data.taskId}/snooze`;
+    event.waitUntil(
+      callApi(path).then((ok) => {
+        // 失敗したら(ログイン切れ等)アプリを開いて処理してもらう
+        if (!ok) return self.clients.openWindow(data.url ?? '/tasks');
+        return undefined;
+      }),
+    );
+    return;
+  }
   event.notification.close();
-  const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/';
+  const url = data.url ?? '/';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsArr) => {
       const existing = clientsArr.find((c) => 'focus' in c);

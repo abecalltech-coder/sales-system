@@ -40,6 +40,7 @@ import { CellStylesModule } from './cell-styles/cell-styles.module';
 import { ChatModule } from './chat/chat.module';
 import { ApplicationSheetsModule } from './application-sheets/application-sheets.module';
 import { DepartmentSummaryModule } from './department-summary/department-summary.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
@@ -81,6 +82,7 @@ import { DepartmentSummaryModule } from './department-summary/department-summary
     ChatModule,
     ApplicationSheetsModule,
     DepartmentSummaryModule,
+    TasksModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

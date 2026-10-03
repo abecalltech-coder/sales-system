@@ -19,7 +19,8 @@ export type IconName =
   | 'gear'
   | 'clipboard'
   | 'folder'
-  | 'chat';
+  | 'chat'
+  | 'task';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -109,6 +110,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     <path d="M3 6a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.2V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z" />
   ),
   chat: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
+  task: (
+    <>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M8.5 12l2.5 2.5 4.5-5" />
+    </>
+  ),
   gear: (
     <>
       <circle cx="12" cy="12" r="3" />

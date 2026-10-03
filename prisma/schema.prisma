@@ -1120,3 +1120,48 @@ model SummaryBudget {
   @@id([periodMonth, userId])
 }
 
+// ============================================================
+// タスク(要望)。自分・他の人・部署全体・All に向けて作成でき、期日・リマインド・繰り返し・重要度を持つ。
+// 完了は担当者ごと(TaskProgress)。繰り返しタスクは完了すると次の回が現れる。
+// ============================================================
+model Task {
+  id                  String    @id @default(uuid())
+  title               String
+  detail              String?
+  // 誰のタスクか(複数可)。All・部署全体・個人を組み合わせられる
+  targetAll           Boolean   @default(false)
+  targetDepartmentIds String[]  @default([])
+  targetUserIds       String[]  @default([])
+  dueAt               DateTime? // 期日+時間(繰り返しの起点)
+  importance          Int       @default(3) // 1(低)〜5(最重要)
+  remindMinutes       Int? // 何分前に通知するか(1440=1日前 〜 5=5分前)。null=期日ちょうど
+  repeatType          String    @default("NONE") // NONE | MONTHLY | WEEKLY | DAILY | WEEKDAYS | HOURLY
+  repeatInterval      Int       @default(1) // 何ヶ月/週/日/時間ごと
+  repeatWeekdays      Int[]     @default([]) // 曜日毎のとき 0=日〜6=土
+  repeatUntil         DateTime? // 繰り返しの終了日(任意)
+  createdBy           String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  deletedAt           DateTime?
+
+  progress TaskProgress[]
+
+  @@index([dueAt])
+}
+
+// 担当者ごとの進み具合と通知の状態
+model TaskProgress {
+  taskId                 String
+  task                   Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId                 String
+  // ここまでの回を完了した(繰り返し無しは完了した回=期日)。期日なしのタスクは 1970-01-01 を完了の印に使う
+  doneThrough            DateTime?
+  doneAt                 DateTime?
+  snoozeUntil            DateTime? // 5分後再通知
+  lastNotifiedOccurrence DateTime?
+  lastNotifiedAt         DateTime?
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+

@@ -17,6 +17,7 @@ import { TossFormAdminPage } from './pages/admin/TossFormAdminPage';
 import { FinalReportPage } from './pages/FinalReportPage';
 import { ChatPage } from './pages/chat/ChatPage';
 import { ApplicationSheetsPage } from './pages/application/ApplicationSheetsPage';
+import { TasksPage } from './pages/tasks/TasksPage';
 import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
@@ -49,6 +50,7 @@ export function App() {
         <Route path="/final-report" element={protect(<FinalReportPage />)} />
         <Route path="/chat" element={protect(<ChatPage />)} />
         <Route path="/application-sheets" element={protect(<ApplicationSheetsPage />)} />
+        <Route path="/tasks" element={protect(<TasksPage />)} />
         <Route path="/chat/:roomId" element={protect(<ChatPage />)} />
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />

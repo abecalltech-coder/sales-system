@@ -10,6 +10,11 @@ export interface PushPayload {
   url?: string;
   /** 同種の通知をまとめて上書きするためのタグ(例: `reminder:<appointmentId>`) */
   tag?: string;
+  /** 押すまで消えない通知にする(タスク: 対応完了・編集・5分後再通知のいずれかを押すまで) */
+  requireInteraction?: boolean;
+  /** 通知内のボタン(対応端末のみ) */
+  actions?: { action: string; title: string }[];
+  data?: Record<string, unknown>;
 }
 
 @Injectable()

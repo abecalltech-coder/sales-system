@@ -9,6 +9,7 @@ import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationMenu } from './NotificationMenu';
 import { AccountBar } from './AccountBar';
+import { TaskAlerts } from './TaskAlerts';
 import { useChatUnread } from '../hooks/useChat';
 import { OnlineUsersWidget } from './OnlineUsersWidget';
 import { NavIcon, IconName } from './NavIcon';
@@ -22,10 +23,11 @@ type NavGroup = { title?: string; items: NavItem[] };
 const TOP_NAV: NavItem[] = [
   { to: '/summary', label: 'サマリー', icon: 'chart' },
   { to: '/chat', label: 'チャット', icon: 'chat' },
+  { to: '/tasks', label: 'タスク', icon: 'task' },
 ];
 /** チャット・申込情報/明細は全員で使うため、役職ごとのタブ表示設定に関わらず常に表示する */
 // 申込情報/明細も全員で共有して使う(要望: 他のアカウントからも見られるように)
-const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets']);
+const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets', '/tasks']);
 
 /** チャットの未読数バッジ */
 function ChatUnreadBadge({ floating }: { floating?: boolean }) {
@@ -294,6 +296,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <AccountBar />
           {children}
         </main>
+        <TaskAlerts />
         <PhoneBottomNav items={phoneItems} adminItems={phoneAdminItems} isManager={isManager} />
       </div>
     );
@@ -413,6 +416,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <AccountBar />
         {children}
       </main>
+      <TaskAlerts />
     </div>
   );
 }
