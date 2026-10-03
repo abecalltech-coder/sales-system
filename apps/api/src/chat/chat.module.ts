@@ -3,7 +3,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { ChatService } from './chat.service';
-import { CreateRoomDto, ForwardDto, SendMessageDto, UpdateProfileDto, UpdateRoomDto } from './chat.dto';
+import { CreateRoomDto, ForwardDto, NotifySettingDto, SendMessageDto, UpdateProfileDto, UpdateRoomDto } from './chat.dto';
 
 /** チャット。権限デコレータ無し=ログインユーザーなら利用可(各操作でルームのメンバーかを確認する) */
 @Controller('chat')
@@ -53,6 +53,17 @@ class ChatController {
   @Post('rooms/:id/read')
   read(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.chat.markRead(id, user.id);
+  }
+
+  /** この端末のこのグループの通知設定(endpoint = この端末のWeb Push購読) */
+  @Get('rooms/:id/notify')
+  getNotify(@Param('id') id: string, @Query('endpoint') endpoint: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.chat.getNotify(id, user.id, endpoint ?? '');
+  }
+
+  @Put('rooms/:id/notify')
+  setNotify(@Param('id') id: string, @Body() dto: NotifySettingDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.chat.setNotify(id, user.id, dto.endpoint, dto.mode);
   }
 
   @Get('messages/:id/readers')

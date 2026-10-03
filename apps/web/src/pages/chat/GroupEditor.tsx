@@ -6,6 +6,7 @@ import { useDepartments, useMe, useUserOptions } from '../../hooks/useApi';
 import { ChatRoomDetail } from '../../hooks/useChat';
 import { api, ApiError } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
+import { ChatNotifySetting } from './ChatNotifySetting';
 
 /**
  * グループの作成・編集(要望: 全体・部署なども含めて手動で作る。名前・写真・メンバーをアカウント単位で選ぶ)。
@@ -96,6 +97,8 @@ export function GroupEditor({ room, onClose, onLeft }: { room?: ChatRoomDetail; 
             写真を外す
           </button>
         )}
+
+        {room && <ChatNotifySetting roomId={room.id} />}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
           <span style={{ fontSize: 12 }}>メンバー({members.size}人)</span>

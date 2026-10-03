@@ -3,7 +3,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
-import { CreateRoomDto, ForwardDto, SendMessageDto, UpdateRoomDto } from './chat.dto';
+import { CreateRoomDto, ForwardDto, NotifyMode, SendMessageDto, UpdateRoomDto } from './chat.dto';
+
+export const MENTION_ALL = 'all';
 
 const PAGE = 200;
 
@@ -57,6 +59,20 @@ export class ChatService {
         this.prisma.chatMessage.count({ where: { roomId: m.roomId, createdAt: { gt: m.lastReadAt }, senderId: { not: userId }, unsentAt: null } }),
       ),
     );
+    // 未読の中に自分宛て(または全員宛て)のメンションがあるか
+    const unreadMentions = await Promise.all(
+      memberships.map((m) =>
+        this.prisma.chatMessage.count({
+          where: {
+            roomId: m.roomId,
+            createdAt: { gt: m.lastReadAt },
+            senderId: { not: userId },
+            unsentAt: null,
+            mentions: { hasSome: [userId, MENTION_ALL] },
+          },
+        }),
+      ),
+    );
     return memberships
       .map((m, i) => {
         const last = m.room.messages[0];
@@ -68,6 +84,7 @@ export class ChatService {
           lastMessageAt: m.room.lastMessageAt,
           lastMessage: last ? { senderName: last.sender.name, text: this.previewText(last), createdAt: last.createdAt } : null,
           unread: unread[i],
+          unreadMentions: unreadMentions[i],
         };
       })
       .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
@@ -185,6 +202,7 @@ export class ChatService {
           forwardedFrom: m.unsentAt ? null : m.forwardedFrom,
           forwardBundle: m.unsentAt ? null : (m.forwardBundle as ForwardItem[] | null),
           unsent: !!m.unsentAt,
+          mentions: m.unsentAt ? [] : m.mentions,
           createdAt: m.createdAt,
           replyTo: reply
             ? { id: reply.id, senderName: reply.sender.name, text: this.previewText(reply) }
@@ -219,7 +237,13 @@ export class ChatService {
       const r = await this.prisma.chatMessage.findUnique({ where: { id: dto.replyToId } });
       if (!r || r.roomId !== roomId) throw new BadRequestException('リプライ先が見つかりません');
     }
-    const msg = await this.createMessage(roomId, userId, { body, image: dto.image || null, replyToId: dto.replyToId || null });
+    // メンションはこのトークのメンバー(または全員)に限る
+    let mentions: string[] = [];
+    if (dto.mentions?.length) {
+      const memberIds = new Set((await this.prisma.chatMember.findMany({ where: { roomId }, select: { userId: true } })).map((m) => m.userId));
+      mentions = [...new Set(dto.mentions)].filter((id) => id === MENTION_ALL || (memberIds.has(id) && id !== userId));
+    }
+    const msg = await this.createMessage(roomId, userId, { body, image: dto.image || null, replyToId: dto.replyToId || null, mentions });
     return { id: msg.id };
   }
 
@@ -234,26 +258,62 @@ export class ChatService {
     return msg;
   }
 
-  private async pushToMembers(roomId: string, senderId: string, msg: { body: string | null; image: string | null; forwardBundle: Prisma.JsonValue | null; unsentAt: Date | null }) {
+  private async pushToMembers(
+    roomId: string,
+    senderId: string,
+    msg: { body: string | null; image: string | null; forwardBundle: Prisma.JsonValue | null; unsentAt: Date | null; mentions?: string[] },
+  ) {
     try {
-      const [room, sender, members] = await Promise.all([
+      const [room, sender, members, settings] = await Promise.all([
         this.prisma.chatRoom.findUnique({ where: { id: roomId } }),
         this.prisma.user.findUnique({ where: { id: senderId }, select: { name: true } }),
         this.prisma.chatMember.findMany({ where: { roomId, userId: { not: senderId } }, select: { userId: true } }),
+        this.prisma.chatNotifySetting.findMany({ where: { roomId } }),
       ]);
       if (!room || members.length === 0) return;
-      await this.push.sendToUsers(
+      const modeOf = new Map(settings.map((s) => [s.endpoint, s.mode as NotifyMode]));
+      const mentions = msg.mentions ?? [];
+      const text = this.previewText({ ...msg, forwardBundle: msg.forwardBundle ?? null });
+      await this.push.sendToUsersPerSubscription(
         members.map((m) => m.userId),
-        {
-          title: `${room.name}`,
-          body: `${sender?.name ?? ''}: ${this.previewText({ ...msg, forwardBundle: msg.forwardBundle ?? null })}`,
-          url: `/chat/${roomId}`,
-          tag: `chat:${roomId}`,
+        (sub) => {
+          const mentioned = mentions.includes(sub.userId) || mentions.includes(MENTION_ALL);
+          const mode = modeOf.get(sub.endpoint) ?? 'ALL';
+          if (mode === 'OFF' || (mode === 'MENTION' && !mentioned)) return null;
+          return {
+            // メンションされた通知はそれと分かるようにする(要望)
+            title: mentioned ? `【メンション】${room.name}` : room.name,
+            body: mentioned
+              ? `${sender?.name ?? ''}さんが${mentions.includes(sub.userId) ? 'あなた' : '全員'}をメンションしました: ${text}`
+              : `${sender?.name ?? ''}: ${text}`,
+            url: `/chat/${roomId}`,
+            tag: mentioned ? `chat-mention:${roomId}` : `chat:${roomId}`,
+          };
         },
       );
     } catch {
       // 通知の失敗でメッセージ送信を失敗扱いにしない
     }
+  }
+
+  /** この端末(購読)のこのグループの通知設定 */
+  async getNotify(roomId: string, userId: string, endpoint: string) {
+    await this.assertMember(roomId, userId);
+    const s = await this.prisma.chatNotifySetting.findUnique({ where: { endpoint_roomId: { endpoint, roomId } } });
+    return { mode: (s?.mode as NotifyMode | undefined) ?? 'ALL' };
+  }
+
+  async setNotify(roomId: string, userId: string, endpoint: string, mode: NotifyMode) {
+    await this.assertMember(roomId, userId);
+    // 他人の端末の設定は変えられないよう、購読が本人のものか確認する
+    const sub = await this.prisma.pushSubscription.findUnique({ where: { endpoint } });
+    if (!sub || sub.userId !== userId) throw new ForbiddenException('この端末の通知が有効になっていません');
+    await this.prisma.chatNotifySetting.upsert({
+      where: { endpoint_roomId: { endpoint, roomId } },
+      update: { mode },
+      create: { endpoint, roomId, mode },
+    });
+    return { mode };
   }
 
   async markRead(roomId: string, userId: string) {

@@ -10,6 +10,79 @@ import { api, ApiError } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
 import { GroupEditor } from './GroupEditor';
 
+const ACCOUNT_BAR_HEIGHT = 36;
+// 下メニューの高さ(52px)+ 枠線。ホームバーのある端末は safe-area 分を足す
+const PHONE_NAV_HEIGHT = 53 + safeAreaBottom();
+
+function safeAreaBottom(): number {
+  if (typeof document === 'undefined') return 0;
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;bottom:0;height:env(safe-area-inset-bottom);visibility:hidden';
+  document.body.appendChild(probe);
+  const h = probe.offsetHeight;
+  probe.remove();
+  return h;
+}
+
+/** 画面に実際に見えている範囲(携帯のキーボード表示中は縮む)。visualViewport が無い端末は window の大きさ */
+function useVisibleViewport(enabled: boolean) {
+  const read = () => {
+    const v = window.visualViewport;
+    return { height: v?.height ?? window.innerHeight, offsetTop: v?.offsetTop ?? 0 };
+  };
+  const [box, setBox] = useState(read);
+  useEffect(() => {
+    if (!enabled) return;
+    const v = window.visualViewport;
+    const update = () => setBox(read());
+    update();
+    v?.addEventListener('resize', update);
+    v?.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
+    return () => {
+      v?.removeEventListener('resize', update);
+      v?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, [enabled]);
+  return box;
+}
+
+const MENTION_ALL = 'all';
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** 本文の「@名前」を強調表示する。自分宛ては色を変える */
+function renderBody(body: string, members: { id: string; name: string }[], myId: string | undefined, mine: boolean) {
+  const names = [...members.map((m) => m.name), '全員'].filter(Boolean).sort((a, b) => b.length - a.length);
+  if (names.length === 0 || !body.includes('@')) return body;
+  const re = new RegExp(`@(${names.map(escapeRe).join('|')})`, 'g');
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of body.matchAll(re)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(body.slice(last, i));
+    const target = m[1];
+    const toMe = target === '全員' || members.find((x) => x.name === target)?.id === myId;
+    out.push(
+      <span
+        key={i}
+        style={{
+          fontWeight: 900,
+          color: mine ? '#fff' : 'var(--color-primary)',
+          background: toMe && !mine ? 'rgba(234, 179, 8, 0.3)' : undefined,
+          borderRadius: 3,
+          padding: '0 1px',
+        }}
+      >
+        {m[0]}
+      </span>,
+    );
+    last = i + m[0].length;
+  }
+  if (last < body.length) out.push(body.slice(last));
+  return out;
+}
+
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 const dayKey = (iso: string) => new Date(iso).toDateString();
 const dayLabel = (iso: string) => new Date(iso).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
@@ -29,9 +102,24 @@ export function ChatPage() {
   const isPhone = useIsPhone();
   const [creating, setCreating] = useState(false);
 
+  const vv = useVisibleViewport(isPhone);
+  // 携帯: 画面に見えている範囲(キーボード表示中はその上まで)にぴったり合わせて固定表示する(要望: 画面が合わない)。
+  const phoneBox: React.CSSProperties = {
+    position: 'fixed',
+    left: 0,
+    right: 0,
+    // トーク中は上のアカウントバー・下メニューの上にも重ねて全画面で使う(戻るボタンで一覧へ)
+    top: vv.offsetTop + (roomId ? 0 : ACCOUNT_BAR_HEIGHT),
+    height: Math.max(200, roomId ? vv.height : vv.height - ACCOUNT_BAR_HEIGHT - PHONE_NAV_HEIGHT),
+    zIndex: roomId ? 310 : 1,
+    display: 'flex',
+    background: 'var(--color-bg)',
+    overscrollBehavior: 'contain',
+  };
+
   return (
     <AppLayout>
-      <div style={{ display: 'flex', height: isPhone ? 'calc(var(--viewport-height, 100vh) - 36px - 64px)' : 'calc(var(--viewport-height, 100vh) - 36px)', minHeight: 0 }}>
+      <div style={isPhone ? phoneBox : { display: 'flex', height: 'calc(var(--viewport-height, 100vh) - 36px)', minHeight: 0 }}>
         {(!isPhone || !roomId) && (
           <RoomList activeId={roomId} wide={isPhone} onCreate={() => setCreating(true)} />
         )}
@@ -127,6 +215,11 @@ function RoomRow({ room, active, onOpen }: { room: ChatRoomItem; active: boolean
           <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {room.lastMessage ? `${room.lastMessage.senderName}: ${room.lastMessage.text}` : 'メッセージはまだありません'}
           </span>
+          {room.unreadMentions > 0 && (
+            <span title="あなた宛てのメンションがあります" style={{ fontSize: 10, fontWeight: 900, color: '#fff', background: '#ca8a04', borderRadius: 4, padding: '0 4px' }}>
+              @メンション
+            </span>
+          )}
           {room.unread > 0 && <span className="chat-badge">{room.unread > 99 ? '99+' : room.unread}</span>}
         </span>
       </span>
@@ -146,6 +239,8 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
   const isPhone = useIsPhone();
 
   const [text, setText] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [replyTo, setReplyTo] = useState<ChatMessageItem | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [partial, setPartial] = useState<ChatMessageItem | null>(null);
@@ -192,7 +287,7 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
   }, [messages.length]);
 
   const sendMutation = useMutation({
-    mutationFn: (v: { body?: string; image?: string; replyToId?: string }) => api.post(`/chat/rooms/${roomId}/messages`, v),
+    mutationFn: (v: { body?: string; image?: string; replyToId?: string; mentions?: string[] }) => api.post(`/chat/rooms/${roomId}/messages`, v),
     onSuccess: () => {
       setError(null);
       invalidate();
@@ -205,10 +300,47 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
     onError: (err) => setError(err instanceof ApiError ? err.message : '取り消せませんでした'),
   });
 
+  // メンション候補: カーソル直前が「@文字」のとき、メンバー(と全員)を出す
+  const members = room?.members ?? [];
+  const mentionQuery = (() => {
+    const m = /@([^\s@]*)$/.exec(text.slice(0, cursor));
+    return m ? m[1] : null;
+  })();
+  const mentionCandidates =
+    mentionQuery === null
+      ? []
+      : [{ id: MENTION_ALL, name: '全員', iconUrl: null as string | null }, ...members.filter((m) => m.id !== me?.id)].filter((m) =>
+          m.name.includes(mentionQuery),
+        );
+  const pickMention = (name: string) => {
+    const before = text.slice(0, cursor).replace(/@([^\s@]*)$/, `@${name} `);
+    const next = before + text.slice(cursor);
+    setText(next);
+    setCursor(before.length);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(before.length, before.length);
+    }, 0);
+  };
+  // 送信時に本文中の「@名前」からメンション先を決める
+  // 名前が他の人の名前を含む場合(例: 田中 と 田中太郎)も取り違えないよう、長い名前から照合する
+  const mentionsIn = (body: string) => {
+    const names = [...members.map((m) => m.name), '全員'].filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!body.includes('@') || names.length === 0) return [];
+    const re = new RegExp(`@(${names.map(escapeRe).join('|')})`, 'g');
+    const ids = new Set<string>();
+    for (const m of body.matchAll(re)) {
+      if (m[1] === '全員') ids.add(MENTION_ALL);
+      else members.filter((x) => x.name === m[1] && x.id !== me?.id).forEach((x) => ids.add(x.id));
+    }
+    return [...ids];
+  };
+
   const send = () => {
     if (!text.trim()) return;
-    sendMutation.mutate({ body: text, replyToId: replyTo?.id });
+    sendMutation.mutate({ body: text, replyToId: replyTo?.id, mentions: mentionsIn(text) });
     setText('');
+    setCursor(0);
     setReplyTo(null);
   };
   const sendImage = async (file: File | undefined) => {
@@ -271,6 +403,8 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
             <MessageRow
               m={m}
               mine={m.senderId === me?.id}
+              members={members}
+              myId={me?.id}
               selecting={selecting}
               onToggleSelect={() => toggleSelect(m.id)}
               onMenu={(x, y) => !m.unsent && setMenu({ message: m, x, y })}
@@ -285,7 +419,7 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, padding: '4px 12px', margin: 0, background: 'var(--color-surface)' }}>{error}</p>}
 
       {selecting ? (
-        <div style={{ background: 'var(--color-surface)', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--color-border)' }}>
+        <div style={{ background: 'var(--color-surface)', padding: '8px 10px', paddingBottom: isPhone ? 'max(8px, env(safe-area-inset-bottom))' : 8, display: 'flex', alignItems: 'center', gap: 8, borderTop: '1px solid var(--color-border)' }}>
           <span style={{ flex: 1, fontSize: 12 }}>{selecting.size}件を選択中(転送するトークを選んでください)</span>
           <button type="button" onClick={() => setSelecting(null)} style={{ fontSize: 12, padding: '5px 10px' }}>
             キャンセル
@@ -295,7 +429,7 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
           </button>
         </div>
       ) : (
-        <div style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', padding: '6px 8px' }}>
+        <div style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', padding: '6px 8px', paddingBottom: isPhone ? 'max(6px, env(safe-area-inset-bottom))' : 6 }}>
           {replyTo && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px', marginBottom: 6, borderRadius: 8, background: 'var(--color-sunken)', fontSize: 11.5 }}>
               <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -306,6 +440,23 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
               </button>
             </div>
           )}
+          {mentionCandidates.length > 0 && (
+            <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 6, border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)' }}>
+              {mentionCandidates.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickMention(m.name)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: 'none', borderRadius: 0, boxShadow: 'none', background: 'transparent', fontSize: 13, textAlign: 'left' }}
+                >
+                  <Avatar src={m.iconUrl} name={m.name} seed={m.id} size={24} />
+                  {m.name}
+                  {m.id === MENTION_ALL && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>(このトークの全員)</span>}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6 }}>
             <button type="button" onClick={() => fileRef.current?.click()} aria-label="写真を送る" style={{ width: 36, height: 36, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', color: 'var(--color-text-muted)' }}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -313,9 +464,32 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
               </svg>
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void sendImage(e.target.files?.[0])} />
+            <button
+              type="button"
+              onClick={() => {
+                const pos = inputRef.current?.selectionStart ?? text.length;
+                const next = text.slice(0, pos) + '@' + text.slice(pos);
+                setText(next);
+                setCursor(pos + 1);
+                window.setTimeout(() => {
+                  inputRef.current?.focus();
+                  inputRef.current?.setSelectionRange(pos + 1, pos + 1);
+                }, 0);
+              }}
+              aria-label="メンション"
+              title="メンション(@)"
+              style={{ width: 30, height: 36, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', fontSize: 18, fontWeight: 900, color: 'var(--color-text-muted)' }}
+            >
+              @
+            </button>
             <textarea
+              ref={inputRef}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                setCursor(e.target.selectionStart ?? e.target.value.length);
+              }}
+              onSelect={(e) => setCursor(e.currentTarget.selectionStart ?? 0)}
               onKeyDown={(e) => {
                 // PCは Enter で送信 / Shift+Enter で改行。携帯は Enter で改行(送信ボタンで送る)
                 if (!isPhone && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -325,7 +499,8 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
               }}
               rows={1}
               placeholder={isPhone ? 'メッセージを入力' : 'メッセージを入力(Enterで送信 / Shift+Enterで改行)'}
-              style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 140, padding: '8px 12px', borderRadius: 18, fontSize: 14, resize: 'none', fieldSizing: 'content' } as React.CSSProperties}
+              // 携帯は16px未満だと入力時に画面が拡大されてずれるため16pxにする
+              style={{ flex: 1, minWidth: 0, minHeight: 36, maxHeight: 140, padding: '8px 12px', borderRadius: 18, fontSize: isPhone ? 16 : 14, resize: 'none', fieldSizing: 'content' } as React.CSSProperties}
             />
             <button type="button" onClick={send} disabled={!text.trim() || sendMutation.isPending} aria-label="送信" className="btn-primary" style={{ width: 36, height: 36, padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -381,6 +556,8 @@ const SWIPE_PX = 60;
 function MessageRow({
   m,
   mine,
+  members,
+  myId,
   selecting,
   onToggleSelect,
   onMenu,
@@ -390,6 +567,8 @@ function MessageRow({
 }: {
   m: ChatMessageItem;
   mine: boolean;
+  members: { id: string; name: string }[];
+  myId: string | undefined;
   selecting: Set<string> | null;
   onToggleSelect: () => void;
   onMenu: (x: number, y: number) => void;
@@ -428,6 +607,7 @@ function MessageRow({
   };
 
   const selected = selecting?.has(m.id) ?? false;
+  const mentionsMe = !mine && (m.mentions.includes(MENTION_ALL) || (!!myId && m.mentions.includes(myId)));
   const bubbleBase: React.CSSProperties = {
     maxWidth: isPhone ? 'min(72vw, 280px)' : 420,
     padding: '7px 11px',
@@ -469,7 +649,7 @@ function MessageRow({
               <img src={m.image} alt="送信された写真" style={{ display: 'block', maxWidth: '100%', maxHeight: 240, borderRadius: 8 }} />
             </button>
           )}
-          {m.body}
+          {m.body && renderBody(m.body, members, myId, mine)}
         </>
       )}
     </div>
@@ -525,7 +705,12 @@ function MessageRow({
         </span>
       )}
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: mine ? 'flex-end' : 'flex-start', minWidth: 0 }}>
-        {!mine && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{m.senderName}</span>}
+        {!mine && (
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>
+            {m.senderName}
+            {mentionsMe && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 900, color: '#a16207' }}>@あなた宛て</span>}
+          </span>
+        )}
         {content}
       </span>
       {!mine && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{timeOf(m.createdAt)}</span>}

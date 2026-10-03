@@ -1056,7 +1056,20 @@ model ChatMessage {
   forwardedFrom String?
   forwardBundle Json? // [{ senderName, body, image?, createdAt }]
   unsentAt  DateTime? // 送信取り消し
+  // メンションされたユーザーID。"all" は全員
+  mentions  String[]  @default([])
   createdAt DateTime  @default(now())
 
   @@index([roomId, createdAt])
+}
+
+// チャットの通知設定(要望: 各人がグループごとに、その端末だけの設定として「すべて/メンションのみ/オフ」を選ぶ)。
+// 端末 = Web Push の購読(endpoint)単位。設定が無ければ「すべて」。
+model ChatNotifySetting {
+  endpoint String
+  roomId   String
+  mode     String // ALL | MENTION | OFF
+  updatedAt DateTime @updatedAt
+
+  @@id([endpoint, roomId])
 }

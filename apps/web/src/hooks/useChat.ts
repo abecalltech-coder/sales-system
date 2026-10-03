@@ -9,6 +9,8 @@ export interface ChatRoomItem {
   lastMessageAt: string;
   lastMessage: { senderName: string; text: string; createdAt: string } | null;
   unread: number;
+  /** 未読のうち自分(または全員)宛てのメンション数 */
+  unreadMentions: number;
 }
 
 export interface ChatRoomDetail {
@@ -35,6 +37,8 @@ export interface ChatMessageItem {
   forwardedFrom: string | null;
   forwardBundle: ForwardItem[] | null;
   unsent: boolean;
+  /** メンションされたユーザーID("all"=全員) */
+  mentions: string[];
   createdAt: string;
   replyTo: { id: string; senderName: string; text: string } | null;
   readCount: number;

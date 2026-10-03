@@ -84,6 +84,24 @@ export class PushNotificationsService {
     await Promise.all(subscriptions.map((sub) => this.sendToSubscription(sub, payload)));
   }
 
+  /**
+   * 購読(端末)ごとに送るかどうか・内容を決めて送る(チャットの端末ごとの通知設定用)。
+   * build が null を返した購読には送らない。
+   */
+  async sendToUsersPerSubscription(
+    userIds: string[],
+    build: (sub: { userId: string; endpoint: string }) => PushPayload | null,
+  ) {
+    if (!this.enabled || userIds.length === 0) return;
+    const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId: { in: userIds } } });
+    await Promise.all(
+      subscriptions.map((sub) => {
+        const payload = build(sub);
+        return payload ? this.sendToSubscription(sub, payload) : undefined;
+      }),
+    );
+  }
+
   private async sendToSubscription(
     sub: { id: string; endpoint: string; p256dh: string; auth: string },
     payload: PushPayload,

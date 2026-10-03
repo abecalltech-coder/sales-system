@@ -1,4 +1,4 @@
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 
 // 画像は端末側で縮小した data URL。ここでは上限だけ確認する(約3MB)
 const IMAGE_MAX = 3_000_000;
@@ -20,6 +20,16 @@ export class SendMessageDto {
   @IsOptional() @IsString() @MaxLength(10000) body?: string;
   @IsOptional() @IsString() @MaxLength(IMAGE_MAX) image?: string;
   @IsOptional() @IsString() replyToId?: string;
+  /** メンションするユーザーID("all" で全員) */
+  @IsOptional() @IsArray() @IsString({ each: true }) @ArrayMaxSize(1000) mentions?: string[];
+}
+
+export const NOTIFY_MODES = ['ALL', 'MENTION', 'OFF'] as const;
+export type NotifyMode = (typeof NOTIFY_MODES)[number];
+
+export class NotifySettingDto {
+  @IsString() @MaxLength(2000) endpoint!: string;
+  @IsIn(NOTIFY_MODES) mode!: NotifyMode;
 }
 
 export class ForwardDto {
