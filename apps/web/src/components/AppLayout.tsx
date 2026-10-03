@@ -69,7 +69,6 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/final-report-fields', label: '最終報告項目', icon: 'clipboard' },
     { to: '/admin/integrations', label: '連携設定', icon: 'link' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },
-    { to: '/admin/system-settings', label: 'システム設定', icon: 'gear' },
   ],
 };
 
@@ -87,7 +86,6 @@ const PHONE_LABELS: Record<string, string> = {
   '/admin/toss-form': 'トスフォーム',
   '/admin/final-report-fields': '報告項目',
   '/admin/integrations': '連携',
-  '/admin/system-settings': 'システム',
 };
 
 function PhoneTabLink({ item }: { item: NavItem }) {

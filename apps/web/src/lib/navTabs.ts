@@ -26,5 +26,4 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/admin/final-report-fields', label: '最終報告項目', group: '管理' },
   { key: '/admin/integrations', label: '連携設定', group: '管理' },
   { key: '/admin/audit-logs', label: '操作ログ', group: '管理' },
-  { key: '/admin/system-settings', label: 'システム設定', group: '管理' },
 ];
