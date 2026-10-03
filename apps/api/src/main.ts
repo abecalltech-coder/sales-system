@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -9,7 +10,9 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // チャットの写真・アカウント写真(縮小済み data URL)を受け取れるよう上限を広げる
+  app.useBodyParser('json', { limit: '5mb' });
 
   app.use(helmet());
   // 一覧は全件を返すため(要望: 1画面で全件表示)、JSONをgzip圧縮して転送量を大きく減らす

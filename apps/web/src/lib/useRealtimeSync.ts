@@ -53,8 +53,26 @@ export function useRealtimeSync() {
     };
 
     s.on('case.updated', handleCaseUpdated);
+    // チャット: 中身は送られてこないので、該当ルームの一覧・発言・未読数を取り直す
+    const handleChat = (e: { roomId?: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['chat', 'unread'] });
+      if (e?.roomId) {
+        queryClient.invalidateQueries({ queryKey: ['chat', 'messages', e.roomId] });
+        queryClient.invalidateQueries({ queryKey: ['chat', 'room', e.roomId] });
+      }
+    };
+    // アカウント写真の変更
+    const handleUsers = () => {
+      queryClient.invalidateQueries({ queryKey: ['user-options'] });
+      queryClient.invalidateQueries({ queryKey: ['chat'] });
+    };
+    s.on('chat.updated', handleChat);
+    s.on('users.updated', handleUsers);
     return () => {
       s.off('case.updated', handleCaseUpdated);
+      s.off('chat.updated', handleChat);
+      s.off('users.updated', handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [queryClient]);

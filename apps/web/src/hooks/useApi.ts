@@ -484,6 +484,7 @@ export interface UserOption {
   employeeCode: string | null;
   departmentId: string | null;
   teamId: string | null;
+  iconUrl?: string | null;
   roles: string[];
 }
 

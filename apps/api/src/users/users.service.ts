@@ -61,6 +61,7 @@ export class UsersService {
         employeeCode: true,
         departmentId: true,
         teamId: true,
+        iconUrl: true,
         roles: { select: { role: { select: { code: true } } } },
       },
     });
@@ -70,6 +71,7 @@ export class UsersService {
       employeeCode: u.employeeCode,
       departmentId: u.departmentId,
       teamId: u.teamId,
+      iconUrl: u.iconUrl,
       roles: u.roles.map((ur) => ur.role.code),
     }));
   }

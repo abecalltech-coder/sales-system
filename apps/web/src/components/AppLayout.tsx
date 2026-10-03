@@ -4,6 +4,8 @@ import { useIsPhone } from '../lib/useIsPhone';
 import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationMenu } from './NotificationMenu';
+import { AccountBar } from './AccountBar';
+import { useChatUnread } from '../hooks/useChat';
 import { OnlineUsersWidget } from './OnlineUsersWidget';
 import { NavIcon, IconName } from './NavIcon';
 
@@ -13,7 +15,24 @@ const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
 type NavItem = { to: string; label: string; icon: IconName };
 type NavGroup = { title?: string; items: NavItem[] };
 
-const TOP_NAV: NavItem[] = [{ to: '/summary', label: 'サマリー', icon: 'chart' }];
+const TOP_NAV: NavItem[] = [
+  { to: '/summary', label: 'サマリー', icon: 'chart' },
+  { to: '/chat', label: 'チャット', icon: 'chat' },
+];
+/** チャットは全員が使う連絡手段のため、役職ごとのタブ表示設定に関わらず常に表示する */
+const ALWAYS_VISIBLE = new Set(['/chat']);
+
+/** チャットの未読数バッジ */
+function ChatUnreadBadge({ floating }: { floating?: boolean }) {
+  const { data } = useChatUnread();
+  const n = data?.total ?? 0;
+  if (n <= 0) return null;
+  return (
+    <span className="chat-badge" style={floating ? { position: 'absolute', top: 3, right: 8 } : { marginLeft: 'auto' }}>
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -94,6 +113,7 @@ function PhoneTabLink({ item }: { item: NavItem }) {
           )}
           <NavIcon name={item.icon} active={isActive} size={19} />
           <span style={{ fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>{PHONE_LABELS[item.to] ?? item.label}</span>
+          {item.to === '/chat' && <ChatUnreadBadge floating />}
         </>
       )}
     </NavLink>
@@ -160,7 +180,7 @@ function PhoneBottomNav({ items, adminItems, isManager }: { items: NavItem[]; ad
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: '1px solid var(--color-border)' }}>
-          <NotificationMenu variant="tab" showReports={isManager} />
+          {isManager && <NotificationMenu variant="tab" showReports />}
           {adminItems.length > 0 && (
             <button
               type="button"
@@ -238,6 +258,7 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
           )}
           <NavIcon name={item.icon} active={isActive} />
           {!collapsed && item.label}
+          {item.to === '/chat' && <ChatUnreadBadge floating={collapsed} />}
         </>
       )}
     </NavLink>
@@ -247,7 +268,6 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
 export function AppLayout({ children }: { children: ReactNode }) {
   useRealtimeSync();
   const isPhone = useIsPhone();
-  const { pathname } = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1');
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
@@ -256,7 +276,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   // 役職ごとのタブ表示設定(ユーザー管理)。visibleTabsがnullなら制限なし(全表示)。
   const visibleTabs = me?.visibleTabs ?? null;
-  const isTabVisible = (to: string) => !visibleTabs || visibleTabs.includes(to);
+  const isTabVisible = (to: string) => ALWAYS_VISIBLE.has(to) || !visibleTabs || visibleTabs.includes(to);
   const topNav = TOP_NAV.filter((i) => isTabVisible(i.to));
   const navGroups = allGroups
     .map((g) => ({ ...g, items: g.items.filter((i) => isTabVisible(i.to)) }))
@@ -265,17 +285,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (isPhone) {
     const phoneItems = [...topNav, ...navGroups.filter((g) => g.title !== ADMIN_NAV_GROUP.title).flatMap((g) => g.items)];
     const phoneAdminItems = navGroups.filter((g) => g.title === ADMIN_NAV_GROUP.title).flatMap((g) => g.items);
-    const showFab = phoneItems.some((i) => i.to === '/toss/new') && pathname !== '/toss/new';
     return (
       <div style={{ minHeight: 'var(--viewport-height)' }}>
-        <main style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>{children}</main>
-        {showFab && (
-          <NavLink to="/toss/new" aria-label="トス登録" className="phone-fab">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </NavLink>
-        )}
+        <main style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom))' }}>
+          <AccountBar />
+          {children}
+        </main>
         <PhoneBottomNav items={phoneItems} adminItems={phoneAdminItems} isManager={isManager} />
       </div>
     );
@@ -388,10 +403,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
           <OnlineUsersWidget collapsed={collapsed} />
-          <NotificationMenu variant="sidebar" collapsed={collapsed} showReports={isManager} />
+          {isManager && <NotificationMenu variant="sidebar" collapsed={collapsed} showReports />}
         </div>
       </nav>
-      <main style={{ flex: 1, minWidth: 0 }}>{children}</main>
+      <main style={{ flex: 1, minWidth: 0 }}>
+        <AccountBar />
+        {children}
+      </main>
     </div>
   );
 }

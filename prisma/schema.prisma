@@ -91,6 +91,8 @@ model User {
   auditLogs          AuditLog[]
   pushSubscriptions  PushSubscription[]
   preferences        UserPreference[]
+  chatMemberships    ChatMember[]
+  chatMessages       ChatMessage[]
 
   @@index([departmentId])
   @@index([teamId])
@@ -1004,4 +1006,57 @@ model CustomReport {
   createdBy String?
 
   @@index([order])
+}
+
+// ============================================================
+// チャット(要望: 全体・部署・アカウント単位のグループを手動で作成してやり取りする)
+// ============================================================
+
+// トークルーム(グループ)。名前・写真はメンバーなら誰でも変更できる。
+model ChatRoom {
+  id        String    @id @default(uuid())
+  name      String
+  photo     String? // グループ写真(縮小済みの画像 data URL)
+  createdBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  // 最後の発言日時(一覧の並び順用)
+  lastMessageAt DateTime @default(now())
+  deletedAt DateTime?
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model ChatMember {
+  roomId     String
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  joinedAt   DateTime @default(now())
+  // ここまで読んだ日時。既読(誰が読んだか)はメッセージ日時と比較して判定する
+  lastReadAt DateTime @default(now())
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id        String    @id @default(uuid())
+  roomId    String
+  room      ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User      @relation(fields: [senderId], references: [id])
+  body      String?
+  image     String? // 縮小済みの画像 data URL
+  replyToId String?
+  // 転送: 1件ならforwardedFrom(元の送信者名)、複数ならやり取りをまとめてforwardBundleに入れる
+  forwardedFrom String?
+  forwardBundle Json? // [{ senderName, body, image?, createdAt }]
+  unsentAt  DateTime? // 送信取り消し
+  createdAt DateTime  @default(now())
+
+  @@index([roomId, createdAt])
 }

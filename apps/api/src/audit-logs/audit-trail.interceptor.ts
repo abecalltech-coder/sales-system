@@ -65,6 +65,8 @@ const SKIP = [
   /^\/custom-reports\/preview$/,
   /^\/integrations\/google-forms\/webhook$/,
   /\/period-move$/, // 各サービスで移動前の対象月つきで記録済み
+  /^\/chat\//, // チャットの発言は操作ログに残さない(会話の内容・写真を複製しないため)
+  /^\/me\/profile/,
 ];
 
 /** DTOの「部分更新」キー → レコード側のJSON列 */
