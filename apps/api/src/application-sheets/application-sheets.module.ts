@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { IsBoolean, IsIn, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
@@ -12,16 +12,27 @@ class SaveSheetDto {
   @IsOptional() @IsObject() data?: Record<string, unknown>;
 }
 
+class AddPhotoDto {
+  @IsIn(['juryo', 'doryoku']) section!: string;
+  @IsString() @MaxLength(4_000_000) image!: string;
+  @IsString() @MaxLength(300_000) thumb!: string;
+}
+
 @Injectable()
 class ApplicationSheetsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
-    const rows = await this.prisma.applicationSheet.findMany({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 2000 });
+    const rows = await this.prisma.applicationSheet.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
+      include: { _count: { select: { photos: true } } },
+    });
     const userIds = [...new Set(rows.flatMap((r) => [r.createdBy, r.updatedBy]).filter((x): x is string => !!x))];
     const users = await this.prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } });
     const nameOf = (id: string | null) => users.find((u) => u.id === id)?.name ?? null;
-    return rows.map((r) => ({ ...r, createdByName: nameOf(r.createdBy), updatedByName: nameOf(r.updatedBy) }));
+    return rows.map(({ _count, ...r }) => ({ ...r, photoCount: _count.photos, createdByName: nameOf(r.createdBy), updatedByName: nameOf(r.updatedBy) }));
   }
 
   create(dto: SaveSheetDto, userId: string) {
@@ -56,6 +67,38 @@ class ApplicationSheetsService {
     });
   }
 
+  /** 写真の一覧(小さい画像のみ。元の大きさは photo() で個別に取る) */
+  photos(sheetId: string) {
+    return this.prisma.applicationSheetPhoto.findMany({
+      where: { sheetId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, section: true, thumb: true, createdAt: true, createdBy: true },
+    });
+  }
+
+  async photo(photoId: string) {
+    const p = await this.prisma.applicationSheetPhoto.findUnique({ where: { id: photoId }, select: { id: true, image: true } });
+    if (!p) throw new NotFoundException('写真が見つかりません');
+    return p;
+  }
+
+  async addPhoto(sheetId: string, dto: AddPhotoDto, userId: string) {
+    const sheet = await this.prisma.applicationSheet.findFirst({ where: { id: sheetId, deletedAt: null } });
+    if (!sheet) throw new NotFoundException('申込情報が見つかりません');
+    if (!dto.image.startsWith('data:image/') || !dto.thumb.startsWith('data:image/')) throw new BadRequestException('画像の形式が正しくありません');
+    const p = await this.prisma.applicationSheetPhoto.create({
+      data: { sheetId, section: dto.section, image: dto.image, thumb: dto.thumb, createdBy: userId },
+      select: { id: true, section: true, thumb: true, createdAt: true },
+    });
+    await this.prisma.applicationSheet.update({ where: { id: sheetId }, data: { updatedBy: userId } });
+    return p;
+  }
+
+  async removePhoto(photoId: string) {
+    await this.prisma.applicationSheetPhoto.delete({ where: { id: photoId } });
+    return { ok: true };
+  }
+
   async remove(id: string) {
     await this.prisma.applicationSheet.update({ where: { id }, data: { deletedAt: new Date() } });
     return { ok: true };
@@ -85,6 +128,26 @@ class ApplicationSheetsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.service.remove(id);
+  }
+
+  @Get(':id/photos')
+  photos(@Param('id') id: string) {
+    return this.service.photos(id);
+  }
+
+  @Post(':id/photos')
+  addPhoto(@Param('id') id: string, @Body() dto: AddPhotoDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.addPhoto(id, dto, user.id);
+  }
+
+  @Get('photos/:photoId')
+  photo(@Param('photoId') photoId: string) {
+    return this.service.photo(photoId);
+  }
+
+  @Delete('photos/:photoId')
+  removePhoto(@Param('photoId') photoId: string) {
+    return this.service.removePhoto(photoId);
   }
 }
 

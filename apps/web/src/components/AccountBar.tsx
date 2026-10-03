@@ -5,7 +5,6 @@ import { usePushNotifications } from '../lib/usePushNotifications';
 import { resizeImage } from '../lib/image';
 import { api, ApiError } from '../lib/api';
 import { Avatar } from './Avatar';
-import { BillReader } from './BillReader';
 
 /**
  * 画面上部のバー(要望): 右端に自分のアカウントの四角いアイコン。押すと写真・通知オン/オフの設定が開く。
@@ -15,7 +14,6 @@ export function AccountBar() {
   const { data: profile } = useMyProfile();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const [billOpen, setBillOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -52,18 +50,6 @@ export function AccountBar() {
         borderBottom: '1px solid var(--color-border)',
       }}
     >
-      <button
-        type="button"
-        onClick={() => setBillOpen(true)}
-        title="電気明細の写真を読み取ってテキストにする(無料・端末内で処理)"
-        style={{ height: 26, padding: '0 8px', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, border: 'none', background: 'transparent', boxShadow: 'none', color: 'var(--color-text-muted)' }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M4 7h3l2-3h6l2 3h3v13H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
-        </svg>
-        明細読み取り
-      </button>
-      {billOpen && <BillReader onClose={() => setBillOpen(false)} />}
       <button
         type="button"
         onClick={popOut}

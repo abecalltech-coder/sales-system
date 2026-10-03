@@ -4,6 +4,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
 import { logCopy } from '../../lib/copyLog';
 import { recognizeBill, extractBillFields } from '../../lib/ocr';
+import { resizeImage } from '../../lib/image';
 import {
   APPLICATION_FIELDS,
   DORYOKU_FIELDS,
@@ -26,9 +27,17 @@ interface SheetRow {
   updatedAt: string;
   createdByName: string | null;
   updatedByName: string | null;
+  photoCount: number;
 }
 
-type Draft = Omit<SheetRow, 'createdAt' | 'updatedAt' | 'createdByName' | 'updatedByName' | 'id'> & { id?: string };
+type Draft = Omit<SheetRow, 'createdAt' | 'updatedAt' | 'createdByName' | 'updatedByName' | 'id' | 'photoCount'> & { id?: string };
+
+interface PhotoItem {
+  id: string;
+  section: 'juryo' | 'doryoku';
+  thumb: string;
+  createdAt: string;
+}
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -72,6 +81,7 @@ export function ApplicationSheetsPage() {
                   {r.inputCode && <span className="app-tag">{r.inputCode}</span>}
                   {r.hasJuryo && <span className="app-tag">従量</span>}
                   {r.hasDoryoku && <span className="app-tag">動力</span>}
+                  {r.photoCount > 0 && <span className="app-tag">写真 {r.photoCount}枚</span>}
                   <span>
                     {fmtDate(r.updatedAt)} {r.updatedByName ?? r.createdByName ?? ''}
                   </span>
@@ -104,6 +114,8 @@ export function ApplicationSheetsPage() {
 function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: () => void; onCopied: () => void }) {
   const queryClient = useQueryClient();
   const [d, setD] = useState<Draft>(initial);
+  const dRef = useRef(d);
+  dRef.current = d;
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const isNew = !d.id;
@@ -112,8 +124,9 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
 
   const save = useMutation({
     mutationFn: async () => {
-      const body = { inputCode: d.inputCode ?? '', hasJuryo: d.hasJuryo, hasDoryoku: d.hasDoryoku, data: d.data };
-      return d.id ? api.patch<SheetRow>(`/application-sheets/${d.id}`, body) : api.post<SheetRow>('/application-sheets', body);
+      const cur = dRef.current;
+      const body = { inputCode: cur.inputCode ?? '', hasJuryo: cur.hasJuryo, hasDoryoku: cur.hasDoryoku, data: cur.data };
+      return cur.id ? api.patch<SheetRow>(`/application-sheets/${cur.id}`, body) : api.post<SheetRow>('/application-sheets', body);
     },
     onSuccess: (row) => {
       setError(null);
@@ -123,6 +136,13 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '保存できませんでした'),
   });
+  // 写真は案件(申込情報)に紐づけて保存するため、未作成ならまず作成してから保存する
+  const ensureSaved = async (): Promise<string> => {
+    if (dRef.current.id) return dRef.current.id;
+    const row = await save.mutateAsync();
+    dRef.current = { ...dRef.current, id: row.id };
+    return row.id;
+  };
   const remove = useMutation({
     mutationFn: () => api.delete(`/application-sheets/${d.id}`),
     onSuccess: () => {
@@ -197,14 +217,18 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
               key={t}
               title={`${typeLabel[t]}情報`}
               actions={
-                <>
-                  <BillPhotoButton onResult={(p) => setSection(t, p)} doryoku={t === 'doryoku'} />
-                  <button type="button" onClick={() => sameAsApplication(t)} style={{ fontSize: 11, padding: '2px 8px' }}>
-                    申込情報と同一
-                  </button>
-                </>
+                <button type="button" onClick={() => sameAsApplication(t)} style={{ fontSize: 11, padding: '2px 8px' }}>
+                  申込情報と同一
+                </button>
               }
             >
+              <SheetPhotos
+                sheetId={d.id}
+                section={t}
+                values={d.data[t]}
+                ensureSaved={ensureSaved}
+                onResult={(patch) => setSection(t, patch)}
+              />
               <Fields fields={t === 'juryo' ? JURYO_FIELDS : DORYOKU_FIELDS} values={d.data[t]} onChange={(p) => setSection(t, p)} />
             </SectionBox>
           ))}
@@ -336,62 +360,190 @@ function ZipAddress({ zip, address, onChange }: { zip: string; address: string; 
   );
 }
 
-/** 明細の写真を読み取って電気情報へ反映する(端末内OCR・無料) */
-function BillPhotoButton({ onResult, doryoku }: { onResult: (patch: Section) => void; doryoku: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
+/** OCRの結果を電気情報の項目へ対応づける */
+function billPatch(text: string, doryoku: boolean): Section {
+  const fields = Object.fromEntries(extractBillFields(text).map((f) => [f.label, f.value]));
+  const patch: Section = {};
+  const put = (key: string, v: string | undefined) => {
+    if (v) patch[key] = v;
+  };
+  put('company', fields['契約電力会社']);
+  put('spid', fields['供給地点特定番号']);
+  put('customerNo', fields['お客さま番号']);
+  put('capacity', fields['契約容量・電力']);
+  put('charge', fields['請求金額']?.replace(/\s*円$/, ''));
+  put('usage', fields['使用量']?.replace(/\s*kWh$/i, ''));
+  put('billMonth', fields['明細月']);
+  put('addressZip', fields['郵便番号']);
+  put('address', fields['住所']);
+  if (doryoku) {
+    put('period', fields['使用期間']);
+    put('powerFactor', fields['力率']?.replace(/%$/, ''));
+  }
+  return patch;
+}
+
+/** dataURL を File にする(保存済みの写真から読み取り直すとき用) */
+async function dataUrlToFile(url: string): Promise<File> {
+  const [head, b64] = url.split(',');
+  const mime = /data:([^;]+)/.exec(head)?.[1] ?? 'image/jpeg';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], 'photo.jpg', { type: mime });
+}
+
+/**
+ * 案件ごとの明細写真(要望): 撮影/写真フォルダから追加すると、案件に保存したうえで読み取って空欄に反映する。
+ * 保存した写真はいつでも見返せ、写真から読み取り直すこともできる。読み取りは端末内(無料)。
+ */
+function SheetPhotos({
+  sheetId,
+  section,
+  values,
+  ensureSaved,
+  onResult,
+}: {
+  sheetId?: string;
+  section: 'juryo' | 'doryoku';
+  values: Section;
+  ensureSaved: () => Promise<string>;
+  onResult: (patch: Section) => void;
+}) {
+  const queryClient = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
   // カメラ専用(capture付き)だと携帯で写真フォルダから選べないため、撮影用と選択用を分ける
   const cameraRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<PhotoItem | null>(null);
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
 
-  const run = async (file: File | undefined) => {
+  const { data: photos } = useQuery({
+    queryKey: ['application-sheet-photos', sheetId],
+    queryFn: () => api.get<PhotoItem[]>(`/application-sheets/${sheetId}/photos`),
+    enabled: !!sheetId,
+  });
+  const mine = (photos ?? []).filter((p) => p.section === section);
+
+  // 読み取った値は空欄の項目にだけ入れる(手で直した値を消さない)
+  const applyText = (text: string) => {
+    const patch = billPatch(text, section === 'doryoku');
+    const onlyEmpty = Object.fromEntries(Object.entries(patch).filter(([k]) => !(valuesRef.current[k] ?? '').trim()));
+    onResult(onlyEmpty);
+    const n = Object.keys(onlyEmpty).length;
+    const skipped = Object.keys(patch).length - n;
+    return n
+      ? `${n}項目を空欄に反映しました${skipped ? `(入力済みの${skipped}項目はそのまま)` : ''}。写真と見比べてください`
+      : Object.keys(patch).length
+        ? '読み取った項目はすべて入力済みでした'
+        : '項目を読み取れませんでした。明るく正面から撮り直してください';
+  };
+
+  const progress = (p: number, status: string) =>
+    setState(status === 'recognizing text' ? `読み取り中 ${Math.round(p * 100)}%` : status.includes('traineddata') ? '日本語データ読込中(初回のみ)' : '読み取り準備中...');
+
+  const add = async (file: File | undefined) => {
     if (!file) return;
-    setState('読み取り準備中...');
     try {
-      const text = await recognizeBill(file, (p, status) =>
-        setState(status === 'recognizing text' ? `読み取り中 ${Math.round(p * 100)}%` : status.includes('traineddata') ? '日本語データ読込中(初回のみ)' : '読み取り準備中...'),
-      );
-      const fields = Object.fromEntries(extractBillFields(text).map((f) => [f.label, f.value]));
-      const patch: Section = {};
-      const put = (key: string, v: string | undefined) => {
-        if (v) patch[key] = v;
-      };
-      put('company', fields['契約電力会社']);
-      put('spid', fields['供給地点特定番号']);
-      put('customerNo', fields['お客さま番号']);
-      put('capacity', fields['契約容量・電力']);
-      put('charge', fields['請求金額']?.replace(/\s*円$/, ''));
-      put('usage', fields['使用量']?.replace(/\s*kWh$/i, ''));
-      put('billMonth', fields['明細月']);
-      put('addressZip', fields['郵便番号']);
-      put('address', fields['住所']);
-      if (doryoku) {
-        put('period', fields['使用期間']);
-        put('powerFactor', fields['力率']?.replace(/%$/, ''));
-      }
-      onResult(patch);
-      const n = Object.keys(patch).length;
-      setState(n ? `${n}項目を反映しました(写真と見比べてください)` : '項目を読み取れませんでした。明るく正面から撮り直してください');
+      setState('写真を保存しています...');
+      const id = await ensureSaved();
+      const [image, thumb] = await Promise.all([resizeImage(file, 1800, { quality: 0.82 }), resizeImage(file, 240, { quality: 0.7 })]);
+      await api.post(`/application-sheets/${id}/photos`, { section, image, thumb });
+      queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', id] });
+      queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
+      const text = await recognizeBill(file, progress);
+      setState(applyText(text));
+    } catch (e) {
+      setState(e instanceof ApiError ? e.message : e instanceof Error ? e.message : '写真を追加できませんでした');
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
+      window.setTimeout(() => setState(null), 8000);
+    }
+  };
+
+  const rereadFrom = async (image: string) => {
+    try {
+      const text = await recognizeBill(await dataUrlToFile(image), progress);
+      setState(applyText(text));
     } catch (e) {
       setState(e instanceof Error ? e.message : '読み取りに失敗しました');
     } finally {
-      if (ref.current) ref.current.value = '';
-      if (cameraRef.current) cameraRef.current.value = '';
-      window.setTimeout(() => setState(null), 6000);
+      window.setTimeout(() => setState(null), 8000);
     }
   };
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      {state && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{state}</span>}
-      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>明細写真から読み取り:</span>
-      <button type="button" onClick={() => cameraRef.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
-        カメラで撮る
-      </button>
-      <button type="button" onClick={() => ref.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
-        写真フォルダから選ぶ
-      </button>
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void run(e.target.files?.[0])} />
-      <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => void run(e.target.files?.[0])} />
-    </span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0 8px', marginBottom: 4, borderBottom: '1px dashed var(--color-border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>明細写真</span>
+        <button type="button" onClick={() => cameraRef.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
+          カメラで撮る
+        </button>
+        <button type="button" onClick={() => fileRef.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
+          写真フォルダから選ぶ
+        </button>
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void add(e.target.files?.[0])} />
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void add(e.target.files?.[0])} />
+        {state && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{state}</span>}
+      </div>
+      {mine.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {mine.map((p) => (
+            <button key={p.id} type="button" onClick={() => setViewing(p)} title="写真を見る" style={{ padding: 0, border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden', background: 'transparent', boxShadow: 'none' }}>
+              <img src={p.thumb} alt="明細写真" style={{ display: 'block', width: 72, height: 72, objectFit: 'cover' }} />
+            </button>
+          ))}
+        </div>
+      )}
+      {viewing && (
+        <PhotoViewer
+          photo={viewing}
+          onClose={() => setViewing(null)}
+          onReread={(image) => {
+            setViewing(null);
+            void rereadFrom(image);
+          }}
+          onDeleted={() => {
+            setViewing(null);
+            queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', sheetId] });
+            queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PhotoViewer({ photo, onClose, onReread, onDeleted }: { photo: PhotoItem; onClose: () => void; onReread: (image: string) => void; onDeleted: () => void }) {
+  const { data } = useQuery({ queryKey: ['application-sheet-photo', photo.id], queryFn: () => api.get<{ image: string }>(`/application-sheets/photos/${photo.id}`) });
+  const [zoom, setZoom] = useState(false);
+  const del = useMutation({ mutationFn: () => api.delete(`/application-sheets/photos/${photo.id}`), onSuccess: onDeleted });
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', flexDirection: 'column' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 8, flexWrap: 'wrap' }}>
+        <span style={{ color: '#fff', fontSize: 12, flex: 1 }}>{new Date(photo.createdAt).toLocaleString('ja-JP')}</span>
+        <button type="button" onClick={() => setZoom((z) => !z)} style={{ fontSize: 12 }}>
+          {zoom ? '全体表示' : '拡大'}
+        </button>
+        <button type="button" disabled={!data} onClick={() => data && onReread(data.image)} style={{ fontSize: 12 }}>
+          この写真から読み取る(空欄に反映)
+        </button>
+        <button type="button" onClick={() => window.confirm('この写真を削除しますか？') && del.mutate()} style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+          削除
+        </button>
+        <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+          閉じる
+        </button>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, overflow: 'auto', display: 'flex', alignItems: zoom ? 'flex-start' : 'center', justifyContent: zoom ? 'flex-start' : 'center' }}>
+        {data ? (
+          <img src={data.image} alt="明細写真" style={zoom ? { display: 'block' } : { maxWidth: '96vw', maxHeight: '82vh', objectFit: 'contain' }} />
+        ) : (
+          <span style={{ color: '#fff', fontSize: 12 }}>読み込み中...</span>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1090,5 +1090,21 @@ model ApplicationSheet {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
+  photos     ApplicationSheetPhoto[]
+
   @@index([createdAt])
+}
+
+// 申込情報の明細写真(要望: 案件ごとに写真を保存していつでも見返せる)。画像は縮小済み data URL
+model ApplicationSheetPhoto {
+  id        String           @id @default(uuid())
+  sheetId   String
+  sheet     ApplicationSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+  section   String // juryo | doryoku
+  image     String // 見返し用(長辺1800px程度)
+  thumb     String // 一覧用の小さい画像
+  createdBy String?
+  createdAt DateTime         @default(now())
+
+  @@index([sheetId])
 }
