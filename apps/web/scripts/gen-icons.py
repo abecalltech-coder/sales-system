@@ -1,10 +1,7 @@
 """PWAアイコンを生成する(外部ライブラリ不要、zlib/structのみ使用)。
 CH partners公式サイト(https://ch-partners.co.jp)のロゴマーク(favicon.svg、
 2026-09-16時点)をそのままベクター座標で再現し、192/512/マスカブル512サイズに
-ラスタライズする。apple-touch-icon.png・favicon-96.pngは同サイトの実ファイルを
-一度だけダウンロードしてpublic/icons/にそのままコミットしている(このスクリプトの
-対象外。ロゴが変わったら https://ch-partners.co.jp/apple-touch-icon.png と
-https://ch-partners.co.jp/favicon-96x96.png を取得し直して差し替える)。
+ラスタライズする。apple-touch-icon.png・favicon-96.png もここから生成する。
 """
 import struct
 import zlib
@@ -47,6 +44,10 @@ PATH1 = build_path1()
 PATH2 = [(32.7, 13), (39.5, 13), (25.2, 35), (18.4, 35)]
 PATH3 = [(43.1, 13), (48, 13), (33.7, 35), (26.9, 35)]
 MARK_POLYS = [PATH1, PATH2, PATH3]
+_xs = [x for poly in MARK_POLYS for x, _ in poly]
+_ys = [y for poly in MARK_POLYS for _, y in poly]
+MARK_CX = (min(_xs) + max(_xs)) / 2
+MARK_CY = (min(_ys) + max(_ys)) / 2
 
 def point_in_poly(x, y, poly):
     inside = False
@@ -90,8 +91,9 @@ def render(size, rounded, mark_scale=1.0):
                 for sx in range(SS):
                     vx = (px + (sx + 0.5) / SS) / size * VIEWBOX
                     vy = (py + (sy + 0.5) / SS) / size * VIEWBOX
-                    mx = (vx - 24) / mark_scale + 24
-                    my = (vy - 24) / mark_scale + 24
+                    # マークの横幅の中心(約24.95)をアイコンの中心に合わせる
+                    mx = (vx - 24) / mark_scale + MARK_CX
+                    my = (vy - 24) / mark_scale + MARK_CY
                     if in_mark(mx, my):
                         n_mark += 1
                     elif (not rounded) or in_rounded_rect(vx, vy, VIEWBOX, VIEWBOX, 8):
@@ -126,7 +128,13 @@ def write_png_rgba(path, size, pixels):
     print(f'wrote {path} ({len(png)} bytes)')
 
 if __name__ == '__main__':
-    # マークが角丸の左右ギリギリまで届いていた(要望)ため、0.8倍に縮小して余白を作る
-    write_png_rgba(os.path.join(OUT_DIR, 'icon-192.png'), 192, render(192, rounded=True, mark_scale=0.8))
-    write_png_rgba(os.path.join(OUT_DIR, 'icon-512.png'), 512, render(512, rounded=True, mark_scale=0.8))
-    write_png_rgba(os.path.join(OUT_DIR, 'icon-512-maskable.png'), 512, render(512, rounded=False, mark_scale=0.72))
+    # マークが大きく左右の余白が無かった(要望)ため、さらに小さくして中央に置く。
+    # apple-touch-icon(iPhoneのホーム画面)・favicon も同じ見た目でここから生成する
+    # (以前は会社サイトの画像をそのまま使っていたが、余白が無いため置き換え)
+    write_png_rgba(os.path.join(OUT_DIR, 'icon-192.png'), 192, render(192, rounded=True, mark_scale=0.62))
+    write_png_rgba(os.path.join(OUT_DIR, 'icon-512.png'), 512, render(512, rounded=True, mark_scale=0.62))
+    # マスカブル(Androidが丸や角丸に切り抜く)は中央80%が安全域なので、さらに小さく
+    write_png_rgba(os.path.join(OUT_DIR, 'icon-512-maskable.png'), 512, render(512, rounded=False, mark_scale=0.52))
+    # iPhoneはOS側で角を丸めるため、透過なしの四角で作る
+    write_png_rgba(os.path.join(OUT_DIR, 'apple-touch-icon.png'), 180, render(180, rounded=False, mark_scale=0.6))
+    write_png_rgba(os.path.join(OUT_DIR, 'favicon-96.png'), 96, render(96, rounded=True, mark_scale=0.72))
