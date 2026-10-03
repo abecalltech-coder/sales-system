@@ -339,6 +339,8 @@ function ZipAddress({ zip, address, onChange }: { zip: string; address: string; 
 /** 明細の写真を読み取って電気情報へ反映する(端末内OCR・無料) */
 function BillPhotoButton({ onResult, doryoku }: { onResult: (patch: Section) => void; doryoku: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
+  // カメラ専用(capture付き)だと携帯で写真フォルダから選べないため、撮影用と選択用を分ける
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<string | null>(null);
 
   const run = async (file: File | undefined) => {
@@ -373,6 +375,7 @@ function BillPhotoButton({ onResult, doryoku }: { onResult: (patch: Section) => 
       setState(e instanceof Error ? e.message : '読み取りに失敗しました');
     } finally {
       if (ref.current) ref.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
       window.setTimeout(() => setState(null), 6000);
     }
   };
@@ -380,10 +383,15 @@ function BillPhotoButton({ onResult, doryoku }: { onResult: (patch: Section) => 
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       {state && <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{state}</span>}
-      <button type="button" onClick={() => ref.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
-        明細写真から読み取り
+      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>明細写真から読み取り:</span>
+      <button type="button" onClick={() => cameraRef.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
+        カメラで撮る
       </button>
-      <input ref={ref} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void run(e.target.files?.[0])} />
+      <button type="button" onClick={() => ref.current?.click()} style={{ fontSize: 11, padding: '2px 8px' }}>
+        写真フォルダから選ぶ
+      </button>
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void run(e.target.files?.[0])} />
+      <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => void run(e.target.files?.[0])} />
     </span>
   );
 }

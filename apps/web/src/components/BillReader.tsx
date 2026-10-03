@@ -16,6 +16,8 @@ const STATUS_LABELS: Record<string, string> = {
  */
 export function BillReader({ onClose }: { onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  // カメラ専用(capture付き)だと携帯で写真フォルダから選べないため、撮影用と選択用を分ける
+  const cameraRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [fields, setFields] = useState<BillField[]>([]);
@@ -49,6 +51,7 @@ export function BillReader({ onClose }: { onClose: () => void }) {
       setBusy(false);
       setProgress(null);
       if (fileRef.current) fileRef.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
     }
   };
 
@@ -77,10 +80,14 @@ export function BillReader({ onClose }: { onClose: () => void }) {
         </p>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button type="button" className="btn-primary" disabled={busy} onClick={() => fileRef.current?.click()} style={{ fontSize: 13, padding: '7px 14px' }}>
-            {busy ? '読み取り中...' : text ? '別の写真を読み取る' : '写真を撮る / 選ぶ'}
+          <button type="button" className="btn-primary" disabled={busy} onClick={() => cameraRef.current?.click()} style={{ fontSize: 13, padding: '7px 14px' }}>
+            {busy ? '読み取り中...' : 'カメラで撮る'}
           </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void run(e.target.files?.[0])} />
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} style={{ fontSize: 13, padding: '7px 14px' }}>
+            写真フォルダから選ぶ
+          </button>
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void run(e.target.files?.[0])} />
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void run(e.target.files?.[0])} />
         </div>
 
         {progress && (
