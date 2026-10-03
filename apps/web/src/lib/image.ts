@@ -4,12 +4,18 @@
  * square=true なら中央を正方形に切り抜く(アイコン用)。
  */
 export async function resizeImage(file: File, maxSize: number, opts: { square?: boolean; quality?: number } = {}): Promise<string> {
-  const url = URL.createObjectURL(file);
-  try {
+  // blob: URL はサーバーのCSP(img-src 'self' data:)で読み込めないため、data URL として読む
+  const url = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('画像を読み込めませんでした'));
+    reader.readAsDataURL(file);
+  });
+  {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('画像を読み込めませんでした'));
+      el.onerror = () => reject(new Error('この画像の形式は読み込めませんでした(JPEG/PNGをお試しください)'));
       el.src = url;
     });
     let sx = 0;
@@ -35,7 +41,5 @@ export async function resizeImage(file: File, maxSize: number, opts: { square?: 
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
     return canvas.toDataURL('image/jpeg', opts.quality ?? 0.8);
-  } finally {
-    URL.revokeObjectURL(url);
   }
 }
