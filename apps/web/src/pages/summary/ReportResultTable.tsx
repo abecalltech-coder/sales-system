@@ -1,4 +1,5 @@
 import { ReportConfig, ReportRow } from '../../hooks/useApi';
+import { logCopy } from '../../lib/copyLog';
 
 const AXIS_LABEL: Record<ReportConfig['axis'], string> = {
   USER: '担当者',
@@ -15,6 +16,7 @@ function csvEscape(v: string): string {
 
 function downloadCsv(filename: string, rows: string[][]) {
   const content = rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
+  logCopy('CSV出力', content, { cells: Math.max(0, rows.length - 1), target: filename });
   const blob = new Blob([`﻿${content}`], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

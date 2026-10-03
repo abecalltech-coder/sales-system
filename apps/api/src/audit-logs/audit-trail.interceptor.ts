@@ -67,6 +67,7 @@ const SKIP = [
   /\/period-move$/, // 各サービスで移動前の対象月つきで記録済み
   /^\/chat\//, // チャットの発言は操作ログに残さない(会話の内容・写真を複製しないため)
   /^\/me\/profile/,
+  /^\/audit-logs\/copy$/, // コピーの記録はそのエンドポイント自身が書く
 ];
 
 /** DTOの「部分更新」キー → レコード側のJSON列 */
@@ -91,9 +92,10 @@ export class AuditTrailInterceptor implements NestInterceptor {
     if (context.getType() !== 'http') return next.handle();
     const req = context.switchToHttp().getRequest();
     const method: string = req.method;
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return next.handle();
-
     const path = String(req.originalUrl ?? req.url ?? '').split('?')[0].replace(/^\/api/, '');
+    // 更新系に加えて、CSV出力(GET .../export)も記録する(要望: 情報の持ち出し確認)
+    const isExport = method === 'GET' && /\/export$/.test(path);
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !isExport) return next.handle();
     const userId: string | undefined = req.user?.id;
     if (!userId || SKIP.some((re) => re.test(path))) return next.handle();
 
@@ -284,6 +286,7 @@ export class AuditTrailInterceptor implements NestInterceptor {
 
   private resolveOp(method: string, segs: string[]): { code: string; label: string } {
     const last = segs[segs.length - 1] ?? '';
+    if (method === 'GET' && last === 'export') return { code: 'export', label: 'CSV出力' };
     const hasId = segs.slice(1).some((s) => UUID.test(s));
     const key = !UUID.test(last) && (segs.length > 1 || last === 'cell-styles') ? last : '';
     if (method === 'DELETE') {

@@ -2,6 +2,7 @@ import { CSSProperties, ReactNode, TouchEvent as ReactTouchEvent, useEffect, use
 import type { Column } from './DataTable';
 import { readableTextColor } from '../lib/color';
 import { useCellStyles } from '../hooks/useCellStyles';
+import { logCopy } from '../lib/copyLog';
 
 const MENU_COLORS = ['#000000', '#6b7280', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#92400e', '#ffffff'];
 
@@ -325,6 +326,7 @@ export function MobileCardList<T>({
             const text = text_(col, openRow);
             try {
               await navigator.clipboard.writeText(text);
+              logCopy('一覧の項目', text, { target: `${text_(titleCol, openRow)} / ${col?.label ?? ''}` });
               flash('コピーしました');
             } catch {
               flash('コピーできませんでした');
@@ -334,6 +336,7 @@ export function MobileCardList<T>({
             const col = byKey.get(fieldMenu.key);
             try {
               await navigator.clipboard.writeText(text_(col, openRow));
+              logCopy('一覧の項目(切り取り)', text_(col, openRow), { target: `${text_(titleCol, openRow)} / ${col?.label ?? ''}` });
             } catch {
               flash('コピーできませんでした');
               return;

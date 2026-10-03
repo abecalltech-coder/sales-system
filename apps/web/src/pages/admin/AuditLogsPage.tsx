@@ -29,6 +29,7 @@ const RESOURCE_TABS: Record<string, string> = {
   comments: 'コメント',
   'cell-styles': '一覧',
   'offline-actions': 'モバイル',
+  chat: 'チャット',
 };
 
 /** 構造化される前から残っている操作種別 */
@@ -62,6 +63,7 @@ function structured(r: AuditLogItem): Structured | null {
 function tabOf(r: AuditLogItem): string {
   const s = structured(r);
   const page = s?.page ?? null;
+  if (page?.startsWith('/chat')) return 'チャット';
   if (page) {
     const hit = ALL_NAV_TABS.filter((t) => page === t.key || page.startsWith(`${t.key}/`)).sort((a, b) => b.key.length - a.key.length)[0];
     if (hit) return hit.label;

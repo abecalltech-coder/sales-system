@@ -8,6 +8,7 @@ import { useMe } from '../../hooks/useApi';
 import { useChatMessages, useChatRoom, useChatRooms, ChatMessageItem, ChatRoomItem } from '../../hooks/useChat';
 import { api, ApiError } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
+import { logCopy } from '../../lib/copyLog';
 import { GroupEditor } from './GroupEditor';
 
 const ACCOUNT_BAR_HEIGHT = 36;
@@ -358,6 +359,7 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
     const t = m.forwardBundle ? m.forwardBundle.map((f) => `${f.senderName}: ${f.body ?? '[写真]'}`).join('\n') : (m.body ?? '');
     try {
       await navigator.clipboard.writeText(t);
+      logCopy('チャット', t, { target: room?.name });
       flash('コピーしました');
     } catch {
       flash('コピーできませんでした');
@@ -817,6 +819,7 @@ function PartialCopy({ message, onClose, onCopied }: { message: ChatMessageItem;
     const sel = el && el.selectionEnd > el.selectionStart ? text.slice(el.selectionStart, el.selectionEnd) : text;
     try {
       await navigator.clipboard.writeText(sel);
+      logCopy('チャット(部分コピー)', sel);
       onCopied();
       onClose();
     } catch {

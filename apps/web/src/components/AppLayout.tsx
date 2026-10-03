@@ -1,6 +1,10 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useIsPhone } from '../lib/useIsPhone';
+import { installNativeCopyLogger } from '../lib/copyLog';
+
+// 文字を選んでのコピー(ブラウザ標準)も操作ログに残す(要望)
+installNativeCopyLogger();
 import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationMenu } from './NotificationMenu';

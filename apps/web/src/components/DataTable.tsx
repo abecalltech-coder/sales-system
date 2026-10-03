@@ -19,6 +19,7 @@ import { ColumnWidths, useTablePreference } from '../hooks/useTablePreference';
 import { useHiddenRows } from '../hooks/useHiddenRows';
 import { useCellStyles, CellStyle } from '../hooks/useCellStyles';
 import { useIsPhone } from '../lib/useIsPhone';
+import { logCopy } from '../lib/copyLog';
 import { MobileCardConfig, MobileCardList } from './MobileCardList';
 
 export interface Column<T> {
@@ -900,9 +901,19 @@ function DataTableGrid<T>({
     return out;
   };
 
-  const doCopy = async (s: Sel) => {
+  const doCopy = async (s: Sel, kind: 'copy' | 'cut' = 'copy') => {
     const tsv = buildTsv(s);
     clipboardRef.current = tsv;
+    // 操作ログ(要望: 誰が・どのタブで・何をコピーしたか)
+    {
+      const b = bounds(s);
+      const cols = columnsRef.current.slice(b.c0, b.c1 + 1).map((c) => c.label);
+      const rowCount = Math.min(b.r1, rowsRef.current.length - 1) - b.r0 + 1;
+      logCopy(kind === 'cut' ? '一覧のセル(切り取り)' : '一覧のセル', tsv, {
+        cells: rowCount * cols.length,
+        target: `${rowCount}行 × ${cols.join('・')}`,
+      });
+    }
     try {
       await navigator.clipboard.writeText(tsv);
     } catch {
@@ -922,7 +933,7 @@ function DataTableGrid<T>({
   };
 
   const doCut = async (s: Sel) => {
-    await doCopy(s);
+    await doCopy(s, 'cut');
     doClear(s);
     flash('切り取りました');
   };
