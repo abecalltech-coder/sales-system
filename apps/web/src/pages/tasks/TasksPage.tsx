@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useDepartments, useMe, useUserOptions } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
@@ -80,6 +80,7 @@ const CATEGORY_STYLE: Record<string, React.CSSProperties> = {
 
 function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; onComplete: () => void; onReopen: () => void; onEdit: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
+  const [showProgress, setShowProgress] = useState(false);
   const imp = IMPORTANCE[t.importance] ?? IMPORTANCE[3];
   const repeat = repeatLabel(t);
   const remind = REMIND_OPTIONS.find((o) => o.value === t.remindMinutes)?.label;
@@ -111,7 +112,22 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
             {repeat && <span>繰り返し: {repeat}</span>}
             {t.currentDueAt && remind && <span>通知: {remind}</span>}
             {t.targetCount > 1 && (
-              <span>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProgress(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    setShowProgress(true);
+                  }
+                }}
+                title="誰が完了/未完了か見る"
+                style={{ color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer' }}
+              >
                 完了 {t.doneCount}/{t.targetCount}人
               </span>
             )}
@@ -144,6 +160,52 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
         </span>
       </div>
       {open && t.detail && <p style={{ margin: '6px 0 0 4px', fontSize: 12.5, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{t.detail}</p>}
+      {showProgress && <ProgressSheet task={t} onClose={() => setShowProgress(false)} />}
+    </div>
+  );
+}
+
+/** 担当者ごとの完了状況(要望: 数字を押すと誰が完了で誰が未完了か分かる) */
+function ProgressSheet({ task, onClose }: { task: TaskItem; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['tasks', 'progress', task.id],
+    queryFn: () =>
+      api.get<{ occurrence: string | null; done: { id: string; name: string; doneAt: string | null }[]; notDone: { id: string; name: string }[] }>(
+        `/tasks/${task.id}/progress`,
+      ),
+  });
+  const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, width: '100%', padding: 14, maxHeight: '80vh', overflowY: 'auto' }}>
+        <h2 style={{ fontSize: 14, margin: '0 0 2px' }}>{task.title}</h2>
+        <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 0 10px' }}>{data?.occurrence ? `${fmtDue(data.occurrence)} の回` : '期日なし'}</p>
+        {isLoading && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
+        {data && (
+          <>
+            <h3 style={{ fontSize: 12, margin: '0 0 4px', color: 'var(--color-danger)' }}>未完了 {data.notDone.length}人</h3>
+            {data.notDone.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: '0 0 8px' }}>なし</p>}
+            {data.notDone.map((u) => (
+              <div key={u.id} style={{ fontSize: 13, padding: '3px 0', borderBottom: '1px solid var(--color-sunken)' }}>
+                {u.name}
+              </div>
+            ))}
+            <h3 style={{ fontSize: 12, margin: '12px 0 4px', color: 'var(--color-success)' }}>完了 {data.done.length}人</h3>
+            {data.done.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>なし</p>}
+            {data.done.map((u) => (
+              <div key={u.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '3px 0', borderBottom: '1px solid var(--color-sunken)' }}>
+                <span>{u.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{fmt(u.doneAt)}</span>
+              </div>
+            ))}
+          </>
+        )}
+        <div style={{ textAlign: 'right', marginTop: 12 }}>
+          <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+            閉じる
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

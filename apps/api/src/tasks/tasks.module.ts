@@ -176,6 +176,35 @@ class TasksService {
     return rows;
   }
 
+  /**
+   * 担当者ごとの完了状況(要望: 複数人のタスクは誰が完了で誰が未完了か分かるように)。
+   * 一覧と同じ「表示中の回」を基準に、その回を完了していれば完了とする。
+   */
+  async progress(id: string, user: AuthenticatedUser) {
+    const t = await this.prisma.task.findFirst({ where: { id, deletedAt: null }, include: { progress: true } });
+    if (!t) throw new NotFoundException('タスクが見つかりません');
+    if (t.createdBy !== user.id && !this.isTarget(t, user) && !user.roles.some((r) => ADMIN_ROLES.includes(r))) {
+      throw new ForbiddenException('このタスクを見る権限がありません');
+    }
+    const users = await this.activeUsers();
+    const mine = this.isTarget(t, user);
+    const shown = mine
+      ? this.currentFor(t, t.progress.find((p) => p.userId === user.id))
+      : t.repeatType === 'NONE'
+        ? nextOccurrence(t, null)
+        : nextOccurrence(t, new Date(Date.now() - 1));
+    const done: { id: string; name: string; doneAt: Date | null }[] = [];
+    const notDone: { id: string; name: string }[] = [];
+    for (const uid of this.targetsOf(t, users)) {
+      const p = t.progress.find((x) => x.userId === uid);
+      const c = this.currentFor(t, p);
+      const name = users.find((u) => u.id === uid)?.name ?? '(不明)';
+      if (c === null || (shown !== null && c.getTime() > shown.getTime())) done.push({ id: uid, name, doneAt: p?.doneAt ?? null });
+      else notDone.push({ id: uid, name });
+    }
+    return { occurrence: shown && shown.getTime() !== NO_DUE.getTime() ? shown : null, done, notDone };
+  }
+
   async create(dto: SaveTaskDto, user: AuthenticatedUser) {
     this.validate(dto);
     const t = await this.prisma.task.create({ data: { ...this.dataOf(dto), createdBy: user.id } });
@@ -337,6 +366,11 @@ class TasksController {
   @Get('alerts')
   alerts(@CurrentUser() user: AuthenticatedUser) {
     return this.tasks.alerts(user);
+  }
+
+  @Get(':id/progress')
+  progress(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tasks.progress(id, user);
   }
 
   @Post()
