@@ -508,6 +508,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
       loading={props.loading}
       rowStyle={props.rowStyle}
       toolbar={modeBar('表で見る', true)}
+      onDeleteRows={props.onDeleteRows}
+      extraRowMenuItems={props.extraRowMenuItems}
+      onReorder={props.onReorder}
+      onDeleteColumn={props.onDeleteColumn}
+      onReorderColumns={props.onReorderColumns}
     />
   );
 }

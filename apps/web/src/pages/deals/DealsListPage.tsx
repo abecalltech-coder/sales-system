@@ -20,7 +20,7 @@ const ADD_COLUMN_KEY = '__add_column__';
 const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
 // 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
 const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
-// 店サポ解約誘導日が当月以前かつ店サポ解約誘導が未のとき行を赤紫にする(要望)。
+// 店サポ解約誘導日が当月以前かつ店サポ解約誘導進捗が未のとき行を赤紫にする(要望)。
 // 「未」は選択肢として明示的に選ばれている場合だけでなく、未入力(空欄)の行も対象に含める
 // (本番データでは「未」を選ばず空欄のまま運用している行がほとんどだったため)。
 // 当月になったらより濃くする(要望: 当月は特に目立たせたい / 当月以前は温度感を高くしたい)。
@@ -137,7 +137,7 @@ export function DealsListPage() {
 
   const rawRows = useMemo(() => data?.items ?? [], [data]);
 
-  // 店サポ解約誘導日が当月以前 かつ 店サポ解約誘導が「未」(空欄含む)の行を薄い赤で塗る(要望)
+  // 店サポ解約誘導日が当月以前 かつ 店サポ解約誘導進捗が「未」(空欄含む)の行を薄い赤で塗る(要望)
   const shopSupportDoneOptionId = fields
     ?.find((f) => f.fieldKey === SHOP_SUPPORT_STATUS_KEY)
     ?.options.find((o) => o.label === SHOP_SUPPORT_STATUS_DONE_LABEL)?.id;
