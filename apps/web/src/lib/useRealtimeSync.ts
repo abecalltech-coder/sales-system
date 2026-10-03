@@ -43,6 +43,8 @@ export function useRealtimeSync() {
     const flush = () => {
       timer = undefined;
       for (const key of pending) queryClient.invalidateQueries({ queryKey: [key] });
+      // トス・アポが変わればサマリーの集計も変わる
+      if (pending.size) queryClient.invalidateQueries({ queryKey: ['department-summary'] });
       pending.clear();
     };
     const handleCaseUpdated = (event: CaseUpdatedEvent) => {
@@ -73,12 +75,15 @@ export function useRealtimeSync() {
       if (e?.id) queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', e.id] });
     };
     s.on('application-sheets.updated', handleSheets);
+    const handleSummary = () => queryClient.invalidateQueries({ queryKey: ['department-summary'] });
+    s.on('department-summary.updated', handleSummary);
     s.on('chat.updated', handleChat);
     s.on('users.updated', handleUsers);
     return () => {
       s.off('case.updated', handleCaseUpdated);
       s.off('chat.updated', handleChat);
       s.off('application-sheets.updated', handleSheets);
+      s.off('department-summary.updated', handleSummary);
       s.off('users.updated', handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };

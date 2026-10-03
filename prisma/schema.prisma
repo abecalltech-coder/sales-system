@@ -1108,3 +1108,15 @@ model ApplicationSheetPhoto {
 
   @@index([sheetId])
 }
+
+// 部署別サマリーの予算(要望: 予算は全て手入力)。人×月ごと。values = { tossUp, preOk, meeting, contract, contractSites }
+model SummaryBudget {
+  periodMonth String
+  userId      String
+  values      Json     @default("{}")
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+
+  @@id([periodMonth, userId])
+}
+
