@@ -123,13 +123,25 @@ export const ROLE_DEFS: RoleDef[] = [
     ]),
   },
   {
+    // 旧「責任者」(要望で「部署責任者」に名称変更。コードは既存の割り当てを保つため据え置き)
     code: 'RESPONSIBLE',
-    name: '責任者',
+    name: '部署責任者',
     permissions: RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
       { resource, action: 'view', scope: 'DEPT' },
       { resource, action: 'edit', scope: 'DEPT' },
       { resource, action: 'create', scope: 'DEPT' },
       { resource, action: 'delete', scope: 'DEPT' },
+    ]),
+  },
+  {
+    // 統括責任者(要望で追加): 全部署を対象にする(システム設定は除く)
+    code: 'GENERAL_RESPONSIBLE',
+    name: '統括責任者',
+    permissions: RESOURCES.filter((r) => r !== 'system').flatMap((resource) => [
+      { resource, action: 'view', scope: 'ALL' },
+      { resource, action: 'edit', scope: 'ALL' },
+      { resource, action: 'create', scope: 'ALL' },
+      { resource, action: 'delete', scope: 'ALL' },
     ]),
   },
 ];

@@ -35,8 +35,15 @@ interface SummaryResponse {
   departments: { id: string; name: string; rows: Row[] }[];
 }
 
-const ROLE_LABELS: Record<string, string> = { SUPER_ADMIN: 'システム管理者', RESPONSIBLE: '責任者', AP_LEADER: 'APリーダー', CL: 'CL', AP: 'AP' };
-const ROLE_ORDER = ['SUPER_ADMIN', 'RESPONSIBLE', 'AP_LEADER', 'CL', 'AP'];
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'システム管理者',
+  GENERAL_RESPONSIBLE: '統括責任者',
+  RESPONSIBLE: '部署責任者',
+  AP_LEADER: 'APリーダー',
+  CL: 'CL',
+  AP: 'AP',
+};
+const ROLE_ORDER = ['SUPER_ADMIN', 'GENERAL_RESPONSIBLE', 'RESPONSIBLE', 'AP_LEADER', 'CL', 'AP'];
 const roleLabel = (roles: string[]) => {
   const r = ROLE_ORDER.find((c) => roles.includes(c));
   return r ? ROLE_LABELS[r] : '';
@@ -119,9 +126,10 @@ export function SummarySheetsPage() {
   const metrics = metricsFor();
 
   // 部署ごとのサマリーは各部署のAPだけ(要望)
+  // APがまだいない部署も枠を出す(要望: CHのAPサマリーが無い)
   const apDepartments = (data?.departments ?? [])
     .map((d) => ({ ...d, rows: d.rows.filter((r) => r.roles.some((c) => AP_ROLES.includes(c))) }))
-    .filter((d) => d.rows.length > 0);
+    .filter((d) => d.id !== 'none' || d.rows.length > 0);
   // CLだけのサマリー(全部署)
   const clRows = (data?.departments ?? []).flatMap((d) => d.rows.filter((r) => r.roles.includes('CL')).map((r) => ({ ...r, deptName: d.name })));
   const preConfirmers = data?.preConfirmers ?? [];
@@ -185,7 +193,13 @@ export function SummarySheetsPage() {
                   </button>
                 }
               >
-                <DepartmentTable period={period} deptName={d.name} rows={d.rows} metrics={metrics} />
+                {d.rows.length > 0 ? (
+                  <DepartmentTable period={period} deptName={d.name} rows={d.rows} metrics={metrics} />
+                ) : (
+                  <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0, padding: '8px 10px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                    この部署に所属する役職AP(APリーダー)のアカウントがまだありません。ユーザー管理で「所属」と「役職」を設定すると表示されます。
+                  </p>
+                )}
               </SummarySection>
             ))}
           </div>

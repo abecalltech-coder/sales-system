@@ -157,7 +157,8 @@ class DepartmentSummaryService {
       departments: [
         ...departments.map((d) => ({ id: d.id, name: d.name, rows: rows.filter((r) => r.departmentId === d.id) })),
         { id: 'none', name: '所属なし', rows: rows.filter((r) => !r.departmentId || !departments.some((d) => d.id === r.departmentId)) },
-      ].filter((d) => d.rows.length > 0),
+        // 部署はアカウントが居なくても枠を出す(所属なしは居るときだけ)
+      ].filter((d) => d.id !== 'none' || d.rows.length > 0),
     };
   }
 

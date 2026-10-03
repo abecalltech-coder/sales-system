@@ -10,7 +10,8 @@ import { ALL_NAV_TABS } from '../../lib/navTabs';
 // 役職(要望: 各アカウントに必ず役職を付与する)。ユーザー管理で選べるロールはこの5つのみ。
 // SUPER_ADMIN/ENTRY_OPERATOR等の旧ロールはDB上は残るが(既存割り当てはそのまま動く)、
 // 新規のロール選択肢としては出さない。
-const ROLE_OPTIONS = ['AP', 'AP_LEADER', 'CL', 'SUPER_ADMIN', 'RESPONSIBLE'];
+// 表示順(要望): AP / APリーダー / CL / 部署責任者 / 統括責任者 / システム管理者
+const ROLE_OPTIONS = ['AP', 'AP_LEADER', 'CL', 'RESPONSIBLE', 'GENERAL_RESPONSIBLE', 'SUPER_ADMIN'];
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'システム管理者',
@@ -25,7 +26,8 @@ const ROLE_LABELS: Record<string, string> = {
   AP: 'AP',
   AP_LEADER: 'APリーダー',
   CL: 'CL',
-  RESPONSIBLE: '責任者',
+  RESPONSIBLE: '部署責任者',
+  GENERAL_RESPONSIBLE: '統括責任者',
 };
 
 const STATUS_LABEL: Record<string, string> = { PENDING: '承認待ち', ACTIVE: '在籍中', SUSPENDED: '停止中', RETIRED: '退職済み' };

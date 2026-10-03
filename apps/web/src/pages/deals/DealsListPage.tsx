@@ -20,7 +20,7 @@ const MANAGE_OPTIONS = '__manage_options__';
 const ADD_COLUMN_KEY = '__add_column__';
 const ASSIGNEE_FIELD_KEY = 'assignee_user_id';
 // 案件を「その人だけ」で絞り込む対象の役職(要望: CL・責任者ごとに表示)
-const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE'];
+const PERSON_FILTER_ROLES = ['CL', 'RESPONSIBLE', 'GENERAL_RESPONSIBLE'];
 // 店サポ解約誘導日が当月以前かつ店サポ解約誘導進捗が未のとき行を赤紫にする(要望)。
 // 「未」は選択肢として明示的に選ばれている場合だけでなく、未入力(空欄)の行も対象に含める
 // (本番データでは「未」を選ばず空欄のまま運用している行がほとんどだったため)。
