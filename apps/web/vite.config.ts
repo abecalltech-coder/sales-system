@@ -18,6 +18,8 @@ export default defineConfig({
       injectManifest: {
         // ビルド後の総容量が既定の上限に近いため、通知用スクリプトを取り込むぶんだけ余裕を持たせる
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // 明細読み取り(OCR)のエンジン・学習データは大きいので、使う人だけが初回に読み込む(事前キャッシュしない)
+        globIgnores: ['**/ocr/**'],
       },
       manifest: {
         name: 'CH partners実績管理',

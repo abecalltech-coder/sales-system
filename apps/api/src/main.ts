@@ -14,7 +14,16 @@ async function bootstrap() {
   // チャットの写真・アカウント写真(縮小済み data URL)を受け取れるよう上限を広げる
   app.useBodyParser('json', { limit: '5mb' });
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          // 明細読み取り(ブラウザ内OCR)で WebAssembly を動かすため 'wasm-unsafe-eval' を許可する(外部スクリプトは引き続き不可)
+          scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
+        },
+      },
+    }),
+  );
   // 一覧は全件を返すため(要望: 1画面で全件表示)、JSONをgzip圧縮して転送量を大きく減らす
   app.use(compression());
   app.use(cookieParser());

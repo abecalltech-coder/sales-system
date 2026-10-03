@@ -13,3 +13,6 @@ prisma/migrations/.gitkeep
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# 明細読み取り(OCR)用。ビルド時に node_modules からコピーする
+apps/web/public/ocr/
