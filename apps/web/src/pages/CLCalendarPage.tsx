@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../components/AppLayout';
 import { useAppointments, useStatuses, useDepartments, useUsers, AppointmentListItem, REPORT_CHECKPOINTS, useMe, useCalendarSettings, StatusMasterItem } from '../hooks/useApi';
@@ -506,7 +506,12 @@ function buildDisplayEvents(
   return result;
 }
 
-/** 携帯用: 週の日付ストリップ + 選んだ日の予定リスト(時間順)。予定を押すと従来の編集モーダルを開く。 */
+/**
+ * 携帯用(要望): 上部の日付(週)から日を選び、選んだ日を時間の目盛りつきで縦スクロール表示する。
+ * 予定の部分を左右にスワイプすると前後の日へ移動。予定を押すと従来の編集モーダルを開く。
+ */
+const PHONE_HOUR_HEIGHT = 56;
+
 function PhoneAgenda({
   anchor,
   events,
@@ -522,95 +527,193 @@ function PhoneAgenda({
 }) {
   const days = weekGridDays(anchor);
   const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const dayEvents = events.filter((e) => sameDay(e.start, anchor)).sort((a, b) => a.start.getTime() - b.start.getTime());
+  const dayEvents = events.filter((e) => sameDay(e.start, anchor));
   const hm = (d: Date) => `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
   const dow = (d: Date) => '日月火水木金土'[d.getDay()];
+  const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR + 1 }, (_, i) => DAY_START_HOUR + i);
+  const gridHeight = (DAY_END_HOUR - DAY_START_HOUR) * PHONE_HOUR_HEIGHT;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  // 日を切り替えたら、最初の予定(無ければ今の時刻/朝)のあたりまでスクロールする
+  const firstStart = dayEvents.reduce<Date | null>((m, e) => (!m || e.start < m ? e.start : m), null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = firstStart ?? (isToday(anchor) ? now : new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), 9));
+    const min = target.getHours() * 60 + target.getMinutes() - DAY_START_HOUR * 60 - 30;
+    el.scrollTop = Math.max(0, (min / 60) * PHONE_HOUR_HEIGHT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor.toDateString()]);
+
+  const moveDay = (dir: -1 | 1) => onSelectDay(addDays(anchor, dir));
+  const nowTop = ((now.getHours() * 60 + now.getMinutes() - DAY_START_HOUR * 60) / 60) * PHONE_HOUR_HEIGHT;
 
   return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3, marginBottom: 8 }}>
-        {days.map((d) => {
-          const on = sameDay(d, anchor);
-          const has = events.some((e) => sameDay(e.start, d));
-          return (
-            <button
-              key={d.toISOString()}
-              type="button"
-              onClick={() => onSelectDay(d)}
-              style={{
-                height: 48,
-                padding: 0,
-                border: 'none',
-                borderRadius: 10,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 1,
-                background: on ? 'var(--color-primary)' : 'var(--color-surface)',
-                color: on ? '#fff' : isToday(d) ? 'var(--color-primary)' : 'var(--color-text)',
-              }}
-            >
-              <span style={{ fontSize: 10 }}>{dow(d)}</span>
-              <span style={{ fontSize: 15, fontWeight: 900 }}>{d.getDate()}</span>
-              <span style={{ width: 4, height: 4, borderRadius: 2, background: has ? (on ? '#fff' : 'var(--color-primary)') : 'transparent' }} />
-            </button>
-          );
-        })}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 6 }}>
+        <button type="button" onClick={() => onSelectDay(addDays(anchor, -7))} aria-label="前の週" style={{ width: 26, height: 48, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', fontSize: 18 }}>
+          ‹
+        </button>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3 }}>
+          {days.map((d) => {
+            const on = sameDay(d, anchor);
+            const has = events.some((e) => sameDay(e.start, d));
+            return (
+              <button
+                key={d.toISOString()}
+                type="button"
+                onClick={() => onSelectDay(d)}
+                style={{
+                  height: 48,
+                  padding: 0,
+                  border: 'none',
+                  borderRadius: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                  background: on ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: on ? '#fff' : isToday(d) ? 'var(--color-primary)' : 'var(--color-text)',
+                }}
+              >
+                <span style={{ fontSize: 10 }}>{dow(d)}</span>
+                <span style={{ fontSize: 15, fontWeight: 900 }}>{d.getDate()}</span>
+                <span style={{ width: 4, height: 4, borderRadius: 2, background: has ? (on ? '#fff' : 'var(--color-primary)') : 'transparent' }} />
+              </button>
+            );
+          })}
+        </div>
+        <button type="button" onClick={() => onSelectDay(addDays(anchor, 7))} aria-label="次の週" style={{ width: 26, height: 48, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', fontSize: 18 }}>
+          ›
+        </button>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 2px 4px' }}>
-        {anchor.getMonth() + 1}/{anchor.getDate()}({dow(anchor)}) の予定 {dayEvents.length}件
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 2px 4px', fontSize: 12 }}>
+        <button type="button" onClick={() => moveDay(-1)} style={{ fontSize: 11, padding: '2px 8px' }}>
+          ‹ 前日
+        </button>
+        <span style={{ flex: 1, textAlign: 'center', fontWeight: 900 }}>
+          {anchor.getMonth() + 1}/{anchor.getDate()}({dow(anchor)}) 予定 {dayEvents.length}件
+        </span>
+        <button type="button" onClick={() => moveDay(1)} style={{ fontSize: 11, padding: '2px 8px' }}>
+          翌日 ›
+        </button>
       </div>
-      <div className="m-card-list">
-        {dayEvents.length === 0 && (
-          <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: 'var(--color-text-faint)' }}>予定はありません</div>
-        )}
-        {dayEvents.map((ev) => {
-          const a = ev.appointment;
-          const phone = a.customer?.phone;
-          const address = a.visitAddress ?? a.customer?.address;
-          return (
-            <div key={ev.key} style={{ display: 'flex', gap: 8, padding: '6px 10px', borderBottom: '1px solid var(--color-sunken)' }}>
-              <div style={{ width: 40, flexShrink: 0, textAlign: 'right', paddingTop: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 900 }}>{hm(ev.start)}</div>
-                {ev.end && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{hm(ev.end)}</div>}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
+
+      <div
+        ref={scrollRef}
+        // 左右にスワイプで前後の日へ(縦スクロールは妨げない)
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          swipe.current = { x: t.clientX, y: t.clientY };
+        }}
+        onTouchEnd={(e) => {
+          const s = swipe.current;
+          swipe.current = null;
+          if (!s) return;
+          const t = e.changedTouches[0];
+          const dx = t.clientX - s.x;
+          const dy = t.clientY - s.y;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) moveDay(dx < 0 ? 1 : -1);
+        }}
+        style={{
+          height: 'calc(var(--viewport-height, 100vh) - 300px)',
+          minHeight: 280,
+          overflowY: 'auto',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)',
+        }}
+      >
+        <div style={{ position: 'relative', height: gridHeight + 12, marginTop: 6 }}>
+          {hours.map((h, i) => (
+            <div key={h} style={{ position: 'absolute', top: i * PHONE_HOUR_HEIGHT, left: 0, right: 0, display: 'flex', alignItems: 'flex-start' }}>
+              <span style={{ width: 40, textAlign: 'right', paddingRight: 6, fontSize: 10, color: 'var(--color-text-faint)', transform: 'translateY(-6px)' }}>{h % 24}:00</span>
+              <span style={{ flex: 1, borderTop: '1px solid var(--color-border)' }} />
+            </div>
+          ))}
+          {isToday(anchor) && nowTop >= 0 && nowTop <= gridHeight && (
+            <div aria-hidden style={{ position: 'absolute', left: 40, right: 0, top: nowTop, borderTop: '2px solid var(--color-danger)', zIndex: 2 }} />
+          )}
+          {layoutOverlaps(dayEvents).map(({ ev, lane, cols }) => {
+            const a = ev.appointment;
+            const startMin = ev.start.getHours() * 60 + ev.start.getMinutes() - DAY_START_HOUR * 60;
+            const durationMin = ev.end ? (ev.end.getTime() - ev.start.getTime()) / 60000 : 60;
+            const top = (Math.max(startMin, 0) / 60) * PHONE_HOUR_HEIGHT;
+            const height = Math.max((durationMin / 60) * PHONE_HOUR_HEIGHT, 22);
+            const address = a.visitAddress ?? a.customer?.address;
+            const textColor = readableTextColorOf(ev.color);
+            return (
+              <div
+                key={ev.key}
+                style={{
+                  position: 'absolute',
+                  top,
+                  height,
+                  left: `calc(44px + (100% - 48px) * ${lane / cols})`,
+                  width: `calc((100% - 48px) / ${cols} - 2px)`,
+                  boxSizing: 'border-box',
+                  borderRadius: 6,
+                  background: ev.color,
+                  color: textColor,
+                  padding: '2px 5px',
+                  overflow: 'hidden',
+                  zIndex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1,
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => onEventClick(a, ev.autoTitle)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: 0, border: 'none', background: 'transparent', textAlign: 'left', font: 'inherit', color: 'inherit' }}
+                  style={{ padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', textAlign: 'left', font: 'inherit', color: 'inherit', minWidth: 0 }}
                 >
-                  <span style={{ width: 8, height: 8, borderRadius: 4, flexShrink: 0, background: ev.color }} />
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ display: 'block', fontSize: 10, opacity: 0.9 }}>
+                    {hm(ev.start)}
+                    {ev.end ? `〜${hm(ev.end)}` : ''} {closerLabel(a.closerStatusId)}
+                  </span>
+                  <span style={{ display: 'block', fontSize: 12, fontWeight: 900, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: height < 40 ? 'nowrap' : 'normal' }}>
                     {ev.title}
                   </span>
                 </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{closerLabel(a.closerStatusId)}</span>
-                  {phone && (
-                    <a href={`tel:${phone}`} className="m-chip-link">
-                      電話
-                    </a>
-                  )}
-                  {address && (
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="m-chip-link">
-                      地図
-                    </a>
-                  )}
-                  {a.meetingUrl && (
-                    <a href={a.meetingUrl} target="_blank" rel="noreferrer" className="m-chip-link">
-                      Meet
-                    </a>
-                  )}
-                </div>
+                {height >= 56 && (address || a.meetingUrl) && (
+                  <span style={{ display: 'flex', gap: 4, marginTop: 'auto' }}>
+                    {address && (
+                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="m-chip-link">
+                        地図
+                      </a>
+                    )}
+                    {a.meetingUrl && (
+                      <a href={a.meetingUrl} target="_blank" rel="noreferrer" className="m-chip-link">
+                        Meet
+                      </a>
+                    )}
+                  </span>
+                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
+}
+
+/** 予定の色の上で読みやすい文字色 */
+function readableTextColorOf(bg: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(bg.trim());
+  if (!m) return '#fff';
+  const n = parseInt(m[1], 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return lum > 0.62 ? '#111827' : '#fff';
 }
 
 function MonthGrid({

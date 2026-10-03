@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
@@ -308,9 +308,36 @@ function FieldInput({ f, values, onChange }: { f: FieldDef; values: Section; onC
   const unit = f.kind === 'yen' ? '円' : f.kind === 'kwh' ? 'kwh' : f.kind === 'percent' ? '%' : null;
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <input value={v} onChange={(e) => set(e.target.value)} placeholder={f.placeholder} style={{ flex: 1, minWidth: 0, fontSize: 13 }} />
+      <AutoText value={v} onChange={set} placeholder={f.placeholder} />
       {unit && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{unit}</span>}
     </span>
+  );
+}
+
+/**
+ * 長い文字は折り返して全文を表示する入力欄(要望: 明細情報のテキスト全体が見えるように)。
+ * 内容に合わせて高さが伸びる。改行は入れない(Enterは無視)。
+ */
+function AutoText({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, ''))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.preventDefault();
+      }}
+      style={{ flex: 1, minWidth: 0, width: '100%', boxSizing: 'border-box', fontSize: 13, lineHeight: 1.45, resize: 'none', overflow: 'hidden', padding: '4px 6px', wordBreak: 'break-all' }}
+    />
   );
 }
 
@@ -355,7 +382,7 @@ function ZipAddress({ zip, address, onChange }: { zip: string; address: string; 
         {busy && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>検索中...</span>}
         {msg && <span style={{ fontSize: 10, color: 'var(--color-warning)' }}>{msg}</span>}
       </span>
-      <input value={address} onChange={(e) => onChange(zip, e.target.value)} placeholder="住所(郵便番号から自動表示・番地を追記)" style={{ fontSize: 13 }} />
+      <AutoText value={address} onChange={(v) => onChange(zip, v)} placeholder="住所(郵便番号から自動表示・番地を追記)" />
     </span>
   );
 }
