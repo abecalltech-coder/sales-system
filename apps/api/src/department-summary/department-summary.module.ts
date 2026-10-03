@@ -14,6 +14,7 @@ import { AuthenticatedUser } from '../auth/types';
  * - 稼働人数 = 稼働時間 ÷ 8、席数 = 稼働時間 ÷ 176(画面で小数第2位まで)
  * - 予算(トスアップ/前確OK/商談実施/商談成約/成約拠点): 手入力
  * - コール数: 最終報告の コール数(SF)+コール数(白地) の月合計、DPH = コール数 ÷ 稼働時間
+ * - 前確OK: トス実績の進捗が「前確OK」の件数
  * - トス側(前確OK・通過率・有効前確OK): トス実績の「AP」が本人の名前のもの
  * - アポ側(商談実施・ET・リスケ・前連失注・残訪問・Pt): アポ実績の「AP」が本人の名前のもの。
  *   役職がCLの人は、アポ実績の「CL」が本人の名前のもの
@@ -93,7 +94,8 @@ class DepartmentSummaryService {
     }
 
     // 判定に使う選択肢
-    const isPreOk = (id: string | null) => matches(st(id), ['PROGRESS_APPOINTMENT', 'PROGRESS_PRE_CONFIRM_OK'], ['アポイント', '前確OK']);
+    // 前確OK(要望: 「前確OK」から拾う。旧「アポイント」は前確OKへ統合済み)
+    const isPreOk = (id: string | null) => matches(st(id), ['PROGRESS_PRE_CONFIRM_OK'], ['前確OK']);
     const isInvalidAppo = (id: string | null) =>
       matches(st(id), ['PROG_CANCELLED', 'PROG_NO_TRANSFER', 'PROG_BACK_TO_AP'], ['キャンセル', '取次不可', 'AP戻し']);
     const isEt = (id: string | null) => matches(st(id), ['PROG_ET'], ['ET']);

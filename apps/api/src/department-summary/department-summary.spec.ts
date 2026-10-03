@@ -16,7 +16,8 @@ function prismaMock() {
     },
     statusMaster: {
       findMany: jest.fn().mockResolvedValue([
-        S('tp-apo', 'TOSS_PROGRESS', 'PROGRESS_APPOINTMENT', 'アポイント'),
+        S('tp-apo', 'TOSS_PROGRESS', 'PROGRESS_PRE_CONFIRM_OK', '前確OK'),
+        S('tp-old', 'TOSS_PROGRESS', 'PROGRESS_APPOINTMENT', 'アポイント'),
         S('tp-ng', 'TOSS_PROGRESS', 'PROGRESS_NG', 'NG'),
         S('ap-et', 'APPOINTMENT_PROGRESS', 'PROG_ET', 'ET'),
         S('ap-cancel', 'APPOINTMENT_PROGRESS', 'PROG_CANCELLED', 'キャンセル'),
@@ -37,6 +38,8 @@ function prismaMock() {
         { id: 't1', apStaffName: '山田太郎', progressStatusId: 'tp-apo' },
         { id: 't2', apStaffName: '山田　太郎', progressStatusId: 'tp-apo' },
         { id: 't3', apStaffName: '山田太郎', progressStatusId: 'tp-ng' },
+        // 旧「アポイント」は数えない
+        { id: 't4', apStaffName: '山田太郎', progressStatusId: 'tp-old' },
       ]),
     },
     appointment: {
@@ -69,7 +72,7 @@ describe('部署別サマリー', () => {
     expect(ap).toMatchObject({
       workHours: 15.5, // 対象月の日だけ
       calls: 124, // SF + 白地
-      tossCount: 3,
+      tossCount: 4,
       preOk: 2,
       validPreOk: 1, // t2 はアポがキャンセル
       meetingDone: 1,

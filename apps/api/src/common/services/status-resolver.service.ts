@@ -16,6 +16,16 @@ export class StatusResolverService {
     return status.id;
   }
 
+  /**
+   * トスの進捗が「アポ詳細を自動作成する進捗」か(要望: 「アポイント」を廃止し「前確OK」に一本化)。
+   * 画面から追加した選択肢は内部コードが自動採番のため、表示名「前確OK」でも判定する。
+   */
+  async isTossConversionProgress(statusId: string): Promise<boolean> {
+    const s = await this.prisma.statusMaster.findUnique({ where: { id: statusId } });
+    if (!s || s.category !== 'TOSS_PROGRESS') return false;
+    return ['PROGRESS_PRE_CONFIRM_OK', 'PROGRESS_APPOINTMENT'].includes(s.internalCode) || s.displayName.trim() === '前確OK';
+  }
+
   /** statusIdからinternalCodeを取得(自動処理の判定に使用。表示名ではなくこちらで判定すること) */
   async internalCodeOf(statusId: string): Promise<string | null> {
     const status = await this.prisma.statusMaster.findUnique({ where: { id: statusId } });

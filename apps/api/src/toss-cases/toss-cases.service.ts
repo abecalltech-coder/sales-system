@@ -294,12 +294,12 @@ export class TossCasesService {
       },
     );
 
-    // 進捗(=ステータス)が「アポイント」に変わった場合、アポ詳細へ自動移行する。
+    // 進捗(=ステータス)が「前確OK」(旧「アポイント」)に変わった場合、アポ詳細へ自動移行する。
     // トスの状況管理は進捗(TOSS_PROGRESS)に一本化したため、判定は progressStatusId を主にし、
     // 旧UI/Googleフォーム互換のため statusId=TOSS_APPOINTMENT でも発火させる。
     const changedToAppointment = async (): Promise<boolean> => {
       if (dto.progressStatusId && dto.progressStatusId !== existing.progressStatusId) {
-        if ((await this.statusResolver.internalCodeOf(dto.progressStatusId)) === 'PROGRESS_APPOINTMENT') return true;
+        if (await this.statusResolver.isTossConversionProgress(dto.progressStatusId)) return true;
       }
       if (dto.statusId && dto.statusId !== existing.statusId) {
         if ((await this.statusResolver.internalCodeOf(dto.statusId)) === 'TOSS_APPOINTMENT') return true;
@@ -329,9 +329,9 @@ export class TossCasesService {
       },
     });
 
-    // 一括で「アポイント」へ変更した場合も自動移行を発火させる
+    // 一括で「前確OK」へ変更した場合も自動移行を発火させる
     const toAppointment =
-      (dto.progressStatusId && (await this.statusResolver.internalCodeOf(dto.progressStatusId)) === 'PROGRESS_APPOINTMENT') ||
+      (dto.progressStatusId && (await this.statusResolver.isTossConversionProgress(dto.progressStatusId))) ||
       (dto.statusId && (await this.statusResolver.internalCodeOf(dto.statusId)) === 'TOSS_APPOINTMENT');
     if (toAppointment) {
       for (const id of dto.ids) {

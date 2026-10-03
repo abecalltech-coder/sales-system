@@ -45,7 +45,7 @@ export function TossCasesListPage() {
   const { data: progressOptions } = useStatuses('TOSS_PROGRESS');
   const { data: ngReasonOptions } = useStatuses('TOSS_NG_REASON');
   const { data: meetingFormatOptions } = useStatuses('MEETING_FORMAT');
-  // アポイントに変更するときに選ぶ商談形式はアポ実績側の選択肢(共通オフならアポ用)
+  // 前確OKにする(アポ詳細を作る)ときに選ぶ商談形式はアポ実績側の選択肢(共通オフならアポ用)
   const appoCat = useAppointmentCategory();
   const { data: appoMeetingFormatOptions } = useStatuses(appoCat('MEETING_FORMAT'));
   const { data: industryOptions } = useStatuses('INDUSTRY');
@@ -66,7 +66,7 @@ export function TossCasesListPage() {
   const [error, setError] = useState<string | null>(null);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
-  // ステータスを「アポイント」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
+  // 進捗を「前確OK」に変更する際、前連日時の入力を必須にするための確認モーダル(セクション追加要望)。
   const [preContactModal, setPreContactModal] = useState<{ row: TossCaseListItem; progressStatusId: string } | null>(null);
   const [preContactInput, setPreContactInput] = useState('');
   const [meetingAtInput, setMeetingAtInput] = useState('');
@@ -157,7 +157,11 @@ export function TossCasesListPage() {
     EXISTING_CONTRACT: (r) => r.existingContract,
     PROPOSAL_LOCATION: (r) => r.proposal,
   });
-  const progressInternalCode = (id: string) => progressOptions?.find((s) => s.id === id)?.internalCode;
+  // アポ詳細を自動作成する進捗(要望: 「アポイント」を廃止し「前確OK」に一本化)
+  const isConversionProgress = (id: string) => {
+    const s = progressOptions?.find((x) => x.id === id);
+    return !!s && (['PROGRESS_PRE_CONFIRM_OK', 'PROGRESS_APPOINTMENT'].includes(s.internalCode) || s.displayName.trim() === '前確OK');
+  };
 
   const filterValueFns: Record<string, FilterValueFn> = {
     tossDate: (r) => formatDate(r.receivedAt),
@@ -403,8 +407,8 @@ export function TossCasesListPage() {
           value={r.progressStatusId}
           options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => {
-            // 「アポイント」に変えたら前連日時・商談日時・商談形式の入力を求め、アポ詳細を自動生成する
-            if (progressInternalCode(v) === 'PROGRESS_APPOINTMENT') {
+            // 「前確OK」に変えたら前連日時・商談日時・商談形式の入力を求め、アポ詳細を自動生成する
+            if (isConversionProgress(v)) {
               setPreContactModal({ row: r, progressStatusId: v });
               setPreContactInput('');
               setMeetingAtInput('');
@@ -420,8 +424,8 @@ export function TossCasesListPage() {
       copyValue: (r) => idOptLabel(progressOptions, r.progressStatusId),
       pasteValue: (r, text) => {
         const id = idOptByLabel(progressOptions, text);
-        // 貼り付けでアポイントに変えると詳細フォーマット入力を挟めないため、アポイントへの一括変更は無視する
-        if (id && progressInternalCode(id) !== 'PROGRESS_APPOINTMENT') save(r, { progressStatusId: id });
+        // 貼り付けで前確OKに変えると詳細フォーマット入力を挟めないため、前確OKへの貼り付けは無視する
+        if (id && !isConversionProgress(id)) save(r, { progressStatusId: id });
       },
     },
     {
@@ -616,7 +620,7 @@ export function TossCasesListPage() {
           <div onClick={(e) => e.stopPropagation()} className="modal" style={{ maxWidth: 380, padding: 18 }}>
             <h2 className="modal-title" style={{ marginBottom: 8 }}>前連日時・商談日時を入力してください</h2>
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.55 }}>
-              「{preContactModal.row.customer?.corporateName ?? '(店舗名未設定)'}」をアポイントへ変更します。
+              「{preContactModal.row.customer?.corporateName ?? '(店舗名未設定)'}」を前確OKにして、アポ詳細を作成します。
               前連日時はアポ実績に反映され、CLカレンダーに30分予定として登録されます。
               商談日時はアポ実績の商談日/商談時間・カレンダーの予定日時・備考欄に反映されます。
             </p>
@@ -674,7 +678,7 @@ export function TossCasesListPage() {
                   });
                 }}
               >
-                確定してアポイントへ変更
+                確定して前確OKにする
               </button>
             </div>
           </div>
