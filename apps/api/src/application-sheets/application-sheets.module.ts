@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module,
 import { Prisma } from '@prisma/client';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types';
 
@@ -20,7 +21,15 @@ class AddPhotoDto {
 
 @Injectable()
 class ApplicationSheetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
+
+  /** 申込情報は全員で共有するため、変更を全員の画面へ知らせる(内容はAPIで取り直す) */
+  private changed(id: string) {
+    this.realtime.emitToAll('application-sheets.updated', { id });
+  }
 
   async list() {
     const rows = await this.prisma.applicationSheet.findMany({
@@ -35,9 +44,9 @@ class ApplicationSheetsService {
     return rows.map(({ _count, ...r }) => ({ ...r, photoCount: _count.photos, createdByName: nameOf(r.createdBy), updatedByName: nameOf(r.updatedBy) }));
   }
 
-  create(dto: SaveSheetDto, userId: string) {
+  async create(dto: SaveSheetDto, userId: string) {
     if (!dto.hasJuryo && !dto.hasDoryoku) throw new BadRequestException('従量・動力のどちらか(または両方)を選んでください');
-    return this.prisma.applicationSheet.create({
+    const row = await this.prisma.applicationSheet.create({
       data: {
         inputCode: dto.inputCode || null,
         hasJuryo: !!dto.hasJuryo,
@@ -47,6 +56,8 @@ class ApplicationSheetsService {
         updatedBy: userId,
       },
     });
+    this.changed(row.id);
+    return row;
   }
 
   async update(id: string, dto: SaveSheetDto, userId: string) {
@@ -55,7 +66,7 @@ class ApplicationSheetsService {
     const hasJuryo = dto.hasJuryo ?? existing.hasJuryo;
     const hasDoryoku = dto.hasDoryoku ?? existing.hasDoryoku;
     if (!hasJuryo && !hasDoryoku) throw new BadRequestException('従量・動力のどちらか(または両方)を選んでください');
-    return this.prisma.applicationSheet.update({
+    const row = await this.prisma.applicationSheet.update({
       where: { id },
       data: {
         ...(dto.inputCode !== undefined ? { inputCode: dto.inputCode || null } : {}),
@@ -65,6 +76,8 @@ class ApplicationSheetsService {
         updatedBy: userId,
       },
     });
+    this.changed(id);
+    return row;
   }
 
   /** 写真の一覧(小さい画像のみ。元の大きさは photo() で個別に取る) */
@@ -91,16 +104,19 @@ class ApplicationSheetsService {
       select: { id: true, section: true, thumb: true, createdAt: true },
     });
     await this.prisma.applicationSheet.update({ where: { id: sheetId }, data: { updatedBy: userId } });
+    this.changed(sheetId);
     return p;
   }
 
   async removePhoto(photoId: string) {
-    await this.prisma.applicationSheetPhoto.delete({ where: { id: photoId } });
+    const p = await this.prisma.applicationSheetPhoto.delete({ where: { id: photoId } });
+    this.changed(p.sheetId);
     return { ok: true };
   }
 
   async remove(id: string) {
     await this.prisma.applicationSheet.update({ where: { id }, data: { deletedAt: new Date() } });
+    this.changed(id);
     return { ok: true };
   }
 }

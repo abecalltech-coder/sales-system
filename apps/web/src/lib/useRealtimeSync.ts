@@ -67,11 +67,18 @@ export function useRealtimeSync() {
       queryClient.invalidateQueries({ queryKey: ['user-options'] });
       queryClient.invalidateQueries({ queryKey: ['chat'] });
     };
+    // 申込情報/明細(全員で共有)
+    const handleSheets = (e: { id?: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
+      if (e?.id) queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', e.id] });
+    };
+    s.on('application-sheets.updated', handleSheets);
     s.on('chat.updated', handleChat);
     s.on('users.updated', handleUsers);
     return () => {
       s.off('case.updated', handleCaseUpdated);
       s.off('chat.updated', handleChat);
+      s.off('application-sheets.updated', handleSheets);
       s.off('users.updated', handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };

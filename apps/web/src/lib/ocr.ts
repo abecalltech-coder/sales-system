@@ -173,9 +173,69 @@ export function extractBillFields(text: string): BillField[] {
   }
   add('力率', /力率[^0-9]{0,4}(\d{2,3})\s*%/, (m) => `${m[1]}%`);
   add('明細月', /((?:\d{4}年)?\d{1,2}月)分/);
-  add('住所', /((?:東京都|北海道|(?:京都|大阪)府|[^\s]{2,3}県)[^\s]{2,30}\d[0-9\-－丁目番地号]*)/);
+  {
+    const addr = extractAddress(text);
+    if (addr) out.push({ label: '住所', value: addr });
+  }
   add('電話番号', /(0\d{1,4}-\d{1,4}-\d{3,4})/);
   // 前後に数字・ハイフンが続くもの(お客さま番号の一部など)は郵便番号とみなさない
   add('郵便番号', /(?:〒\s*|(?<![\d-]))(\d{3}-\d{4})(?![\d-])/);
   return out;
 }
+
+const PREF = '(?:北海道|東京都|(?:京都|大阪)府|(?:青森|岩手|宮城|秋田|山形|福島|茨城|栃木|群馬|埼玉|千葉|神奈川|新潟|富山|石川|福井|山梨|長野|岐阜|静岡|愛知|三重|滋賀|兵庫|奈良|和歌山|鳥取|島根|岡山|広島|山口|徳島|香川|愛媛|高知|福岡|佐賀|長崎|熊本|大分|宮崎|鹿児島|沖縄)県)';
+// 住所の見出し(電気の使用場所を優先)
+const ADDRESS_LABEL = /(?:ご?使用場所|需要場所|供給場所|設置場所|ご?住所|所在地|ご?契約住所)\s*[:：]?\s*/;
+// 住所の後ろに続く別項目の見出し(ここで住所を打ち切る)
+const ADDRESS_STOP = /\s*(?:電話|TEL|Tel|℡|お客(?:さま|様)番号|供給地点|ご?契約|検針|ご?使用量|ご?請求|お支払|メーター|計器)/;
+
+/** 住所らしい続きの行か(建物名・部屋番号・番地の続きなど) */
+function isAddressContinuation(line: string): boolean {
+  if (!line || line.length > 40) return false;
+  if (ADDRESS_LABEL.test(line) || ADDRESS_STOP.test(line) || /[:：]/.test(line)) return false;
+  if (/(?:様|殿)$/.test(line) || /円|kWh|%/.test(line)) return false;
+  return /(?:ビル|マンション|ハイツ|コーポ|荘|館|棟|号室|階|F$|\d+-\d+|\d+号|丁目|番地?)/i.test(line);
+}
+
+/**
+ * 住所(要望: 途中までしか拾えない → 番地・建物名まで拾う)。
+ * 1) 「ご使用場所」「需要場所」「住所」などの見出しの後ろ 2) 都道府県から始まる行、の順に探し、
+ *    行末まで(別項目の見出しが出たらそこまで)+ 建物名などの続きの行もつなげる。
+ */
+export function extractAddress(text: string): string | null {
+  const lines = text
+    .split('\n')
+    .map((l) => l.replace(/[−ー‐－–—]/g, (c, i, s) => (/\d/.test(s[i - 1] ?? '') ? '-' : c)).trim())
+    .filter(Boolean);
+  const cut = (s: string) => {
+    const m = s.match(ADDRESS_STOP);
+    return (m ? s.slice(0, m.index) : s).replace(/^〒?\s*\d{3}-?\d{4}\s*/, '').trim();
+  };
+  const withContinuation = (i: number, first: string) => {
+    let addr = first;
+    const next = lines[i + 1];
+    if (next && isAddressContinuation(next)) addr += ` ${next}`;
+    return addr.trim();
+  };
+
+  // 1) 見出しつき
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(ADDRESS_LABEL);
+    if (!m) continue;
+    let rest = cut(lines[i].slice((m.index ?? 0) + m[0].length));
+    let at = i;
+    if (!rest && lines[i + 1]) {
+      at = i + 1;
+      rest = cut(lines[i + 1]);
+    }
+    if (rest && (new RegExp(PREF).test(rest) || /[市区町村郡]/.test(rest))) return withContinuation(at, rest);
+  }
+  // 2) 都道府県から始まる行
+  const prefRe = new RegExp(`(${PREF}.*)`);
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(prefRe);
+    if (m && /[市区町村郡]/.test(m[1])) return withContinuation(i, cut(m[1]));
+  }
+  return null;
+}
+

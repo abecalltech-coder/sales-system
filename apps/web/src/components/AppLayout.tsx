@@ -23,8 +23,9 @@ const TOP_NAV: NavItem[] = [
   { to: '/summary', label: 'サマリー', icon: 'chart' },
   { to: '/chat', label: 'チャット', icon: 'chat' },
 ];
-/** チャットは全員が使う連絡手段のため、役職ごとのタブ表示設定に関わらず常に表示する */
-const ALWAYS_VISIBLE = new Set(['/chat']);
+/** チャット・申込情報/明細は全員で使うため、役職ごとのタブ表示設定に関わらず常に表示する */
+// 申込情報/明細も全員で共有して使う(要望: 他のアカウントからも見られるように)
+const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets']);
 
 /** チャットの未読数バッジ */
 function ChatUnreadBadge({ floating }: { floating?: boolean }) {
