@@ -49,6 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/deals', label: '案件管理', icon: 'folder' },
       { to: '/cl-calendar', label: 'CLカレンダー', icon: 'calendar' },
       { to: '/final-report', label: '最終報告', icon: 'clipboard' },
+      { to: '/application-sheets', label: '申込情報/明細', icon: 'form' },
     ],
   },
 ];
@@ -77,6 +78,7 @@ const COLLAPSE_STORAGE_KEY = 'nav.collapsed';
 /** 携帯の下メニューは幅が狭いため短い呼び名にする */
 const PHONE_LABELS: Record<string, string> = {
   '/toss-cases': 'トス実績',
+  '/application-sheets': '申込/明細',
   '/appointments': 'アポ実績',
   '/contracts': 'エントリー',
   '/admin/users': 'ユーザー',

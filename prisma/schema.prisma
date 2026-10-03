@@ -1073,3 +1073,22 @@ model ChatNotifySetting {
 
   @@id([endpoint, roomId])
 }
+
+// ============================================================
+// 申込情報/明細(要望: 申込情報と従量・動力の電気情報をまとめ、全体コピーできるようにする)
+// ============================================================
+model ApplicationSheet {
+  id         String    @id @default(uuid())
+  inputCode  String? // 投入コード: CT / CH
+  hasJuryo   Boolean   @default(false) // 従量情報を作成するか
+  hasDoryoku Boolean   @default(false) // 動力情報を作成するか
+  // { application: {...}, juryo: {...}, doryoku: {...} } 各項目の値(文字列)
+  data       Json      @default("{}")
+  createdBy  String?
+  updatedBy  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  @@index([createdAt])
+}

@@ -327,6 +327,13 @@ table {
 .phone-nav-scroll > a {
   scroll-snap-align: start;
 }
+.app-tag {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-active);
+  font-size: 10.5px;
+}
 .chat-badge {
   min-width: 16px;
   height: 16px;

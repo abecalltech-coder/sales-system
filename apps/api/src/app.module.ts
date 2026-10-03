@@ -38,6 +38,7 @@ import { DealsModule } from './deals/deals.module';
 import { CustomReportsModule } from './custom-reports/custom-reports.module';
 import { CellStylesModule } from './cell-styles/cell-styles.module';
 import { ChatModule } from './chat/chat.module';
+import { ApplicationSheetsModule } from './application-sheets/application-sheets.module';
 
 @Module({
   imports: [
@@ -77,6 +78,7 @@ import { ChatModule } from './chat/chat.module';
     CustomReportsModule,
     CellStylesModule,
     ChatModule,
+    ApplicationSheetsModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,
