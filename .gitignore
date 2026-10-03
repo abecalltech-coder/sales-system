@@ -16,3 +16,4 @@ prisma/migrations/.gitkeep
 
 # 明細読み取り(OCR)用。ビルド時に node_modules からコピーする
 apps/web/public/ocr/
+apps/web/*.traineddata
