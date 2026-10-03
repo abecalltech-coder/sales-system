@@ -294,6 +294,7 @@ model StatusMaster {
   displayName  String
   color        String?
   onlineColor  String? // 部署(DEPARTMENT_BRANCH)のカレンダー色: color=訪問, onlineColor=オンライン
+  textColor    String? // 選択時の文字色(要望)。color は行の塗りつぶし色
   order        Int     @default(0)
   active       Boolean @default(true)
 
@@ -967,6 +968,7 @@ model DealFieldOption {
   fieldId String
   label   String
   color   String?
+  textColor String? // 選択時の文字色(要望)。color は行の塗りつぶし色
   order   Int     @default(0)
 
   field DealField @relation(fields: [fieldId], references: [id], onDelete: Cascade)

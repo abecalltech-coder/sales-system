@@ -6,6 +6,7 @@ import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../components/InlineEdit';
 import { PresenceBar } from '../../components/PresenceBar';
 import { useContracts, useStatuses, useMe, ContractListItem } from '../../hooks/useApi';
+import { useMasterRowColors } from '../../hooks/useMasterRowColors';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
@@ -43,6 +44,8 @@ export function ContractsListPage() {
   const { data: me } = useMe();
   const presence = usePresence('CONTRACT', me?.id);
   const { data: statuses } = useStatuses('MATCHING');
+  // 行の塗りつぶし・文字色はマスタ管理の設定どおり(要望)
+  const masterRowColors = useMasterRowColors<ContractListItem>('エントリー管理', { MATCHING: (r) => r.matchingStatusId });
 
   const statusLabel = (id: string) => statuses?.find((s) => s.id === id)?.displayName ?? id;
 
@@ -232,7 +235,7 @@ export function ContractsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.matchingStatusId}
-          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          options={statuses?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => save(r, { matchingStatusId: v })}
           colored
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
@@ -324,6 +327,7 @@ export function ContractsListPage() {
           tableKey="contracts"
           cellTextColor
           columns={columns}
+          rowStyle={masterRowColors}
           mobileCard={{
             title: 'storeName',
             badge: 'status',

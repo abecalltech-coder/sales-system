@@ -5,7 +5,8 @@ import { DataTable, Column } from '../../components/DataTable';
 import type { MobileCardConfig } from '../../components/MobileCardList';
 import { ColumnFilterHeader } from '../../components/ColumnFilterHeader';
 import { InlineText, InlineSelect, InlineFlexDate } from '../../components/InlineEdit';
-import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions, useMe } from '../../hooks/useApi';
+import { DealListItem, DealFieldItem, useDeals, useDealFields, useUserOptions, useMe, useMasterOrder } from '../../hooks/useApi';
+import { applySavedOrder, rowColorStyle } from '../../lib/rowColors';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
@@ -141,15 +142,31 @@ export function DealsListPage() {
   const shopSupportDoneOptionId = fields
     ?.find((f) => f.fieldKey === SHOP_SUPPORT_STATUS_KEY)
     ?.options.find((o) => o.label === SHOP_SUPPORT_STATUS_DONE_LABEL)?.id;
+  // プルダウン列の選択肢に設定した塗りつぶし・文字色(マスタ管理 > 案件管理)。上にある列ほど優先(要望)
+  const { data: masterOrder } = useMasterOrder();
+  const colorFields = useMemo(() => {
+    const selects = [...(fields ?? [])].filter((f) => f.dataType === 'SELECT').sort((a, b) => a.order - b.order);
+    const keys = applySavedOrder(
+      selects.map((f) => f.fieldKey),
+      masterOrder?.['案件管理'],
+    );
+    return keys.map((k) => selects.find((f) => f.fieldKey === k)!);
+  }, [fields, masterOrder]);
+  const optionColors = (r: DealListItem) =>
+    rowColorStyle(colorFields.map((f) => f.options.find((o) => o.id === r.values[f.fieldKey])));
+
   const rowStyle = (r: DealListItem): CSSProperties | undefined => {
-    if (!shopSupportDoneOptionId) return undefined;
-    const dateVal = r.values[SHOP_SUPPORT_DATE_KEY] as string | null;
-    const statusVal = r.values[SHOP_SUPPORT_STATUS_KEY] as string | null;
-    if (statusVal === shopSupportDoneOptionId) return undefined;
-    const cmp = monthCompareToNow(dateVal);
-    if (cmp === 'current') return { background: SHOP_SUPPORT_BG_CURRENT };
-    if (cmp === 'past') return { background: SHOP_SUPPORT_BG_PAST };
-    return undefined;
+    // 店サポ解約誘導の期限切れは最優先で塗る
+    if (shopSupportDoneOptionId) {
+      const dateVal = r.values[SHOP_SUPPORT_DATE_KEY] as string | null;
+      const statusVal = r.values[SHOP_SUPPORT_STATUS_KEY] as string | null;
+      if (statusVal !== shopSupportDoneOptionId) {
+        const cmp = monthCompareToNow(dateVal);
+        if (cmp === 'current') return { background: SHOP_SUPPORT_BG_CURRENT };
+        if (cmp === 'past') return { background: SHOP_SUPPORT_BG_PAST };
+      }
+    }
+    return optionColors(r);
   };
 
   const fieldColumn = (field: DealFieldItem): Column<DealListItem> => {
@@ -187,7 +204,7 @@ export function DealsListPage() {
           <InlineSelect
             value={(r.values[key] as string | null) ?? ''}
             options={[
-              ...options.map((o) => ({ id: o.id, label: o.label, color: o.color })),
+              ...options.map((o) => ({ id: o.id, label: o.label, color: o.color, textColor: o.textColor })),
               { id: MANAGE_OPTIONS, label: '＋ 選択肢を編集...' },
             ]}
             onSave={(v) => {

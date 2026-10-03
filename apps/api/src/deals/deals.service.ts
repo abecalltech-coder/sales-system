@@ -101,7 +101,12 @@ export class DealsService {
   async updateOption(id: string, dto: UpdateDealFieldOptionDto) {
     const existing = await this.prisma.dealFieldOption.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('選択肢が見つかりません');
-    return this.prisma.dealFieldOption.update({ where: { id }, data: dto });
+    const data = {
+      ...dto,
+      ...(dto.color !== undefined ? { color: dto.color || null } : {}),
+      ...(dto.textColor !== undefined ? { textColor: dto.textColor || null } : {}),
+    };
+    return this.prisma.dealFieldOption.update({ where: { id }, data });
   }
 
   async deleteOption(id: string) {

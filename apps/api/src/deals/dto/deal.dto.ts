@@ -95,6 +95,11 @@ export class UpdateDealFieldOptionDto {
   @IsString()
   color?: string;
 
+  /** 選択時の文字色。空文字で解除 */
+  @IsOptional()
+  @IsString()
+  textColor?: string;
+
   @IsOptional()
   @IsInt()
   order?: number;

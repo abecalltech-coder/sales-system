@@ -10,7 +10,7 @@ import { api, ApiError } from '../../lib/api';
 import { formatDate, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
-import { masterRowColors } from '../../lib/color';
+import { useMasterRowColors } from '../../hooks/useMasterRowColors';
 import { useManualSort } from '../../hooks/useManualSort';
 import { appointmentProgressRank, compareByRankThenTime } from '../../lib/progressPriority';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
@@ -62,9 +62,30 @@ export function AppointmentsListPage() {
   const { data: deliveryMethodOptions } = useStatuses('APPOINTMENT_DELIVERY_METHOD');
   const { data: deliveryStatusOptions } = useStatuses('APPOINTMENT_DELIVERY_STATUS');
 
-  // 行の塗りつぶし・文字色はマスタ管理の設定どおり(要望)
-  const progressRowColors = (id: string | null) =>
-    masterRowColors(id ? progressOptions?.find((s) => s.id === id) : undefined);
+  // 行の塗りつぶし・文字色はマスタ管理の設定どおり。マスタ管理で上にある項目ほど優先(要望)
+  const masterRowColors = useMasterRowColors<AppointmentListItem>('アポ実績', {
+    APPOINTMENT_PROGRESS: (r) => r.progressStatusId,
+    MEETING_FORMAT: (r) => r.hook,
+    TOSS_PRE_CONFIRM: (r) => r.preConfirmStatusId,
+    APPOINTMENT_PRE_CONTACT: (r) => r.preContactStatusId,
+    APPOINTMENT_CLOSER: (r) => r.closerStatusId,
+    INDUSTRY: (r) => r.industry,
+    EXISTING_CONTRACT: (r) => r.existingContract,
+    PROPOSAL_LOCATION: (r) => r.proposalLocation,
+    APPOINTMENT: (r) => r.meetingStatusId,
+    APPOINTMENT_HP_PROGRESS: (r) => r.hpProgressStatusId,
+    APPOINTMENT_TYPE: (r) => r.typeStatusId,
+    APPOINTMENT_ACQUISITION_METHOD: (r) => r.acquisitionMethodStatusId,
+    APPOINTMENT_ANSHIN_BIZ_STATUS: (r) => r.anshinBizStatusId,
+    APPOINTMENT_ANSHIN_BIZ_LOST_REASON: (r) => r.anshinBizLostReasonStatusId,
+    APPOINTMENT_MOBILE_STATUS: (r) => r.mobileStatusId,
+    APPOINTMENT_MOBILE_LOST_REASON: (r) => r.mobileLostReasonStatusId,
+    APPOINTMENT_FUNFO_STATUS: (r) => r.funfoStatusId,
+    APPOINTMENT_FUNFO_LOST_REASON: (r) => r.funfoLostReasonStatusId,
+    APPOINTMENT_CONSENT_FORM_TYPE: (r) => r.consentFormTypeStatusId,
+    APPOINTMENT_DELIVERY_METHOD: (r) => r.deliveryMethodStatusId,
+    APPOINTMENT_DELIVERY_STATUS: (r) => r.deliveryStatusStatusId,
+  });
 
   const updateMutation = useMutation({
     mutationFn: (vars: { id: string; version: number; patch: Record<string, unknown> }) =>
@@ -354,7 +375,7 @@ export function AppointmentsListPage() {
       render: (r) => (
         <InlineSelect
           value={r.progressStatusId}
-          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color })) ?? []}
+          options={progressOptions?.map((s) => ({ id: s.id, label: s.displayName, color: s.color, textColor: s.textColor })) ?? []}
           onSave={(v) => save(r, { progressStatusId: v })}
           colored
           style={{ borderRadius: 999, padding: '2px 6px', fontSize: 11, fontWeight: 600, textAlign: 'center' }}
@@ -503,7 +524,7 @@ export function AppointmentsListPage() {
           loading={isLoading}
           onPageChange={setPage}
           getRowId={(r) => r.id}
-          rowStyle={(r) => progressRowColors(r.progressStatusId)}
+          rowStyle={masterRowColors}
           onCellFocus={presence.notifyFocus}
           onCellBlur={presence.notifyBlur}
           cellCursor={presence.cellCursor}

@@ -374,6 +374,12 @@ table {
   content-visibility: auto;
   contain-intrinsic-size: auto 46px;
 }
+/* 長押しで自前のメニューを出すため、タッチ端末では一覧セルのOS標準の長押しメニューを止める */
+@media (pointer: coarse) {
+  .data-table tbody td {
+    -webkit-touch-callout: none;
+  }
+}
 .m-chip-link {
   flex-shrink: 0;
   padding: 2px 9px;

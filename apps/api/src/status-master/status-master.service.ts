@@ -35,11 +35,17 @@ export class StatusMasterService {
     });
   }
 
-  /** displayName/color/order/activeのみ変更可能。internalCodeは自動処理の判定基盤のため不変。 */
+  /** displayName/color/textColor/order/activeのみ変更可能。internalCodeは自動処理の判定基盤のため不変。 */
   async update(id: string, dto: UpdateStatusMasterDto) {
     const existing = await this.prisma.statusMaster.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('ステータスが見つかりません');
-    return this.prisma.statusMaster.update({ where: { id }, data: dto });
+    // 色は空文字で「色なし」に戻す
+    const data = {
+      ...dto,
+      ...(dto.color !== undefined ? { color: dto.color || null } : {}),
+      ...(dto.textColor !== undefined ? { textColor: dto.textColor || null } : {}),
+    };
+    return this.prisma.statusMaster.update({ where: { id }, data });
   }
 
   /**
@@ -52,7 +58,7 @@ export class StatusMasterService {
     if (!existing) throw new NotFoundException('ステータスが見つかりません');
     const protectedCategories = ['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING'];
     if (protectedCategories.includes(existing.category)) {
-      throw new ConflictException('基本ステータスは削除できません。「有効」のチェックを外して無効化してください');
+      throw new ConflictException('基本ステータスは自動処理で使うため削除できません');
     }
     await this.prisma.statusMaster.delete({ where: { id } });
     return { ok: true };

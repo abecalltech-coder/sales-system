@@ -1,6 +1,9 @@
-import { CSSProperties, ReactNode, useEffect, useState } from 'react';
+import { CSSProperties, ReactNode, TouchEvent as ReactTouchEvent, useEffect, useRef, useState } from 'react';
 import type { Column } from './DataTable';
 import { readableTextColor } from '../lib/color';
+import { useCellStyles } from '../hooks/useCellStyles';
+
+const MENU_COLORS = ['#000000', '#6b7280', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#92400e', '#ffffff'];
 
 /**
  * 携帯で一覧を「1件2行」のコンパクト表示にするための設定(要望: 1画面に多くの案件を表示)。
@@ -31,9 +34,84 @@ interface Props<T> {
   onReorder?: (orderedIds: string[]) => void;
   onDeleteColumn?: (columnKey: string) => void;
   onReorderColumns?: (orderedKeys: string[]) => void;
+  /** セルの文字色・太字(表と共通・全員共有)。tableKey があり cellTextColor のとき有効 */
+  tableKey?: string;
+  cellTextColor?: boolean;
 }
 
 const text = <T,>(col: Column<T> | undefined, row: T) => (col?.copyValue ? col.copyValue(row) : '');
+const text_ = text;
+
+/** 長押しメニュー(コピー/切り取り/貼り付け・太字・文字色) */
+function FieldMenu({
+  x,
+  y,
+  styles,
+  onClose,
+  onCopy,
+  onCut,
+  onPaste,
+  onBold,
+  onColor,
+}: {
+  x: number;
+  y: number;
+  styles: boolean;
+  onClose: () => void;
+  onCopy: () => void;
+  onCut: () => void;
+  onPaste: () => void;
+  onBold: () => void;
+  onColor: (c: string | null) => void;
+}) {
+  const run = (f: () => void) => () => {
+    f();
+    onClose();
+  };
+  const item: CSSProperties = { display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', border: 'none', background: 'transparent', fontSize: 13 };
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 3000 }} onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="popover"
+        style={{ position: 'fixed', top: Math.max(8, Math.min(y, window.innerHeight - (styles ? 330 : 160))), left: Math.min(x, window.innerWidth - 216), width: 208, padding: 4 }}
+      >
+        <button type="button" style={item} onClick={run(onCopy)}>
+          コピー
+        </button>
+        <button type="button" style={item} onClick={run(onCut)}>
+          切り取り
+        </button>
+        <button type="button" style={item} onClick={run(onPaste)}>
+          貼り付け
+        </button>
+        {styles && (
+          <>
+            <div style={{ borderTop: '1px solid var(--color-border)', margin: '4px 0' }} />
+            <button type="button" style={item} onClick={run(onBold)}>
+              <b>B</b> 太字 / 太字を解除
+            </button>
+            <div style={{ padding: '4px 12px 2px', fontSize: 11, color: 'var(--color-text-muted)' }}>文字色</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 26px)', gap: 5, padding: '2px 12px 6px' }}>
+              {MENU_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={c}
+                  onClick={run(() => onColor(c))}
+                  style={{ width: 26, height: 26, padding: 0, borderRadius: 5, border: '1px solid var(--color-border-strong)', background: c }}
+                />
+              ))}
+            </div>
+            <button type="button" style={item} onClick={run(() => onColor(null))}>
+              文字色を解除
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function MobileCardList<T>({
   columns,
@@ -48,9 +126,37 @@ export function MobileCardList<T>({
   onReorder,
   onDeleteColumn,
   onReorderColumns,
+  tableKey,
+  cellTextColor,
 }: Props<T>) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  // 詳細シートの項目を長押ししたときのメニュー(要望: コピー/切り取り/貼り付け・文字色・太字)
+  const [fieldMenu, setFieldMenu] = useState<{ key: string; x: number; y: number } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const stylesEnabled = Boolean(tableKey && cellTextColor);
+  const cellStyles = useCellStyles(stylesEnabled ? tableKey! : '');
+  const pressTimer = useRef<number | undefined>(undefined);
+  const flash = (m: string) => {
+    setToast(m);
+    window.setTimeout(() => setToast(null), 1500);
+  };
+  const pressHandlers = (key: string) => ({
+    onTouchStart: (e: ReactTouchEvent) => {
+      const t = e.touches[0];
+      window.clearTimeout(pressTimer.current);
+      if (!t) return;
+      const x = t.clientX;
+      const y = t.clientY;
+      pressTimer.current = window.setTimeout(() => setFieldMenu({ key, x, y }), 500);
+    },
+    onTouchMove: () => window.clearTimeout(pressTimer.current),
+    onTouchEnd: () => window.clearTimeout(pressTimer.current),
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      setFieldMenu({ key, x: e.clientX, y: e.clientY });
+    },
+  });
   const byKey = new Map(columns.map((c) => [c.key, c]));
   const titleCol = byKey.get(config.title);
   const badgeCol = config.badge ? byKey.get(config.badge) : undefined;
@@ -182,13 +288,81 @@ export function MobileCardList<T>({
             )
           }
         >
-          {editableColumns.map((c) => (
-              <div key={c.key} style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr)', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--color-sunken)' }}>
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{c.label}</span>
-                <div style={{ minWidth: 0, fontSize: 13 }}>{c.render(openRow)}</div>
+          {editableColumns.map((c) => {
+            const st = stylesEnabled ? cellStyles.styleOf(openId!, c.key) : undefined;
+            return (
+              <div
+                key={c.key}
+                {...pressHandlers(c.key)}
+                style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr)', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--color-sunken)' }}
+              >
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)', WebkitTouchCallout: 'none', userSelect: 'none' }}>{c.label}</span>
+                <div
+                  style={{
+                    minWidth: 0,
+                    fontSize: 13,
+                    ...(st?.textColor ? ({ color: st.textColor, '--cell-text-color': st.textColor } as CSSProperties) : null),
+                    ...(st?.bold ? ({ fontWeight: 900, '--cell-font-weight': 900 } as CSSProperties) : null),
+                  }}
+                >
+                  {c.render(openRow)}
+                </div>
               </div>
-            ))}
+            );
+          })}
+          <p style={{ fontSize: 10, color: 'var(--color-text-faint)', margin: '8px 0 0' }}>項目を長押しすると、コピー・貼り付け・文字色・太字のメニューが出ます。</p>
         </DetailSheet>
+      )}
+
+      {fieldMenu && openRow && (
+        <FieldMenu
+          x={fieldMenu.x}
+          y={fieldMenu.y}
+          styles={stylesEnabled}
+          onClose={() => setFieldMenu(null)}
+          onCopy={async () => {
+            const col = byKey.get(fieldMenu.key);
+            const text = text_(col, openRow);
+            try {
+              await navigator.clipboard.writeText(text);
+              flash('コピーしました');
+            } catch {
+              flash('コピーできませんでした');
+            }
+          }}
+          onCut={async () => {
+            const col = byKey.get(fieldMenu.key);
+            try {
+              await navigator.clipboard.writeText(text_(col, openRow));
+            } catch {
+              flash('コピーできませんでした');
+              return;
+            }
+            col?.pasteValue?.(openRow, '');
+            flash('切り取りました');
+          }}
+          onPaste={async () => {
+            const col = byKey.get(fieldMenu.key);
+            if (!col?.pasteValue) return flash('この項目には貼り付けできません');
+            try {
+              const t = await navigator.clipboard.readText();
+              col.pasteValue(openRow, t.replace(/\r?\n$/, ''));
+              flash('貼り付けました');
+            } catch {
+              flash('クリップボードを読み取れませんでした');
+            }
+          }}
+          onBold={() => {
+            const cur = cellStyles.styleOf(openId!, fieldMenu.key)?.bold;
+            cellStyles.setStyle([{ rowId: openId!, columnKey: fieldMenu.key }], { bold: !cur });
+          }}
+          onColor={(color) => cellStyles.setStyle([{ rowId: openId!, columnKey: fieldMenu.key }], { textColor: color })}
+        />
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', left: '50%', bottom: 90, transform: 'translateX(-50%)', zIndex: 3100, background: 'rgba(25,28,34,0.88)', color: '#fff', fontSize: 12, padding: '6px 12px', borderRadius: 8 }}>
+          {toast}
+        </div>
       )}
 
       {columnsOpen && (

@@ -81,6 +81,29 @@ const TEXT_COLOR_PALETTE = [
   '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#db2777', '#92400e',
 ];
 
+/**
+ * 長押し(タッチ)で右クリックメニューを開く(要望: 携帯でもコピー・貼り付け・文字色・太字を使えるように)。
+ * iOS は長押しで contextmenu が発火しないため自前で判定する。指が動いたらスクロールとみなして取り消す。
+ */
+const LONG_PRESS_MS = 500;
+let longPressTimer: number | undefined;
+function longPressHandlers(fire: (x: number, y: number) => void) {
+  return {
+    onTouchStart: (e: ReactTouchEvent) => {
+      const t = e.touches[0];
+      window.clearTimeout(longPressTimer);
+      if (!t || e.touches.length > 1) return;
+      const x = t.clientX;
+      const y = t.clientY;
+      longPressTimer = window.setTimeout(() => fire(x, y), LONG_PRESS_MS);
+    },
+    onTouchMove: () => window.clearTimeout(longPressTimer),
+    onTouchEnd: () => window.clearTimeout(longPressTimer),
+    onTouchCancel: () => window.clearTimeout(longPressTimer),
+  };
+}
+const fakeMouseEvent = (x: number, y: number) => ({ clientX: x, clientY: y, preventDefault() {} }) as unknown as ReactMouseEvent;
+
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
 const GUTTER_WIDTH = 34;
@@ -208,6 +231,7 @@ function RowInner<T>({
         <td
           onClick={(e) => onSelectRow(i, e.shiftKey)}
           onContextMenu={(e) => onCellContextMenu(e, i)}
+          {...longPressHandlers((x, y) => onCellContextMenu(fakeMouseEvent(x, y), i))}
           draggable={reorderable}
           onDragStart={reorderable ? (e) => onRowDragStart(e, i) : undefined}
           onDragEnd={reorderable ? onRowDragEnd : undefined}
@@ -260,6 +284,7 @@ function RowInner<T>({
               onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
               onMouseEnter={() => onCellMouseEnter(i, colIdx)}
               onContextMenu={(e) => onCellContextMenu(e, i, colIdx)}
+              {...longPressHandlers((x, y) => onCellContextMenu(fakeMouseEvent(x, y), i, colIdx))}
               style={{
                 ...(cellColor ? ({ color: cellColor, '--cell-text-color': cellColor } as CSSProperties) : null),
                 ...(cellStyle?.bold ? ({ fontWeight: 700, '--cell-font-weight': 700 } as CSSProperties) : null),
@@ -513,6 +538,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
       onReorder={props.onReorder}
       onDeleteColumn={props.onDeleteColumn}
       onReorderColumns={props.onReorderColumns}
+      tableKey={props.tableKey}
+      cellTextColor={props.cellTextColor}
     />
   );
 }
@@ -1366,7 +1393,7 @@ function DataTableGrid<T>({
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'fixed',
-            top: Math.min(menu.y, window.innerHeight - (styleOf ? 310 : 160)),
+            top: Math.max(8, Math.min(menu.y, window.innerHeight - (styleOf ? 400 : 250))),
             left: Math.min(menu.x, window.innerWidth - 200),
             zIndex: 3000,
             background: 'var(--color-surface)',
@@ -1378,6 +1405,32 @@ function DataTableGrid<T>({
             fontSize: 12,
           }}
         >
+          {sel && (
+            <>
+              <MenuItem
+                label="コピー"
+                onClick={() => {
+                  void doCopy(sel);
+                  setMenu(null);
+                }}
+              />
+              <MenuItem
+                label="切り取り"
+                onClick={() => {
+                  void doCut(sel);
+                  setMenu(null);
+                }}
+              />
+              <MenuItem
+                label="貼り付け"
+                onClick={() => {
+                  void doPaste(sel);
+                  setMenu(null);
+                }}
+              />
+              <div style={{ borderTop: '1px solid var(--color-border)', margin: '4px 0' }} />
+            </>
+          )}
           {styleOf && (
             <>
               <button

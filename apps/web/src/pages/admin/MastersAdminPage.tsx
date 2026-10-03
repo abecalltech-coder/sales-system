@@ -1,89 +1,19 @@
 import { ReactNode, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
-import { useProducts, useSources, useSystemSettings } from '../../hooks/useApi';
+import { useProducts, useSources, useSystemSettings, useMasterOrder, useDealFields, DealFieldItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-
-interface CategoryDef {
-  value: string;
-  label: string;
-  /** 複数画面で使う項目。ここで編集すると全画面に反映される */
-  shared?: boolean;
-}
-
-// 画面ごとのタブ。各タブの中は「項目」ごとのカードに分かれる(要望: 画面毎→項目毎)。
-// 同じ項目(部署・商談形式・前確・業種など)は複数タブに出るが、中身は共通で連動する。
-const TAB_GROUPS: { title: string; categories: CategoryDef[] }[] = [
-  {
-    title: 'トス実績',
-    categories: [
-      { value: 'MEETING_FORMAT', label: '商談形式(フック)', shared: true },
-      { value: 'TOSS_PRE_CONFIRM', label: '前確担当者', shared: true },
-      { value: 'TOSS_PROGRESS', label: '進捗(状況 / ステータス兼用)' },
-      { value: 'TOSS_NG_REASON', label: 'NG理由' },
-      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)', shared: true },
-      { value: 'INDUSTRY', label: '業種', shared: true },
-      { value: 'EXISTING_CONTRACT', label: '既契約', shared: true },
-      { value: 'PROPOSAL_LOCATION', label: '提案(場所)', shared: true },
-    ],
-  },
-  {
-    title: 'アポ実績',
-    categories: [
-      { value: 'MEETING_FORMAT', label: '商談形式(フック)', shared: true },
-      { value: 'TOSS_PRE_CONFIRM', label: '前確担当者', shared: true },
-      { value: 'APPOINTMENT_PRE_CONTACT', label: '前連担当' },
-      { value: 'APPOINTMENT_CLOSER', label: 'CL(クロージング担当)', shared: true },
-      { value: 'DEPARTMENT_BRANCH', label: '部署(CT/CH東/CH西)', shared: true },
-      { value: 'INDUSTRY', label: '業種', shared: true },
-      { value: 'EXISTING_CONTRACT', label: '既契約', shared: true },
-      { value: 'PROPOSAL_LOCATION', label: '提案場所', shared: true },
-      { value: 'APPOINTMENT', label: '商談ステータス' },
-      { value: 'APPOINTMENT_PROGRESS', label: '進捗' },
-      { value: 'APPOINTMENT_HP_PROGRESS', label: 'HP進捗' },
-      { value: 'APPOINTMENT_TYPE', label: '種別' },
-      { value: 'APPOINTMENT_ACQUISITION_METHOD', label: '獲得方法' },
-      { value: 'APPOINTMENT_ANSHIN_BIZ_STATUS', label: 'あんしんBiz' },
-      { value: 'APPOINTMENT_ANSHIN_BIZ_LOST_REASON', label: 'あんしんBiz失注理由' },
-      { value: 'APPOINTMENT_MOBILE_STATUS', label: 'モバイル' },
-      { value: 'APPOINTMENT_MOBILE_LOST_REASON', label: 'モバイル失注理由' },
-      { value: 'APPOINTMENT_FUNFO_STATUS', label: 'funfo' },
-      { value: 'APPOINTMENT_FUNFO_LOST_REASON', label: 'funfo失注理由' },
-      { value: 'APPOINTMENT_CONSENT_FORM_TYPE', label: '同意書種別' },
-      { value: 'APPOINTMENT_DELIVERY_METHOD', label: '交付方法' },
-      { value: 'APPOINTMENT_DELIVERY_STATUS', label: '交付状況' },
-      { value: 'VISIT', label: '訪問ステータス' },
-    ],
-  },
-  {
-    title: 'エントリー管理',
-    categories: [{ value: 'MATCHING', label: 'マッチング状況' }],
-  },
-  {
-    title: 'CLカレンダー',
-    categories: [
-      { value: 'DEPARTMENT_BRANCH', label: '部署(予定の色分けにも使用)', shared: true },
-      { value: 'APPOINTMENT_CLOSER', label: 'CL(クロージング担当)', shared: true },
-      { value: 'MEETING_FORMAT', label: '商談形式(フック / 題名の【】に入る)', shared: true },
-    ],
-  },
-  {
-    title: 'その他',
-    categories: [
-      {
-        value: 'TOSS_HOOK_LABEL_MAP',
-        label: 'Googleフォームのフック文言 → 商談形式の変換(内部コード=フォームの原文、表示名=変換後)',
-      },
-    ],
-  },
-];
+import { MASTER_TAB_GROUPS, orderedCategories } from '../../lib/masterTabs';
+import { applySavedOrder } from '../../lib/rowColors';
 
 // 内部コードに意味を持たせず単純な選択肢名の管理として使うカテゴリでは、追加フォームで
 // 表示名のみ入力させ内部コードは自動採番する。ただし以下は内部コード自体が判定キーとして
 // 使われるため対象外(基本ステータス=自動化コード、部署=自動化コード、フック変換=変換元テキスト)。
 const NON_SIMPLE_LABEL_CATEGORIES = new Set(['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING', 'DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP']);
-const ALL_CATEGORY_VALUES = new Set(TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)));
+const ALL_CATEGORY_VALUES = new Set(MASTER_TAB_GROUPS.flatMap((g) => g.categories.map((c) => c.value)));
 const SIMPLE_LABEL_CATEGORIES = new Set([...ALL_CATEGORY_VALUES].filter((v) => !NON_SIMPLE_LABEL_CATEGORIES.has(v)));
+/** 行の色に使わない項目(部署はCLカレンダーの色、フック変換は変換表) */
+const NO_ROW_COLOR_CATEGORIES = new Set(['DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP', 'VISIT']);
 
 interface StatusRow {
   id: string;
@@ -91,17 +21,40 @@ interface StatusRow {
   internalCode: string;
   displayName: string;
   color: string | null;
+  textColor?: string | null;
   onlineColor?: string | null;
   order: number;
   active: boolean;
 }
 
-// カテゴリ一覧以外の特殊タブ(商材・流入元の閲覧、自動作成テンプレートの編集)
-const EXTRA_TAB_TITLES = ['商材・流入元', 'アポ詳細FMT'];
+const DEALS_TAB = '案件管理';
+// カテゴリ一覧以外の特殊タブ(案件管理のプルダウン、商材・流入元の閲覧、自動作成テンプレートの編集)
+const EXTRA_TAB_TITLES = [DEALS_TAB, '商材・流入元', 'アポ詳細FMT'];
+
+/** マスタ管理での項目(カード)の並び順を保存する(=一覧の行の色の優先順) */
+function useSaveCardOrder() {
+  const queryClient = useQueryClient();
+  const { data: saved } = useMasterOrder();
+  return useMutation({
+    mutationFn: (v: { tab: string; keys: string[] }) =>
+      api.put('/system-settings/masterCardOrder', { value: { ...(saved ?? {}), [v.tab]: v.keys } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['system-settings'] }),
+  });
+}
+
+function swap<T>(list: T[], i: number, j: number): T[] {
+  const next = [...list];
+  [next[i], next[j]] = [next[j], next[i]];
+  return next;
+}
 
 export function MastersAdminPage() {
   const [tabIndex, setTabIndex] = useState(0);
-  const allTitles = [...TAB_GROUPS.map((g) => g.title), ...EXTRA_TAB_TITLES];
+  const allTitles = [...MASTER_TAB_GROUPS.map((g) => g.title), ...EXTRA_TAB_TITLES];
+  const { data: savedOrder } = useMasterOrder();
+  const saveOrder = useSaveCardOrder();
+  const currentTitle = allTitles[tabIndex];
+  const cards = tabIndex < MASTER_TAB_GROUPS.length ? orderedCategories(currentTitle, savedOrder) : [];
 
   return (
     <AppLayout>
@@ -129,29 +82,148 @@ export function MastersAdminPage() {
           ))}
         </div>
 
-        {tabIndex < TAB_GROUPS.length && (
+        {tabIndex < MASTER_TAB_GROUPS.length && (
           <>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-              「{allTitles[tabIndex]}」で使うプルダウンの選択肢です。各項目カードで追加・名前変更・削除できます。
-              <span style={{ color: 'var(--color-primary)' }}> 共通</span> の項目は他の画面と連動します。
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-              {TAB_GROUPS[tabIndex].categories.map((c) => (
+            <ColorHelp />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+              {cards.map((c, i) => (
                 <CategoryCard
                   key={c.value}
                   category={c.value}
                   label={c.label}
                   shared={c.shared}
                   simpleLabel={SIMPLE_LABEL_CATEGORIES.has(c.value)}
+                  rowColor={!NO_ROW_COLOR_CATEGORIES.has(c.value)}
+                  moveButtons={
+                    <CardMoveButtons
+                      canUp={i > 0}
+                      canDown={i < cards.length - 1}
+                      onMove={(dir) =>
+                        saveOrder.mutate({ tab: currentTitle, keys: swap(cards.map((x) => x.value), i, i + dir) })
+                      }
+                    />
+                  }
                 />
               ))}
             </div>
           </>
         )}
-        {tabIndex === TAB_GROUPS.length && <ProductsAndSources />}
-        {tabIndex === TAB_GROUPS.length + 1 && <TemplateEditors />}
+        {currentTitle === DEALS_TAB && <DealsMasterTab />}
+        {currentTitle === '商材・流入元' && <ProductsAndSources />}
+        {currentTitle === 'アポ詳細FMT' && <TemplateEditors />}
       </div>
     </AppLayout>
+  );
+}
+
+function ColorHelp() {
+  return (
+    <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12, lineHeight: 1.6 }}>
+      各項目カードで選択肢の追加・名前変更・並び替え・削除と、選んだときの<strong>文字色</strong>・<strong>行の塗りつぶし色</strong>を設定できます。
+      1行に色付きの選択肢が複数あるときは、<strong>このページで上にある項目ほど優先</strong>されます(カード右上の↑↓で並び替え)。
+      <span style={{ color: 'var(--color-primary)' }}> 共通</span> の項目は他の画面と連動します。
+    </p>
+  );
+}
+
+function CardMoveButtons({ canUp, canDown, onMove }: { canUp: boolean; canDown: boolean; onMove: (dir: -1 | 1) => void }) {
+  return (
+    <span style={{ display: 'inline-flex', gap: 2, marginLeft: 'auto' }}>
+      <button type="button" disabled={!canUp} onClick={() => onMove(-1)} title="上へ(優先度を上げる)" style={{ width: 24, height: 22, padding: 0, fontSize: 11 }}>
+        ↑
+      </button>
+      <button type="button" disabled={!canDown} onClick={() => onMove(1)} title="下へ(優先度を下げる)" style={{ width: 24, height: 22, padding: 0, fontSize: 11 }}>
+        ↓
+      </button>
+    </span>
+  );
+}
+
+/** 色の指定(未設定=色なし)。×で色なしに戻す */
+function ColorPick({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (v: string) => void }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, fontSize: 10, color: 'var(--color-text-muted)' }}>
+      {label}
+      <input
+        type="color"
+        value={value || '#ffffff'}
+        onChange={(e) => onChange(e.target.value)}
+        title={`${label}${value ? '' : '(未設定)'}`}
+        style={{ width: 22, height: 22, padding: 0, opacity: value ? 1 : 0.35 }}
+      />
+      {value && (
+        <button type="button" onClick={() => onChange('')} title={`${label}を解除`} style={{ width: 16, height: 16, padding: 0, fontSize: 10, lineHeight: 1 }}>
+          ×
+        </button>
+      )}
+    </span>
+  );
+}
+
+/** 選択肢1つ分の行(名前・文字色・塗りつぶし・並び替え・削除) */
+function OptionRow({
+  name,
+  color,
+  textColor,
+  showColors,
+  preview,
+  extra,
+  onRename,
+  onColor,
+  onTextColor,
+  onMove,
+  canUp,
+  canDown,
+  onDelete,
+}: {
+  name: string;
+  color: string | null | undefined;
+  textColor: string | null | undefined;
+  showColors: boolean;
+  preview?: boolean;
+  extra?: ReactNode;
+  onRename: (v: string) => void;
+  onColor: (v: string) => void;
+  onTextColor: (v: string) => void;
+  onMove: (dir: -1 | 1) => void;
+  canUp: boolean;
+  canDown: boolean;
+  onDelete: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0', borderBottom: '1px solid var(--color-sunken)' }}>
+      <span style={{ display: 'inline-flex', flexDirection: 'column', flexShrink: 0 }}>
+        <button type="button" disabled={!canUp} onClick={() => onMove(-1)} title="上へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
+          ▲
+        </button>
+        <button type="button" disabled={!canDown} onClick={() => onMove(1)} title="下へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
+          ▼
+        </button>
+      </span>
+      <input
+        key={name}
+        defaultValue={name}
+        onBlur={(e) => e.target.value !== name && onRename(e.target.value)}
+        style={{
+          flex: 1,
+          padding: 4,
+          fontSize: 12,
+          minWidth: 0,
+          // 設定した色をその場で確認できるように
+          ...(preview && showColors ? { background: color || undefined, color: textColor || undefined } : {}),
+        }}
+      />
+      {extra}
+      {showColors && (
+        <>
+          <ColorPick label="文字" value={textColor} onChange={onTextColor} />
+          <ColorPick label="塗り" value={color} onChange={onColor} />
+        </>
+      )}
+      <button type="button" onClick={onDelete} title="削除" style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11, color: 'var(--color-danger)' }}>
+        削除
+      </button>
+    </div>
   );
 }
 
@@ -435,16 +507,44 @@ function PreContactColorSetting() {
   );
 }
 
+function CardFrame({ title, badge, moveButtons, children }: { title: string; badge?: ReactNode; moveButtons?: ReactNode; children: ReactNode }) {
+  return (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', padding: 14, background: 'var(--color-surface)' }}>
+      <h2 style={{ fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {title}
+        {badge}
+        {moveButtons}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function SharedBadge() {
+  return (
+    <span
+      title="複数画面で共通。ここで編集すると全画面に反映されます"
+      style={{ fontSize: 10, fontWeight: 700, color: 'var(--color-primary)', background: 'var(--color-primary-soft)', borderRadius: 4, padding: '1px 5px' }}
+    >
+      共通
+    </span>
+  );
+}
+
 function CategoryCard({
   category,
   label,
   simpleLabel,
   shared,
+  rowColor,
+  moveButtons,
 }: {
   category: string;
   label: string;
   simpleLabel: boolean;
   shared?: boolean;
+  rowColor: boolean;
+  moveButtons?: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -456,27 +556,31 @@ function CategoryCard({
     queryFn: () => api.get<StatusRow[]>(`/status-master?category=${category}`),
   });
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['status-master', category] });
+    // 一覧画面のプルダウン・行の色へも反映する
+    queryClient.invalidateQueries({ queryKey: ['statuses'] });
+  };
+
   const updateMutation = useMutation({
     // id はURLに載せる。bodyへ入れると forbidNonWhitelisted で弾かれる(「property id should not exist」)。
-    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; onlineColor?: string; active?: boolean }) =>
+    mutationFn: ({ id, ...patch }: { id: string; displayName?: string; color?: string; textColor?: string; onlineColor?: string; active?: boolean; order?: number }) =>
       api.patch(`/status-master/${id}`, patch),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
+    onSuccess: invalidate,
     onError: (err) => setError(err instanceof ApiError ? err.message : '更新に失敗しました'),
   });
 
   const isDepartment = category === 'DEPARTMENT_BRANCH';
 
-  const genCode = () =>
-    simpleLabel ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode;
+  const genCode = () => (simpleLabel ? `${category}_${crypto.randomUUID().slice(0, 8)}` : newCode);
 
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/status-master', { category, internalCode: genCode(), displayName: newLabel }),
+    mutationFn: () => api.post('/status-master', { category, internalCode: genCode(), displayName: newLabel }),
     onSuccess: () => {
       setNewCode('');
       setNewLabel('');
       setError(null);
-      queryClient.invalidateQueries({ queryKey: ['status-master', category] });
+      invalidate();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '作成に失敗しました'),
   });
@@ -496,44 +600,28 @@ function CategoryCard({
     onSuccess: () => {
       setNewLabel('');
       setError(null);
-      queryClient.invalidateQueries({ queryKey: ['status-master', category] });
+      invalidate();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '一括追加に失敗しました'),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/status-master/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['status-master', category] }),
+    onSuccess: invalidate,
     onError: (err) => setError(err instanceof ApiError ? err.message : '削除に失敗しました'),
   });
 
+  // 並び替え: 表示順どおりに order を振り直す(同じ order が混ざっていても確実に入れ替わるように)
+  const move = (index: number, dir: -1 | 1) => {
+    if (!statuses) return;
+    const next = swap(statuses, index, index + dir);
+    next.forEach((s, i) => {
+      if (s.order !== i + 1) updateMutation.mutate({ id: s.id, order: i + 1 });
+    });
+  };
+
   return (
-    <div
-      style={{
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-md)',
-        padding: 14,
-        background: 'var(--color-surface)',
-      }}
-    >
-      <h2 style={{ fontSize: 15, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        {label}
-        {shared && (
-          <span
-            title="複数画面で共通。ここで編集すると全画面に反映されます"
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: 'var(--color-primary)',
-              background: 'var(--color-primary-soft)',
-              borderRadius: 4,
-              padding: '1px 5px',
-            }}
-          >
-            共通
-          </span>
-        )}
-      </h2>
+    <CardFrame title={label} badge={shared && <SharedBadge />} moveButtons={moveButtons}>
       {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
 
       {isLoading ? (
@@ -541,74 +629,53 @@ function CategoryCard({
       ) : (
         <div style={{ marginBottom: 10 }}>
           {statuses?.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>まだ登録がありません</p>}
-          {statuses?.map((s) => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
-              <input
-                defaultValue={s.displayName}
-                onBlur={(e) => e.target.value !== s.displayName && updateMutation.mutate({ id: s.id, displayName: e.target.value })}
-                style={{ flex: 1, padding: 4, fontSize: 12, minWidth: 0 }}
-              />
-              {isDepartment ? (
-                // 部署はCLカレンダーの色: 訪問/オンラインで別の色を指定できる(要望)
+          {statuses?.map((s, i) => (
+            <OptionRow
+              key={s.id}
+              name={s.displayName}
+              color={s.color}
+              textColor={s.textColor}
+              showColors={rowColor}
+              preview
+              canUp={i > 0}
+              canDown={i < statuses.length - 1}
+              onMove={(dir) => move(i, dir)}
+              onRename={(v) => updateMutation.mutate({ id: s.id, displayName: v })}
+              onColor={(v) => updateMutation.mutate({ id: s.id, color: v })}
+              onTextColor={(v) => updateMutation.mutate({ id: s.id, textColor: v })}
+              onDelete={() => {
+                if (window.confirm(`「${s.displayName}」を削除しますか？`)) deleteMutation.mutate(s.id);
+              }}
+              extra={
                 <>
-                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} title="訪問の予定の色">
-                    訪問
-                    <input
-                      type="color"
-                      defaultValue={s.color ?? '#3b82f6'}
-                      onChange={(e) => updateMutation.mutate({ id: s.id, color: e.target.value })}
-                      style={{ width: 24, height: 24, padding: 0 }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} title="オンライン(HPZOOM等)の予定の色">
-                    オンライン
-                    <input
-                      type="color"
-                      defaultValue={s.onlineColor ?? s.color ?? '#3b82f6'}
-                      onChange={(e) => updateMutation.mutate({ id: s.id, onlineColor: e.target.value })}
-                      style={{ width: 24, height: 24, padding: 0 }}
-                    />
-                  </label>
+                  {isDepartment && (
+                    // 部署はCLカレンダーの色: 訪問/オンラインで別の色を指定できる(要望)
+                    <>
+                      <ColorPick label="訪問" value={s.color} onChange={(v) => updateMutation.mutate({ id: s.id, color: v })} />
+                      <ColorPick label="オンライン" value={s.onlineColor} onChange={(v) => updateMutation.mutate({ id: s.id, onlineColor: v })} />
+                    </>
+                  )}
+                  {!s.active && (
+                    // 以前「有効」を外した選択肢。一覧のプルダウンには出ない
+                    <button
+                      type="button"
+                      onClick={() => updateMutation.mutate({ id: s.id, active: true })}
+                      title="一覧のプルダウンに表示されていません。押すと表示に戻します"
+                      style={{ flexShrink: 0, padding: '1px 5px', fontSize: 10 }}
+                    >
+                      非表示中→表示
+                    </button>
+                  )}
                 </>
-              ) : (
-                <input
-                  type="color"
-                  defaultValue={s.color ?? '#9ca3af'}
-                  onChange={(e) => updateMutation.mutate({ id: s.id, color: e.target.value })}
-                  title="塗りつぶし色"
-                  style={{ width: 24, height: 24, padding: 0, flexShrink: 0 }}
-                />
-              )}
-              <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }} title="有効">
-                <input
-                  type="checkbox"
-                  defaultChecked={s.active}
-                  onChange={(e) => updateMutation.mutate({ id: s.id, active: e.target.checked })}
-                />
-                有効
-              </label>
-              <button
-                onClick={() => {
-                  if (window.confirm(`「${s.displayName}」を削除しますか？`)) deleteMutation.mutate(s.id);
-                }}
-                title="削除"
-                style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11, color: 'var(--color-danger)' }}
-              >
-                削除
-              </button>
-            </div>
+              }
+            />
           ))}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 6 }}>
         {!simpleLabel && (
-          <input
-            placeholder="内部コード"
-            value={newCode}
-            onChange={(e) => setNewCode(e.target.value)}
-            style={{ width: 90, padding: 5, fontSize: 12 }}
-          />
+          <input placeholder="内部コード" value={newCode} onChange={(e) => setNewCode(e.target.value)} style={{ width: 90, padding: 5, fontSize: 12 }} />
         )}
         <input
           placeholder={simpleLabel ? '名前を追加(複数行の貼り付けで一括追加)' : '表示名'}
@@ -630,16 +697,140 @@ function CategoryCard({
           }}
           style={{ flex: 1, padding: 5, fontSize: 12, minWidth: 0 }}
         />
-        <button
-          onClick={() => createMutation.mutate()}
-          disabled={(!simpleLabel && !newCode) || !newLabel}
-          style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}
-        >
+        <button onClick={() => createMutation.mutate()} disabled={(!simpleLabel && !newCode) || !newLabel} style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}>
           {bulkCreateMutation.isPending ? '追加中…' : '追加'}
         </button>
       </div>
       {isDepartment && <PreContactColorSetting />}
-    </div>
+    </CardFrame>
+  );
+}
+
+/** マスタ管理 > 案件管理: 案件管理のプルダウン列ごとの選択肢・色(要望) */
+function DealsMasterTab() {
+  const { data: fields, isLoading } = useDealFields();
+  const { data: savedOrder } = useMasterOrder();
+  const saveOrder = useSaveCardOrder();
+  const selects = [...(fields ?? [])].filter((f) => f.dataType === 'SELECT').sort((a, b) => a.order - b.order);
+  const keys = applySavedOrder(
+    selects.map((f) => f.fieldKey),
+    savedOrder?.[DEALS_TAB],
+  );
+  const cards = keys.map((k) => selects.find((f) => f.fieldKey === k)!);
+
+  return (
+    <>
+      <ColorHelp />
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        列そのものの追加・名前変更・削除は、案件管理の「列を管理」から行えます。
+      </p>
+      {isLoading && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+        {cards.map((f, i) => (
+          <DealFieldCard
+            key={f.id}
+            field={f}
+            moveButtons={
+              <CardMoveButtons
+                canUp={i > 0}
+                canDown={i < cards.length - 1}
+                onMove={(dir) => saveOrder.mutate({ tab: DEALS_TAB, keys: swap(keys, i, i + dir) })}
+              />
+            }
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function DealFieldCard({ field, moveButtons }: { field: DealFieldItem; moveButtons: ReactNode }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const [newLabel, setNewLabel] = useState('');
+  const options = [...field.options].sort((a, b) => a.order - b.order);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['deal-fields'] });
+  const onError = (err: unknown) => setError(err instanceof ApiError ? err.message : '更新に失敗しました');
+
+  const updateMutation = useMutation({
+    mutationFn: (v: { id: string; patch: { label?: string; color?: string; textColor?: string; order?: number } }) =>
+      api.patch(`/deals/field-options/${v.id}`, v.patch),
+    onSuccess: invalidate,
+    onError,
+  });
+  const createMutation = useMutation({
+    mutationFn: (labels: string[]) => Promise.all(labels.map((label) => api.post(`/deals/fields/${field.id}/options`, { label }))),
+    onSuccess: () => {
+      setNewLabel('');
+      setError(null);
+      invalidate();
+    },
+    onError,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/deals/field-options/${id}`),
+    onSuccess: invalidate,
+    onError,
+  });
+
+  const move = (index: number, dir: -1 | 1) => {
+    const next = swap(options, index, index + dir);
+    next.forEach((o, i) => {
+      if (o.order !== (i + 1) * 10) updateMutation.mutate({ id: o.id, patch: { order: (i + 1) * 10 } });
+    });
+  };
+
+  return (
+    <CardFrame title={field.label} moveButtons={moveButtons}>
+      {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, marginBottom: 8 }}>{error}</p>}
+      <div style={{ marginBottom: 10 }}>
+        {options.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>まだ選択肢がありません</p>}
+        {options.map((o, i) => (
+          <OptionRow
+            key={o.id}
+            name={o.label}
+            color={o.color}
+            textColor={o.textColor}
+            showColors
+            preview
+            canUp={i > 0}
+            canDown={i < options.length - 1}
+            onMove={(dir) => move(i, dir)}
+            onRename={(v) => updateMutation.mutate({ id: o.id, patch: { label: v } })}
+            onColor={(v) => updateMutation.mutate({ id: o.id, patch: { color: v } })}
+            onTextColor={(v) => updateMutation.mutate({ id: o.id, patch: { textColor: v } })}
+            onDelete={() => {
+              if (window.confirm(`「${o.label}」を削除しますか？`)) deleteMutation.mutate(o.id);
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          placeholder="選択肢を追加(複数行の貼り付けで一括追加)"
+          value={newLabel}
+          onChange={(e) => setNewLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && newLabel.trim()) createMutation.mutate([newLabel.trim()]);
+          }}
+          onPaste={(e) => {
+            const items = e.clipboardData
+              .getData('text')
+              .split(/[\r\n\t]+/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+            if (items.length > 1) {
+              e.preventDefault();
+              createMutation.mutate(items);
+            }
+          }}
+          style={{ flex: 1, padding: 5, fontSize: 12, minWidth: 0 }}
+        />
+        <button onClick={() => newLabel.trim() && createMutation.mutate([newLabel.trim()])} disabled={!newLabel.trim()} style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}>
+          追加
+        </button>
+      </div>
+    </CardFrame>
   );
 }
 

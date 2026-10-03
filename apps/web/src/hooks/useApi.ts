@@ -38,7 +38,18 @@ export interface StatusMasterItem {
   color: string | null;
   /** 部署(DEPARTMENT_BRANCH)のオンライン商談のカレンダー色。color は訪問の色 */
   onlineColor?: string | null;
+  /** 選択時の文字色(color は行の塗りつぶし色) */
+  textColor?: string | null;
   order: number;
+}
+
+/** マスタ管理での項目(カード)の並び順。上ほど一覧の行の塗りつぶしが優先(要望) */
+export function useMasterOrder() {
+  return useQuery({
+    queryKey: ['system-settings', 'master-order'],
+    queryFn: () => api.get<Record<string, string[]>>('/system-settings/master-order'),
+    staleTime: 60_000,
+  });
 }
 
 export function useStatuses(category?: string) {
@@ -228,11 +239,12 @@ export interface PendingReportItem {
   appointment: { id: string; caseNumber: string; customer: { corporateName: string | null } | null };
 }
 
-export function usePendingReports() {
+export function usePendingReports(opts: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['appointment-reports', 'pending'],
     queryFn: () => api.get<PendingReportItem[]>('/appointment-reports/pending'),
     refetchInterval: 30_000,
+    enabled: opts.enabled ?? true,
   });
 }
 
@@ -614,6 +626,7 @@ export interface DealFieldOptionItem {
   fieldId: string;
   label: string;
   color: string | null;
+  textColor?: string | null;
   order: number;
 }
 

@@ -3,8 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useIsPhone } from '../lib/useIsPhone';
 import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
-import { NotificationBell } from './NotificationBell';
-import { PushNotificationToggle } from './PushNotificationToggle';
+import { NotificationMenu } from './NotificationMenu';
 import { OnlineUsersWidget } from './OnlineUsersWidget';
 import { NavIcon, IconName } from './NavIcon';
 
@@ -67,75 +66,133 @@ const PHONE_LABELS: Record<string, string> = {
   '/admin/system-settings': 'システム',
 };
 
+function PhoneTabLink({ item }: { item: NavItem }) {
+  return (
+    <NavLink
+      to={item.to}
+      style={({ isActive }) => ({
+        position: 'relative',
+        flex: '0 0 auto',
+        minWidth: 56,
+        height: 52,
+        padding: '7px 4px 0',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 3,
+        textDecoration: 'none',
+        color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+      })}
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span
+              aria-hidden
+              style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 3, borderRadius: '0 0 3px 3px', background: 'var(--color-primary)' }}
+            />
+          )}
+          <NavIcon name={item.icon} active={isActive} size={19} />
+          <span style={{ fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>{PHONE_LABELS[item.to] ?? item.label}</span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
 /**
  * 携帯の下メニュー(要望: 横スクロールで全タブを表示)。表示中のタブは自動で見える位置へスクロールする。
- * 通知ベル等はスクロール領域の外(右端)に固定し、ポップオーバーが切れないようにする。
+ * 設定系(管理)のタブは常時は出さず、右端の「設定」から開く(要望)。通知もスクロール領域の外(右端)に固定。
  */
-function PhoneBottomNav({ items, isManager }: { items: NavItem[]; isManager: boolean }) {
+function PhoneBottomNav({ items, adminItems, isManager }: { items: NavItem[]; adminItems: NavItem[]; isManager: boolean }) {
   const { pathname } = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const onAdminPage = adminItems.some((i) => pathname === i.to || pathname.startsWith(`${i.to}/`));
   useEffect(() => {
     const el = scrollRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
     el?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    setAdminOpen(false);
   }, [pathname]);
 
   return (
-    <nav
-      aria-label="タブ"
-      style={{
-        position: 'fixed',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 300,
-        display: 'flex',
-        alignItems: 'stretch',
-        background: 'var(--color-surface)',
-        borderTop: '1px solid var(--color-border)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}
-    >
-      <div ref={scrollRef} className="phone-nav-scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', padding: '0 4px' }}>
-        {items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            style={({ isActive }) => ({
-              position: 'relative',
-              flex: '0 0 auto',
-              minWidth: 56,
-              height: 52,
-              padding: '7px 4px 0',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 3,
-              textDecoration: 'none',
-              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
-            })}
+    <>
+      {adminOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 299 }} onClick={() => setAdminOpen(false)}>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="popover"
+            style={{
+              position: 'absolute',
+              right: 8,
+              bottom: 'calc(64px + env(safe-area-inset-bottom))',
+              width: 'min(300px, calc(100vw - 16px))',
+              padding: 8,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 4,
+            }}
           >
-            {({ isActive }) => (
-              <>
-                {isActive && (
-                  <span
-                    aria-hidden
-                    style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 3, borderRadius: '0 0 3px 3px', background: 'var(--color-primary)' }}
-                  />
-                )}
-                <NavIcon name={item.icon} active={isActive} size={19} />
-                <span style={{ fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}>
-                  {PHONE_LABELS[item.to] ?? item.label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', borderLeft: '1px solid var(--color-border)', padding: '0 2px' }}>
-        <PushNotificationToggle collapsed />
-        {isManager && <NotificationBell collapsed align="right" />}
-      </div>
-    </nav>
+            {adminItems.map((item) => (
+              <PhoneTabLink key={item.to} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+      <nav
+        aria-label="タブ"
+        style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 300,
+          display: 'flex',
+          alignItems: 'stretch',
+          background: 'var(--color-surface)',
+          borderTop: '1px solid var(--color-border)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        <div ref={scrollRef} className="phone-nav-scroll" style={{ flex: 1, minWidth: 0, display: 'flex', overflowX: 'auto', padding: '0 4px' }}>
+          {items.map((item) => (
+            <PhoneTabLink key={item.to} item={item} />
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'stretch', borderLeft: '1px solid var(--color-border)' }}>
+          <NotificationMenu variant="tab" showReports={isManager} />
+          {adminItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setAdminOpen((v) => !v)}
+              aria-expanded={adminOpen}
+              style={{
+                position: 'relative',
+                minWidth: 52,
+                height: 52,
+                padding: '7px 4px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                border: 'none',
+                background: 'transparent',
+                boxShadow: 'none',
+                color: onAdminPage || adminOpen ? 'var(--color-primary)' : 'var(--color-text-muted)',
+              }}
+            >
+              {onAdminPage && (
+                <span aria-hidden style={{ position: 'absolute', top: 0, left: 12, right: 12, height: 3, borderRadius: '0 0 3px 3px', background: 'var(--color-primary)' }} />
+              )}
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d={adminOpen ? 'M6 6l12 12M18 6L6 18' : 'M12 5v14M5 12h14'} />
+              </svg>
+              <span style={{ fontSize: 9.5, fontWeight: 700 }}>設定</span>
+            </button>
+          )}
+        </div>
+      </nav>
+    </>
   );
 }
 
@@ -206,7 +263,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
     .filter((g) => g.items.length > 0);
 
   if (isPhone) {
-    const phoneItems = [...topNav, ...navGroups.flatMap((g) => g.items)];
+    const phoneItems = [...topNav, ...navGroups.filter((g) => g.title !== ADMIN_NAV_GROUP.title).flatMap((g) => g.items)];
+    const phoneAdminItems = navGroups.filter((g) => g.title === ADMIN_NAV_GROUP.title).flatMap((g) => g.items);
     const showFab = phoneItems.some((i) => i.to === '/toss/new') && pathname !== '/toss/new';
     return (
       <div style={{ minHeight: 'var(--viewport-height)' }}>
@@ -218,7 +276,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </svg>
           </NavLink>
         )}
-        <PhoneBottomNav items={phoneItems} isManager={isManager} />
+        <PhoneBottomNav items={phoneItems} adminItems={phoneAdminItems} isManager={isManager} />
       </div>
     );
   }
@@ -330,8 +388,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
           <OnlineUsersWidget collapsed={collapsed} />
-          <PushNotificationToggle collapsed={collapsed} />
-          {isManager && <NotificationBell collapsed={collapsed} />}
+          <NotificationMenu variant="sidebar" collapsed={collapsed} showReports={isManager} />
         </div>
       </nav>
       <main style={{ flex: 1, minWidth: 0 }}>{children}</main>

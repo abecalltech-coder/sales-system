@@ -78,6 +78,9 @@ const DEFAULT_SETTINGS: Record<string, unknown> = {
   tossAppointmentMemoTemplateVisit: DEFAULT_TOSS_APPOINTMENT_MEMO_TEMPLATE_VISIT,
   // CLカレンダーの前連(30分予定)の色。全前連で統一(要望)。マスタ管理 > 部署 で変更
   calendarPreContactColor: '#ff887c',
+  // マスタ管理の各タブでの項目(カード)の並び順。上にある項目ほど一覧の行の塗りつぶしが優先される(要望)。
+  // { "<タブキー>": ["<カテゴリ or 案件管理の列キー>", ...] }
+  masterCardOrder: {},
 };
 
 class SetSettingDto {
@@ -127,6 +130,12 @@ class SystemSettingsController {
   @Get('calendar')
   async calendar() {
     return { preContactColor: await this.service.getOne('calendarPreContactColor') };
+  }
+
+  /** マスタ管理での項目の並び順(行の塗りつぶしの優先順位)。一覧画面で使うためログインユーザーなら誰でも取得可 */
+  @Get('master-order')
+  async masterOrder() {
+    return (await this.service.getOne('masterCardOrder')) ?? {};
   }
 
   @RequirePermissions({ resource: 'system', action: 'edit' })

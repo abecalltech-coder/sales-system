@@ -70,5 +70,25 @@ export function usePushNotifications() {
     }
   };
 
-  return { permission, subscribed, busy, error, enable };
+  /** この端末の通知をOFFにする(購読を解除してサーバーからも削除) */
+  const disable = async () => {
+    if (!('serviceWorker' in navigator)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await api.request('/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => undefined);
+        await sub.unsubscribe();
+      }
+      setSubscribed(false);
+    } catch {
+      setError('通知の停止に失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return { permission, subscribed, busy, error, enable, disable };
 }
