@@ -15,23 +15,47 @@ export class RolesService implements OnModuleInit {
    * (AP/APリーダー/CL/責任者)追加時にRUN_SEED_ON_BOOT無しでも本番へ確実に反映されるように)。
    * upsertのみでStatusMaster等の他データには触れないため副作用はない。
    */
-  async onModuleInit() {
+  onModuleInit() {
+    // 起動(ヘルスチェックの応答)を待たせないよう、同期は裏で行う。
+    // 以前は数百件の upsert を起動前に1件ずつ待っており、DBが遅いとき(Railway US West の
+    // ストレージ障害時)に起動が数分以上かかってデプロイが失敗していた。
+    void this.syncRoleDefs();
+  }
+
+  /** ROLE_DEFS とDBの差分だけを書き込む(普段は書き込み0件) */
+  async syncRoleDefs() {
     try {
+      const existing = await this.prisma.role.findMany({ include: { permissions: true } });
+      let writes = 0;
       for (const def of ROLE_DEFS) {
-        const role = await this.prisma.role.upsert({
-          where: { code: def.code },
-          update: { name: def.name },
-          create: { code: def.code, name: def.name },
-        });
-        for (const p of def.permissions) {
-          await this.prisma.permission.upsert({
-            where: { roleId_resource_action: { roleId: role.id, resource: p.resource, action: p.action } },
-            update: { scope: p.scope },
-            create: { roleId: role.id, resource: p.resource, action: p.action, scope: p.scope },
+        let role = existing.find((r) => r.code === def.code);
+        if (!role) {
+          const created = await this.prisma.role.create({ data: { code: def.code, name: def.name } });
+          role = { ...created, permissions: [] };
+          writes++;
+        } else if (role.name !== def.name) {
+          await this.prisma.role.update({ where: { id: role.id }, data: { name: def.name } });
+          writes++;
+        }
+        const roleId = role.id;
+        const current = new Map(role.permissions.map((p) => [`${p.resource}:${p.action}`, p]));
+        const missing = def.permissions.filter((p) => !current.has(`${p.resource}:${p.action}`));
+        if (missing.length) {
+          await this.prisma.permission.createMany({
+            data: missing.map((p) => ({ roleId, resource: p.resource, action: p.action, scope: p.scope })),
+            skipDuplicates: true,
           });
+          writes += missing.length;
+        }
+        for (const p of def.permissions) {
+          const cur = current.get(`${p.resource}:${p.action}`);
+          if (cur && cur.scope !== p.scope) {
+            await this.prisma.permission.update({ where: { id: cur.id }, data: { scope: p.scope } });
+            writes++;
+          }
         }
       }
-      this.logger.log(`ロール定義を同期しました(${ROLE_DEFS.length}件)`);
+      this.logger.log(`ロール定義を同期しました(${ROLE_DEFS.length}件、書き込み${writes}件)`);
     } catch (err) {
       this.logger.error('ロール定義の同期に失敗しました', err instanceof Error ? err.stack : String(err));
     }
