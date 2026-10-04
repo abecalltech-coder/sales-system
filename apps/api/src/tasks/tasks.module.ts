@@ -285,7 +285,7 @@ class TasksService {
     return new Date(occurrence.getTime() - (t.remindMinutes ?? 0) * 60_000);
   }
 
-  /** 今出しておくべき通知(要望: 対応完了・編集・5分後再通知のいずれかを押すまで消えない) */
+  /** 今出しておくべきアプリ内の通知(期日を過ぎた未完了。対応完了・編集・5分後再通知のいずれかを押すまで消えない) */
   async alerts(user: AuthenticatedUser) {
     const tasks = await this.prisma.task.findMany({
       where: { deletedAt: null, dueAt: { not: null } },
@@ -298,7 +298,9 @@ class TasksService {
       const p = t.progress[0];
       const current = this.currentFor(t, p);
       if (!current || current.getTime() === NO_DUE.getTime()) continue;
-      if (this.alertAt(t, current).getTime() > now) continue;
+      // アプリ内の通知は期日の時刻になってから出す(要望: それまでは表示しない)。
+      // リマインド(○分前)は端末の通知(sendDue)で知らせる
+      if (current.getTime() > now) continue;
       if (p?.snoozeUntil && p.snoozeUntil.getTime() > now) continue;
       out.push({ id: t.id, title: t.title, detail: t.detail, importance: t.importance, occurrence: current });
     }
