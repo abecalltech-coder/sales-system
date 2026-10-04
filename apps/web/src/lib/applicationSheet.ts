@@ -65,13 +65,46 @@ export const DORYOKU_FIELDS: FieldDef[] = [
 
 export type Section = Record<string, string>;
 
+/** 担当者(要望: 「担当者追加」を押したときだけ使う) */
+export const CONTACT_FIELDS: FieldDef[] = [
+  { key: 'name', label: '担当者名' },
+  { key: 'nameKana', label: '担当者名(カナ)' },
+  { key: 'phone', label: '担当者電話番号' },
+];
+
+/**
+ * 1つの申込情報のデータ。従量・動力は複数契約に対応するため配列で持つ(要望)。
+ * 各契約の _key は写真のひも付け用の固定キー(旧データの1件目は 'juryo' / 'doryoku')。
+ * juryo / doryoku は複数契約対応前の保存形式(読み込み時に配列へ移す)。
+ */
 export interface SheetData {
   application: Section;
-  juryo: Section;
-  doryoku: Section;
+  hasContact?: boolean;
+  contact?: Section;
+  juryoList: Section[];
+  doryokuList: Section[];
+  juryo?: Section;
+  doryoku?: Section;
 }
 
-export const emptySheetData = (): SheetData => ({ application: {}, juryo: {}, doryoku: { powerFactor: '90' } });
+export type ElectricKind = 'juryo' | 'doryoku';
+
+const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID().slice(0, 8) : String(Date.now()));
+export const newContract = (kind: ElectricKind): Section => ({ _key: newKey(), ...(kind === 'doryoku' ? { powerFactor: '90' } : {}) });
+
+export const emptySheetData = (): SheetData => ({ application: {}, juryoList: [], doryokuList: [] });
+
+/** 保存済みデータを今の形にそろえる(複数契約対応前のデータも読めるように) */
+export function normalizeSheetData(raw: Partial<SheetData> | null | undefined): SheetData {
+  const d = raw ?? {};
+  const list = (kind: ElectricKind): Section[] => {
+    const arr = kind === 'juryo' ? d.juryoList : d.doryokuList;
+    if (Array.isArray(arr)) return arr.map((s, i) => ({ ...s, _key: s._key || (i === 0 ? kind : newKey()) }));
+    const old = kind === 'juryo' ? d.juryo : d.doryoku;
+    return old && Object.keys(old).length ? [{ ...old, _key: kind }] : [];
+  };
+  return { application: d.application ?? {}, hasContact: !!d.hasContact, contact: d.contact ?? {}, juryoList: list('juryo'), doryokuList: list('doryoku') };
+}
 
 /** 郵便番号は「123-4567」に整える */
 export function formatZip(v: string | undefined): string {
@@ -106,10 +139,21 @@ function sectionText(title: string, fields: FieldDef[], s: Section): string {
   return lines.join('\n');
 }
 
-/** 全体コピー用のテキスト(要望の書式どおり) */
-export function sheetText(sheet: { inputCode: string | null; hasJuryo: boolean; hasDoryoku: boolean; data: SheetData }): string {
-  const parts = [`投入コード：${sheet.inputCode ?? ''}`, sectionText('申込情報', APPLICATION_FIELDS, sheet.data.application ?? {})];
-  if (sheet.hasJuryo) parts.push(sectionText('従量情報', JURYO_FIELDS, sheet.data.juryo ?? {}));
-  if (sheet.hasDoryoku) parts.push(sectionText('動力情報', DORYOKU_FIELDS, sheet.data.doryoku ?? {}));
+/**
+ * 全体コピー用のテキスト(要望の書式どおり)。
+ * 申込情報 →(1行空けて)担当者 → 従量(複数なら 従量情報1, 2…)→ 動力 の順。
+ */
+export function sheetText(sheet: { inputCode: string | null; hasJuryo: boolean; hasDoryoku: boolean; data: SheetData | Partial<SheetData> }): string {
+  const data = normalizeSheetData(sheet.data as Partial<SheetData>);
+  let applicationText = sectionText('申込情報', APPLICATION_FIELDS, data.application);
+  if (data.hasContact) {
+    const c = data.contact ?? {};
+    applicationText += `\n\n${CONTACT_FIELDS.map((f) => `${f.label}：${(c[f.key] ?? '').trim()}`).join('\n')}`;
+  }
+  const parts = [`投入コード：${sheet.inputCode ?? ''}`, applicationText];
+  const add = (title: string, fields: FieldDef[], list: Section[]) =>
+    list.forEach((s, i) => parts.push(sectionText(list.length > 1 ? `${title}${i + 1}` : title, fields, s)));
+  if (sheet.hasJuryo) add('従量情報', JURYO_FIELDS, data.juryoList.length ? data.juryoList : [{}]);
+  if (sheet.hasDoryoku) add('動力情報', DORYOKU_FIELDS, data.doryokuList.length ? data.doryokuList : [{ powerFactor: '90' }]);
   return parts.join('\n\n');
 }

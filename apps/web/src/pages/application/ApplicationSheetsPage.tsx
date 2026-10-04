@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
@@ -14,6 +14,10 @@ import {
   Section,
   SheetData,
   emptySheetData,
+  normalizeSheetData,
+  newContract,
+  CONTACT_FIELDS,
+  ElectricKind,
   sheetText,
 } from '../../lib/applicationSheet';
 
@@ -34,7 +38,7 @@ type Draft = Omit<SheetRow, 'createdAt' | 'updatedAt' | 'createdByName' | 'updat
 
 interface PhotoItem {
   id: string;
-  section: 'juryo' | 'doryoku';
+  section: string;
   thumb: string;
   createdAt: string;
 }
@@ -98,7 +102,7 @@ export function ApplicationSheetsPage() {
               >
                 全体コピー
               </button>
-              <button type="button" onClick={() => setDraft({ ...r, data: { ...emptySheetData(), ...r.data } })} style={{ fontSize: 12, padding: '4px 10px' }}>
+              <button type="button" onClick={() => setDraft({ ...r, data: normalizeSheetData(r.data) })} style={{ fontSize: 12, padding: '4px 10px' }}>
                 編集
               </button>
             </div>
@@ -120,7 +124,25 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const isNew = !d.id;
 
-  const setSection = (sec: keyof SheetData, patch: Section) => setD((cur) => ({ ...cur, data: { ...cur.data, [sec]: { ...cur.data[sec], ...patch } } }));
+  const setSection = (sec: 'application' | 'contact', patch: Section) => setD((cur) => ({ ...cur, data: { ...cur.data, [sec]: { ...(cur.data[sec] ?? {}), ...patch } } }));
+  const listKey = (kind: ElectricKind): 'juryoList' | 'doryokuList' => (kind === 'juryo' ? 'juryoList' : 'doryokuList');
+  // 従量・動力は複数契約(要望)。i 番目の契約を更新する
+  const setContract = (kind: ElectricKind, i: number, patch: Section) =>
+    setD((cur) => {
+      const list = [...cur.data[listKey(kind)]];
+      list[i] = { ...list[i], ...patch };
+      return { ...cur, data: { ...cur.data, [listKey(kind)]: list } };
+    });
+  const addContract = (kind: ElectricKind) =>
+    setD((cur) => ({ ...cur, data: { ...cur.data, [listKey(kind)]: [...cur.data[listKey(kind)], newContract(kind)] } }));
+  const removeContract = (kind: ElectricKind, i: number) =>
+    setD((cur) => ({ ...cur, data: { ...cur.data, [listKey(kind)]: cur.data[listKey(kind)].filter((_, j) => j !== i) } }));
+  // 従量/動力にチェックを入れたら、最初の契約の入力欄を用意する
+  useEffect(() => {
+    if (d.hasJuryo && d.data.juryoList.length === 0) addContract('juryo');
+    if (d.hasDoryoku && d.data.doryokuList.length === 0) addContract('doryoku');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d.hasJuryo, d.hasDoryoku]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -152,13 +174,13 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
   });
 
   // 申込情報 ⇔ 電気情報 の名義・フリガナ・住所を同じにする(要望のボタン)
-  const sameAsElectric = (sec: 'juryo' | 'doryoku') => {
-    const e = d.data[sec];
+  const sameAsElectric = (kind: ElectricKind) => {
+    const e = d.data[listKey(kind)][0] ?? {};
     setSection('application', { name: e.holder ?? '', nameKana: e.holderKana ?? '', address: e.address ?? '', addressZip: e.addressZip ?? '' });
   };
-  const sameAsApplication = (sec: 'juryo' | 'doryoku') => {
+  const sameAsApplication = (kind: ElectricKind, i: number) => {
     const a = d.data.application;
-    setSection(sec, { holder: a.name ?? '', holderKana: a.nameKana ?? '', address: a.address ?? '', addressZip: a.addressZip ?? '' });
+    setContract(kind, i, { holder: a.name ?? '', holderKana: a.nameKana ?? '', address: a.address ?? '', addressZip: a.addressZip ?? '' });
   };
 
   const electricTypes = [...(d.hasJuryo ? (['juryo'] as const) : []), ...(d.hasDoryoku ? (['doryoku'] as const) : [])];
@@ -210,28 +232,71 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
             ))}
           >
             <Fields fields={APPLICATION_FIELDS} values={d.data.application} onChange={(p) => setSection('application', p)} />
+            {/* 担当者(要望: 常時表示ではなく「担当者追加」で出す) */}
+            {d.data.hasContact ? (
+              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--color-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ fontSize: 12, flex: 1 }}>担当者</span>
+                  <button
+                    type="button"
+                    onClick={() => setD((cur) => ({ ...cur, data: { ...cur.data, hasContact: false } }))}
+                    style={{ fontSize: 11, padding: '2px 8px', color: 'var(--color-danger)' }}
+                  >
+                    担当者を削除
+                  </button>
+                </div>
+                <Fields fields={CONTACT_FIELDS} values={d.data.contact ?? {}} onChange={(p) => setSection('contact', p)} />
+              </div>
+            ) : (
+              <button type="button" onClick={() => setD((cur) => ({ ...cur, data: { ...cur.data, hasContact: true } }))} style={{ fontSize: 12, padding: '3px 10px', marginTop: 6 }}>
+                ＋ 担当者追加
+              </button>
+            )}
           </SectionBox>
 
-          {electricTypes.map((t) => (
-            <SectionBox
-              key={t}
-              title={`${typeLabel[t]}情報`}
-              actions={
-                <button type="button" onClick={() => sameAsApplication(t)} style={{ fontSize: 11, padding: '2px 8px' }}>
-                  申込情報と同一
+          {electricTypes.map((t) => {
+            const list = d.data[listKey(t)];
+            return (
+              <div key={t} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {list.map((c, i) => (
+                  <SectionBox
+                    key={c._key ?? i}
+                    title={`${typeLabel[t]}情報${list.length > 1 ? i + 1 : ''}`}
+                    actions={
+                      <>
+                        <button type="button" onClick={() => sameAsApplication(t, i)} style={{ fontSize: 11, padding: '2px 8px' }}>
+                          申込情報と同一
+                        </button>
+                        {list.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => window.confirm(`${typeLabel[t]}情報${i + 1}を削除しますか？`) && removeContract(t, i)}
+                            style={{ fontSize: 11, padding: '2px 8px', color: 'var(--color-danger)' }}
+                          >
+                            この契約を削除
+                          </button>
+                        )}
+                      </>
+                    }
+                  >
+                    <SheetPhotos
+                      sheetId={d.id}
+                      kind={t}
+                      section={c._key === t ? t : `${t}:${c._key}`}
+                      values={c}
+                      ensureSaved={ensureSaved}
+                      onResult={(patch) => setContract(t, i, patch)}
+                    />
+                    <Fields fields={t === 'juryo' ? JURYO_FIELDS : DORYOKU_FIELDS} values={c} onChange={(p) => setContract(t, i, p)} />
+                  </SectionBox>
+                ))}
+                {/* 複数契約(要望: 幾つでも追加) */}
+                <button type="button" onClick={() => addContract(t)} style={{ alignSelf: 'flex-start', fontSize: 12, padding: '3px 10px' }}>
+                  ＋ {typeLabel[t]}の契約を追加
                 </button>
-              }
-            >
-              <SheetPhotos
-                sheetId={d.id}
-                section={t}
-                values={d.data[t]}
-                ensureSaved={ensureSaved}
-                onResult={(patch) => setSection(t, patch)}
-              />
-              <Fields fields={t === 'juryo' ? JURYO_FIELDS : DORYOKU_FIELDS} values={d.data[t]} onChange={(p) => setSection(t, p)} />
-            </SectionBox>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderTop: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
@@ -428,12 +493,15 @@ async function dataUrlToFile(url: string): Promise<File> {
 function SheetPhotos({
   sheetId,
   section,
+  kind,
   values,
   ensureSaved,
   onResult,
 }: {
   sheetId?: string;
-  section: 'juryo' | 'doryoku';
+  /** 写真のひも付け先(契約ごとのキー) */
+  section: string;
+  kind: ElectricKind;
   values: Section;
   ensureSaved: () => Promise<string>;
   onResult: (patch: Section) => void;
@@ -456,7 +524,7 @@ function SheetPhotos({
 
   // 読み取った値は空欄の項目にだけ入れる(手で直した値を消さない)
   const applyText = (text: string) => {
-    const patch = billPatch(text, section === 'doryoku');
+    const patch = billPatch(text, kind === 'doryoku');
     const onlyEmpty = Object.fromEntries(Object.entries(patch).filter(([k]) => !(valuesRef.current[k] ?? '').trim()));
     onResult(onlyEmpty);
     const n = Object.keys(onlyEmpty).length;

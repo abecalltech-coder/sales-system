@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -14,7 +14,8 @@ class SaveSheetDto {
 }
 
 class AddPhotoDto {
-  @IsIn(['juryo', 'doryoku']) section!: string;
+  // 'juryo' / 'doryoku'(1件目・旧形式)または 'juryo:<契約キー>'(複数契約)
+  @Matches(/^(juryo|doryoku)(:[A-Za-z0-9-]{1,40})?$/) section!: string;
   @IsString() @MaxLength(4_000_000) image!: string;
   @IsString() @MaxLength(300_000) thumb!: string;
 }
