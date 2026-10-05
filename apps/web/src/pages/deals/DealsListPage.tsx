@@ -12,6 +12,7 @@ import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
 import { BulkImportDealsModal } from './BulkImportDealsModal';
+import { DEAL_USER_OTHER, DEAL_USER_OTHER_LABEL } from '../../lib/dealUsers';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
@@ -228,7 +229,7 @@ export function DealsListPage() {
       };
     }
     if (field.dataType === 'USER') {
-      const nameOf = (id: string | null) => userOptions?.find((u) => u.id === id)?.name ?? '';
+      const nameOf = (id: string | null) => (id === DEAL_USER_OTHER ? DEAL_USER_OTHER_LABEL : (userOptions?.find((u) => u.id === id)?.name ?? ''));
       return {
         key,
         label: field.label,
@@ -236,7 +237,7 @@ export function DealsListPage() {
         render: (r) => (
           <InlineSelect
             value={(r.values[key] as string | null) ?? ''}
-            options={(userOptions ?? []).map((u) => ({ id: u.id, label: u.name }))}
+            options={[...(userOptions ?? []).map((u) => ({ id: u.id, label: u.name })), { id: DEAL_USER_OTHER, label: DEAL_USER_OTHER_LABEL }]}
             onSave={(v) => save(r, { [key]: v || null })}
           />
         ),
@@ -245,7 +246,8 @@ export function DealsListPage() {
           const t = text.trim();
           if (!t) return save(r, { [key]: null });
           const m = userOptions?.find((u) => u.name === t);
-          if (m) save(r, { [key]: m.id });
+          // アカウントと一致しない名前は「その他」へまとめる(要望)
+          save(r, { [key]: m ? m.id : DEAL_USER_OTHER });
         },
       };
     }
@@ -420,6 +422,20 @@ export function DealsListPage() {
                   {u.name}
                 </button>
               ))}
+              <button
+                onClick={() => setPersonFilter((cur) => (cur === DEAL_USER_OTHER ? null : DEAL_USER_OTHER))}
+                style={{
+                  fontSize: 12,
+                  padding: '4px 12px',
+                  border: 'none',
+                  borderRadius: 999,
+                  fontWeight: personFilter === DEAL_USER_OTHER ? 700 : 500,
+                  background: personFilter === DEAL_USER_OTHER ? 'var(--color-primary-soft)' : 'var(--color-subtle)',
+                  color: personFilter === DEAL_USER_OTHER ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                }}
+              >
+                {DEAL_USER_OTHER_LABEL}
+              </button>
             </div>
           )}
         </div>

@@ -3,6 +3,7 @@ import { DealFieldItem, DealListItem, UserOption } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText } from '../../lib/dateInput';
 import { parseTsv } from '../../lib/tsv';
+import { DEAL_USER_OTHER } from '../../lib/dealUsers';
 
 interface ImportColumn {
   /** 貼り付ける表の列名 */
@@ -195,7 +196,11 @@ export function BulkImportDealsModal({
             // 登録アカウント名に前後の空白・改行が紛れていても一致するようtrimして比較する
             const u = userOptions.find((x) => x.name.trim() === raw);
             if (u) values[field.fieldKey] = u.id;
-            else skippedUsers.add(raw);
+            else {
+              // アカウントと一致しない名前は「その他」へまとめる(要望)
+              values[field.fieldKey] = DEAL_USER_OTHER;
+              skippedUsers.add(raw);
+            }
           } else if (field.dataType === 'SELECT') {
             const optId = await resolveSelectOption(field, raw);
             if (optId) values[field.fieldKey] = optId;
@@ -314,7 +319,7 @@ export function BulkImportDealsModal({
               {summary.skippedUsers.length > 0 && (
                 <>
                   <br />
-                  担当者名が一致しなかったため未設定にしました: {summary.skippedUsers.join('、')}
+                  アカウントと一致しないため「その他」にまとめました: {summary.skippedUsers.join('、')}
                 </>
               )}
             </p>
