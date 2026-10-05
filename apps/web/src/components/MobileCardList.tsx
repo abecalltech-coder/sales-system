@@ -371,27 +371,11 @@ export function MobileCardList<T>({
       {columnsOpen && (
         <DetailSheet title="絞り込み・列の操作" onClose={() => setColumnsOpen(false)}>
           <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '6px 0' }}>
-            項目名の横のアイコンで絞り込みます。{onReorderColumns ? '↑↓で列の順番を入れ替えます。' : ''}
+            項目名の横のアイコンで、絞り込みと昇順・降順の並び替えができます。
           </p>
           {editableColumns.map((c, i) => (
             <div key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 0', borderBottom: '1px solid var(--color-sunken)' }}>
               <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{c.renderHeader ? c.renderHeader() : c.label}</div>
-              {onReorderColumns && (
-                <>
-                  <button type="button" disabled={i === 0} onClick={() => moveColumn(c.key, -1)} aria-label={`${c.label}を上へ`} style={{ width: 30, height: 30, padding: 0 }}>
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={i === editableColumns.length - 1}
-                    onClick={() => moveColumn(c.key, 1)}
-                    aria-label={`${c.label}を下へ`}
-                    style={{ width: 30, height: 30, padding: 0 }}
-                  >
-                    ↓
-                  </button>
-                </>
-              )}
               {onDeleteColumn && (
                 <button
                   type="button"

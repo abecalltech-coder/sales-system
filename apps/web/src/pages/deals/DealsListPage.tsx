@@ -53,6 +53,8 @@ export function DealsListPage() {
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  // 列の絞り込みの中の昇順・降順(要望)。自分の画面だけ(保存・共有しない)
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   // 列の絞り込みポップオーバー内で検索した文字列(列ごと)。チェックが入っている値に加え、
   // ここにヒットする値も一覧に表示する(要望: 絞り込み内検索がそのまま一覧表示に反映されるように)
@@ -271,6 +273,8 @@ export function DealsListPage() {
   };
   const filterHeaderFor = (col: Column<DealListItem>) => () => (
     <ColumnFilterHeader
+      sort={sort?.key === col.key ? sort.dir : null}
+      onSort={(dir) => setSort(dir ? { key: col.key, dir } : null)}
       label={col.label}
       options={() => optionsFor(col)}
       selected={filters[col.key] ?? null}
@@ -346,6 +350,20 @@ export function DealsListPage() {
       filtered = filtered.filter((r) => r.values[ASSIGNEE_FIELD_KEY] === personFilter);
     }
 
+    // 列の昇順・降順(要望)。日付は日付順、それ以外は表示の文字で比べる(数字は数値として)。空欄は常に最後
+    if (sort) {
+      const col = columns.find((c) => c.key === sort.key);
+      const isDate = fields?.find((f) => f.fieldKey === sort.key)?.dataType === 'DATE';
+      const valueOf = (r: DealListItem) => (isDate ? String(r.values[sort.key] ?? '') : (col?.copyValue?.(r) ?? ''));
+      const sign = sort.dir === 'asc' ? 1 : -1;
+      filtered = [...filtered].sort((a, b) => {
+        const va = valueOf(a);
+        const vb = valueOf(b);
+        if (!va || !vb) return va ? -1 : vb ? 1 : 0;
+        return sign * va.localeCompare(vb, 'ja', { numeric: true });
+      });
+    }
+
     // 案件名が同じ案件は自動で纏める(要望)。最初に出てくる位置にまとめ、それ以外の並びは変えない
     const nameKey = fields?.find((f) => f.label === '案件名')?.fieldKey;
     if (nameKey) {
@@ -369,7 +387,7 @@ export function DealsListPage() {
       filtered = order.flat();
     }
     return filtered;
-  }, [rawRows, keyword, filters, columnSearch, personFilter, columns, fields]);
+  }, [rawRows, keyword, filters, columnSearch, personFilter, columns, fields, sort]);
 
   return (
     <AppLayout>

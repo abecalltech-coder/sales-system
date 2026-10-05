@@ -18,6 +18,9 @@ interface ColumnFilterHeaderProps {
    */
   searchText?: string;
   onSearchTextChange?: (text: string) => void;
+  /** この列での並び替え(要望: 絞り込みの中に昇順・降順ボタン)。onSort を渡した時だけボタンを出す */
+  sort?: 'asc' | 'desc' | null;
+  onSort?: (dir: 'asc' | 'desc' | null) => void;
 }
 
 /**
@@ -32,6 +35,8 @@ export function ColumnFilterHeader({
   onChange,
   searchText: searchTextProp,
   onSearchTextChange,
+  sort,
+  onSort,
 }: ColumnFilterHeaderProps) {
   const [open, setOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState('');
@@ -77,6 +82,11 @@ export function ColumnFilterHeader({
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <span>{label}</span>
+      {sort && (
+        <span title={sort === 'asc' ? '昇順で並び替え中' : '降順で並び替え中'} style={{ fontSize: 10, color: 'var(--color-primary)' }}>
+          {sort === 'asc' ? '↑' : '↓'}
+        </span>
+      )}
       <button
         type="button"
         onClick={(e) => {
@@ -114,6 +124,26 @@ export function ColumnFilterHeader({
             fontSize: 12,
           }}
         >
+          {onSort && (
+            <div style={{ display: 'flex', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>
+              {(['asc', 'desc'] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => onSort(sort === d ? null : d)}
+                  style={{
+                    flex: 1,
+                    fontSize: 11.5,
+                    padding: '4px 6px',
+                    background: sort === d ? 'var(--color-primary)' : undefined,
+                    color: sort === d ? '#fff' : undefined,
+                  }}
+                >
+                  {d === 'asc' ? '↑ 昇順' : '↓ 降順'}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ padding: 8, borderBottom: '1px solid var(--color-border)' }}>
             <input
               autoFocus

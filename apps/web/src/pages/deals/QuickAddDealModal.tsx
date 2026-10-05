@@ -97,7 +97,7 @@ export function QuickAddDealModal({
                   onChange={(e) => setAssigneeId(e.target.value)}
                   style={{ padding: 6, fontSize: 13 }}
                 >
-                  <option value="">未選択</option>
+                  <option value=""></option>
                   {userOptions.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}

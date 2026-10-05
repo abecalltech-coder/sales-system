@@ -405,7 +405,7 @@ export function InlineSelect({
         ...style,
       }}
     >
-      {!hideBlankOption && <option value="">{placeholder ?? '未選択'}</option>}
+      {!hideBlankOption && <option value="">{placeholder ?? ''}</option>}
       {hasUnknownValue && <option value={value as string}>{value}</option>}
       {options.map((o) => (
         <option key={o.id} value={o.id}>
