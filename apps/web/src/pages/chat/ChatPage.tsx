@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { Avatar } from '../../components/Avatar';
 import { useIsPhone } from '../../lib/useIsPhone';
-import { useMe } from '../../hooks/useApi';
+import { useMe, useUserOptions } from '../../hooks/useApi';
 import { useChatMessages, useChatRoom, useChatRooms, ChatMessageItem, ChatRoomItem } from '../../hooks/useChat';
 import { api, ApiError } from '../../lib/api';
 import { resizeImage } from '../../lib/image';
@@ -142,6 +142,7 @@ export function ChatPage() {
 function RoomList({ activeId, wide, onCreate }: { activeId?: string; wide: boolean; onCreate: () => void }) {
   const { data: rooms, isLoading } = useChatRooms();
   const [q, setQ] = useState('');
+  const [directOpen, setDirectOpen] = useState(false);
   const navigate = useNavigate();
   const filtered = (rooms ?? []).filter((r) => !q || r.name.includes(q));
 
@@ -161,11 +162,17 @@ function RoomList({ activeId, wide, onCreate }: { activeId?: string; wide: boole
       <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, borderBottom: '1px solid var(--color-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h1 style={{ margin: 0, fontSize: 16, fontWeight: 900 }}>チャット</h1>
-          <button type="button" className="btn-primary" onClick={onCreate} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 16 }}>
-            ＋ グループ作成
-          </button>
+          <span style={{ display: 'flex', gap: 4 }}>
+            <button type="button" onClick={() => setDirectOpen(true)} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 16 }}>
+              ＋ 個人チャット
+            </button>
+            <button type="button" className="btn-primary" onClick={onCreate} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 16 }}>
+              ＋ グループ作成
+            </button>
+          </span>
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="トークを検索" style={{ height: 30, fontSize: 13 }} />
+        {directOpen && <DirectPicker onClose={() => setDirectOpen(false)} />}
       </div>
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {isLoading && <p style={{ padding: 16, fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
@@ -203,12 +210,12 @@ function RoomRow({ room, active, onOpen }: { room: ChatRoomItem; active: boolean
         color: 'var(--color-text)',
       }}
     >
-      <Avatar src={room.photo} name={room.name} seed={room.id} size={40} square />
+      <Avatar src={room.photo} name={room.name} seed={room.otherUserId ?? room.id} size={40} square={!room.isDirect} />
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {room.name}
-            <span style={{ fontSize: 11, color: 'var(--color-text-faint)', marginLeft: 4 }}>({room.memberCount})</span>
+            {!room.isDirect && <span style={{ fontSize: 11, color: 'var(--color-text-faint)', marginLeft: 4 }}>({room.memberCount})</span>}
           </span>
           <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)' }}>{listTime(room.lastMessage?.createdAt ?? room.lastMessageAt)}</span>
         </span>
@@ -387,10 +394,10 @@ function RoomView({ roomId, showBack }: { roomId: string; showBack: boolean }) {
         <Avatar src={room?.photo} name={room?.name ?? ''} seed={roomId} size={32} square />
         <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 14, fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{room?.name}</span>
-          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>メンバー {room?.members.length ?? 0}人</span>
+          <span style={{ fontSize: 10.5, color: 'var(--color-text-muted)' }}>{room?.isDirect ? '個人チャット' : `メンバー ${room?.members.length ?? 0}人`}</span>
         </span>
         <button type="button" onClick={() => setEditing(true)} style={{ fontSize: 11, padding: '3px 10px' }}>
-          グループ設定
+          {room?.isDirect ? '設定' : 'グループ設定'}
         </button>
       </div>
 
@@ -934,6 +941,55 @@ function ReadersSheet({ message, onClose }: { message: ChatMessageItem; onClose:
             {data.unread.map(row)}
           </>
         )}
+        <div style={{ textAlign: 'right', marginTop: 10 }}>
+          <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+            閉じる
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 個人チャットの相手を選ぶ(要望: 個人へも連絡できるように) */
+function DirectPicker({ onClose }: { onClose: () => void }) {
+  const { data: users } = useUserOptions();
+  const { data: me } = useMe();
+  const [q, setQ] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const open = useMutation({
+    mutationFn: (userId: string) => api.post<{ id: string }>(`/chat/direct/${userId}`, {}),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['chat'] });
+      onClose();
+      navigate(`/chat/${res.id}`);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'トークを開けませんでした'),
+  });
+  const list = (users ?? []).filter((u) => u.id !== me?.id && (!q || u.name.includes(q)));
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, width: '100%', padding: 14, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>個人チャットの相手を選ぶ</h2>
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前で検索" style={{ fontSize: 13, height: 32, marginBottom: 6 }} />
+        <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+          {list.map((u) => (
+            <button
+              key={u.id}
+              type="button"
+              disabled={open.isPending}
+              onClick={() => open.mutate(u.id)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: 'none', borderBottom: '1px solid var(--color-sunken)', borderRadius: 0, boxShadow: 'none', background: 'transparent', textAlign: 'left', fontSize: 13 }}
+            >
+              <Avatar src={u.iconUrl} name={u.name} seed={u.id} size={28} />
+              {u.name}
+            </button>
+          ))}
+          {list.length === 0 && <p style={{ padding: 12, fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>該当するアカウントがありません</p>}
+        </div>
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, margin: '6px 0 0' }}>{error}</p>}
         <div style={{ textAlign: 'right', marginTop: 10 }}>
           <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
             閉じる

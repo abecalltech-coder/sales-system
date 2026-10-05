@@ -77,6 +77,28 @@ export function GroupEditor({ room, onClose, onLeft }: { room?: ChatRoomDetail; 
   const addDepartment = (deptId: string) =>
     setMembers((cur) => new Set([...cur, ...(users ?? []).filter((u) => u.departmentId === deptId).map((u) => u.id)]));
 
+  // 個人チャットは名前・写真・メンバーを変えられないので、通知設定と退出だけ
+  if (room?.isDirect) {
+    return (
+      <div className="modal-backdrop" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '100%', padding: 14 }}>
+          <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>{room.name} との個人チャット</h2>
+          <ChatNotifySetting roomId={room.id} />
+          {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, margin: '6px 0 0' }}>{error}</p>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10 }}>
+            <button type="button" onClick={() => window.confirm('この個人チャットを一覧から外しますか？(相手から連絡があればまた表示されます)') && leave.mutate()} style={{ fontSize: 12, color: 'var(--color-danger)' }}>
+              一覧から外す
+            </button>
+            <span style={{ flex: 1 }} />
+            <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, width: '100%', padding: 14, maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>

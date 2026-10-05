@@ -3,6 +3,9 @@ import { api } from '../lib/api';
 
 export interface ChatRoomItem {
   id: string;
+  /** 個人チャット(1対1)。name/photo は相手の名前・写真 */
+  isDirect: boolean;
+  otherUserId: string | null;
   name: string;
   photo: string | null;
   memberCount: number;
@@ -15,6 +18,7 @@ export interface ChatRoomItem {
 
 export interface ChatRoomDetail {
   id: string;
+  isDirect: boolean;
   name: string;
   photo: string | null;
   members: { id: string; name: string; iconUrl: string | null; lastReadAt: string }[];

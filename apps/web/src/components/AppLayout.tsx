@@ -24,10 +24,11 @@ const TOP_NAV: NavItem[] = [
   { to: '/summary', label: 'サマリー', icon: 'chart' },
   { to: '/chat', label: 'チャット', icon: 'chat' },
   { to: '/tasks', label: 'タスク', icon: 'task' },
+  { to: '/memos', label: 'メモ', icon: 'memo' },
 ];
 /** チャット・申込情報/明細は全員で使うため、役職ごとのタブ表示設定に関わらず常に表示する */
 // 申込情報/明細も全員で共有して使う(要望: 他のアカウントからも見られるように)
-const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets', '/tasks']);
+const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets', '/tasks', '/memos']);
 
 /** チャットの未読数バッジ */
 function ChatUnreadBadge({ floating }: { floating?: boolean }) {

@@ -20,7 +20,8 @@ export type IconName =
   | 'clipboard'
   | 'folder'
   | 'chat'
-  | 'task';
+  | 'task'
+  | 'memo';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -110,6 +111,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     <path d="M3 6a1.5 1.5 0 0 1 1.5-1.5H9l2 2.2h8.5A1.5 1.5 0 0 1 21 8.2V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18Z" />
   ),
   chat: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
+  memo: (
+    <>
+      <path d="M6 3h9l4 4v14H6z" />
+      <path d="M15 3v4h4M9 12h7M9 16h5" />
+    </>
+  ),
   task: (
     <>
       <rect x="4" y="4" width="16" height="16" rx="3" />

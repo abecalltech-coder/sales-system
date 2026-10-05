@@ -41,6 +41,7 @@ import { ChatModule } from './chat/chat.module';
 import { ApplicationSheetsModule } from './application-sheets/application-sheets.module';
 import { DepartmentSummaryModule } from './department-summary/department-summary.module';
 import { TasksModule } from './tasks/tasks.module';
+import { MemosModule } from './memos/memos.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { TasksModule } from './tasks/tasks.module';
     ApplicationSheetsModule,
     DepartmentSummaryModule,
     TasksModule,
+    MemosModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

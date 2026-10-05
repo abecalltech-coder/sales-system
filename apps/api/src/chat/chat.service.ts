@@ -50,6 +50,8 @@ export class ChatService {
           include: {
             _count: { select: { members: true } },
             messages: { orderBy: { createdAt: 'desc' }, take: 1, include: { sender: { select: { name: true } } } },
+            // 個人チャットは相手の名前・写真を表示するため
+            members: { select: { user: { select: { id: true, name: true, iconUrl: true } } } },
           },
         },
       },
@@ -76,10 +78,13 @@ export class ChatService {
     return memberships
       .map((m, i) => {
         const last = m.room.messages[0];
+        const other = m.room.isDirect ? m.room.members.find((x) => x.user.id !== userId)?.user : undefined;
         return {
           id: m.room.id,
-          name: m.room.name,
-          photo: m.room.photo,
+          isDirect: m.room.isDirect,
+          name: m.room.isDirect ? (other?.name ?? '(退出したユーザー)') : m.room.name,
+          photo: m.room.isDirect ? (other?.iconUrl ?? null) : m.room.photo,
+          otherUserId: other?.id ?? null,
           memberCount: m.room._count.members,
           lastMessageAt: m.room.lastMessageAt,
           lastMessage: last ? { senderName: last.sender.name, text: this.previewText(last), createdAt: last.createdAt } : null,
@@ -114,12 +119,46 @@ export class ChatService {
       where: { id: roomId },
       include: { members: { include: { user: { select: { id: true, name: true, iconUrl: true } } }, orderBy: { joinedAt: 'asc' } } },
     });
+    const other = room.isDirect ? room.members.find((m) => m.user.id !== userId)?.user : undefined;
     return {
       id: room.id,
-      name: room.name,
-      photo: room.photo,
+      isDirect: room.isDirect,
+      name: room.isDirect ? (other?.name ?? '(退出したユーザー)') : room.name,
+      photo: room.isDirect ? (other?.iconUrl ?? null) : room.photo,
       members: room.members.map((m) => ({ id: m.user.id, name: m.user.name, iconUrl: m.user.iconUrl, lastReadAt: m.lastReadAt })),
     };
+  }
+
+  /** 個人チャット(要望): 相手との1対1のトークを開く。無ければ作る(同じ2人は常に同じトーク) */
+  async openDirect(userId: string, otherUserId: string) {
+    if (userId === otherUserId) throw new BadRequestException('自分とは個人チャットできません');
+    const other = await this.prisma.user.findFirst({ where: { id: otherUserId, deletedAt: null } });
+    if (!other) throw new NotFoundException('相手のアカウントが見つかりません');
+    const directKey = [userId, otherUserId].sort().join(':');
+    const existing = await this.prisma.chatRoom.findUnique({ where: { directKey } });
+    if (existing) {
+      // 片方が退出していたら戻す
+      await this.prisma.chatRoom.update({ where: { id: existing.id }, data: { deletedAt: null } });
+      for (const id of [userId, otherUserId]) {
+        await this.prisma.chatMember.upsert({
+          where: { roomId_userId: { roomId: existing.id, userId: id } },
+          update: {},
+          create: { roomId: existing.id, userId: id },
+        });
+      }
+      return { id: existing.id };
+    }
+    const room = await this.prisma.chatRoom.create({
+      data: {
+        name: '個人チャット',
+        isDirect: true,
+        directKey,
+        createdBy: userId,
+        members: { create: [{ userId }, { userId: otherUserId }] },
+      },
+    });
+    await this.notifyMembers(room.id);
+    return { id: room.id };
   }
 
   async createRoom(dto: CreateRoomDto, userId: string) {
@@ -139,7 +178,8 @@ export class ChatService {
   }
 
   async updateRoom(roomId: string, dto: UpdateRoomDto, userId: string) {
-    await this.assertMember(roomId, userId);
+    const member = await this.assertMember(roomId, userId);
+    if (member.room.isDirect) throw new BadRequestException('個人チャットの名前・メンバーは変更できません');
     await this.prisma.$transaction(async (tx) => {
       await tx.chatRoom.update({
         where: { id: roomId },
@@ -250,7 +290,13 @@ export class ChatService {
   private async createMessage(roomId: string, userId: string, data: Omit<Prisma.ChatMessageUncheckedCreateInput, 'roomId' | 'senderId'>) {
     const now = new Date();
     const msg = await this.prisma.chatMessage.create({ data: { ...data, roomId, senderId: userId, createdAt: now } });
-    await this.prisma.chatRoom.update({ where: { id: roomId }, data: { lastMessageAt: now } });
+    const room = await this.prisma.chatRoom.update({ where: { id: roomId }, data: { lastMessageAt: now } });
+    // 個人チャットを一覧から外していた相手にも、連絡があれば再び表示する(2人とも戻す。既存なら何もしない)
+    if (room.isDirect && room.directKey) {
+      for (const id of room.directKey.split(':')) {
+        await this.prisma.chatMember.upsert({ where: { roomId_userId: { roomId, userId: id } }, update: {}, create: { roomId, userId: id, joinedAt: new Date(0), lastReadAt: new Date(now.getTime() - 1) } });
+      }
+    }
     // 自分の発言までは既読
     await this.prisma.chatMember.update({ where: { roomId_userId: { roomId, userId } }, data: { lastReadAt: now } });
     await this.notifyMembers(roomId);

@@ -1023,6 +1023,9 @@ model ChatRoom {
   // 最後の発言日時(一覧の並び順用)
   lastMessageAt DateTime @default(now())
   deletedAt DateTime?
+  // 個人チャット(1対1)。directKey = 2人のユーザーIDを並べたもの(同じ2人のトークを1つにする)
+  isDirect  Boolean   @default(false)
+  directKey String?   @unique
 
   members  ChatMember[]
   messages ChatMessage[]
@@ -1163,5 +1166,19 @@ model TaskProgress {
 
   @@id([taskId, userId])
   @@index([userId])
+}
+
+// メモ(要望: 題名ごとにいろいろな内容を残せる。自分専用)
+model Memo {
+  id        String    @id @default(uuid())
+  userId    String
+  title     String
+  body      String    @default("")
+  pinned    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, updatedAt])
 }
 

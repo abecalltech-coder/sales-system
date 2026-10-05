@@ -25,6 +25,12 @@ class ChatController {
     return this.chat.createRoom(dto, user.id);
   }
 
+  /** 個人チャットを開く(無ければ作る) */
+  @Post('direct/:userId')
+  direct(@Param('userId') otherUserId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.chat.openDirect(user.id, otherUserId);
+  }
+
   @Get('rooms/:id')
   room(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.chat.getRoom(id, user.id);
