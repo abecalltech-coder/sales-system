@@ -36,7 +36,7 @@ export function BulkImportDealsModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; duplicates: number; skippedUsers: string[] } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; updated: number; protectedFields: number; duplicates: number; skippedUsers: string[] } | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -114,6 +114,9 @@ export function BulkImportDealsModal({
       const batchValuesList: Record<string, unknown>[] = [];
 
       const rows: { values: Record<string, unknown> }[] = [];
+      // 案件名+申込番号が一致する既存の案件へは追記する(要望: 手打ちの値は上書きしない。判定はサーバー側)
+      const updates: { id: string; values: Record<string, unknown> }[] = [];
+      const updatedIds = new Set<string>();
       let duplicates = 0;
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
@@ -140,6 +143,17 @@ export function BulkImportDealsModal({
           }
         }
         if (Object.keys(values).length === 0) continue;
+        if (nameKey && appNoKey && norm(values[appNoKey])) {
+          const target = existing.items.find((d) => norm(d.values[nameKey]) === norm(values[nameKey]) && norm(d.values[appNoKey]) === norm(values[appNoKey]));
+          if (target) {
+            if (updatedIds.has(target.id)) duplicates += 1;
+            else {
+              updatedIds.add(target.id);
+              updates.push({ id: target.id, values });
+            }
+            continue;
+          }
+        }
         const isDuplicate =
           existingValuesList.some((ev) => isDuplicateOf(values, ev)) || batchValuesList.some((bv) => isDuplicateOf(values, bv));
         if (isDuplicate) {
@@ -149,13 +163,13 @@ export function BulkImportDealsModal({
         batchValuesList.push(values);
         rows.push({ values });
       }
-      if (rows.length === 0) {
+      if (rows.length === 0 && updates.length === 0) {
         setError(duplicates > 0 ? `全て重複していたため取り込みませんでした(${duplicates}件)` : '取り込めるデータ行がありませんでした');
         setSubmitting(false);
         return;
       }
-      const res = await api.post<{ count: number }>('/deals/bulk-create', { rows });
-      setSummary({ created: res.count, duplicates, skippedUsers: [...skippedUsers] });
+      const res = await api.post<{ count: number; updated: number; protectedFields: number }>('/deals/bulk-create', { rows, updates });
+      setSummary({ created: res.count, updated: res.updated ?? 0, protectedFields: res.protectedFields ?? 0, duplicates, skippedUsers: [...skippedUsers] });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -173,7 +187,8 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            案件名と申込番号が既存の案件・貼り付け内の他の行と両方一致する場合は重複として除外します(案件名が同じでも申込番号が違えば追加)。
+            案件名と申込番号が既存の案件と両方一致する場合は、その案件へ記載します。手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
+            案件名が同じでも申込番号が違えば新しい案件として追加します。
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
           <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
@@ -183,6 +198,18 @@ export function BulkImportDealsModal({
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
               {summary.created}件の案件を作成しました。
+              {summary.updated > 0 && (
+                <>
+                  <br />
+                  既存の案件{summary.updated}件に、空欄・前回の一括投入の項目を記載しました。
+                </>
+              )}
+              {summary.protectedFields > 0 && (
+                <>
+                  <br />
+                  手打ち・システム内で入力済みの{summary.protectedFields}項目は上書きしませんでした。
+                </>
+              )}
               {summary.duplicates > 0 && (
                 <>
                   <br />

@@ -95,7 +95,7 @@ export class DealsController {
   @RequirePermissions({ resource: 'deal', action: 'create' })
   @Post('bulk-create')
   bulkCreate(@Body() dto: BulkCreateDealsDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.bulkCreate(dto.rows, user.id);
+    return this.service.bulkCreate(dto.rows, user.id, dto.updates ?? []);
   }
 
   @RequirePermissions({ resource: 'deal', action: 'edit' })

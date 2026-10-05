@@ -27,12 +27,27 @@ export class CreateDealDto {
   values?: Record<string, unknown>;
 }
 
-/** 一括投入(要望): 外部シートを貼り付けてまとめて案件を作成する */
+/** 一括投入で既存の案件へ入れる値(案件名+申込番号が一致した行) */
+export class ImportIntoDealDto {
+  @IsString()
+  id!: string;
+
+  @IsObject()
+  values!: Record<string, unknown>;
+}
+
+/** 一括投入(要望): 外部シートを貼り付けてまとめて案件を作成する。既存の案件は手打ちの値を守って追記する */
 export class BulkCreateDealsDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateDealDto)
   rows!: CreateDealDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ImportIntoDealDto)
+  updates?: ImportIntoDealDto[];
 }
 
 export class UpdateDealDto {

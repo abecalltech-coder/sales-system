@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { markManual, mergeImported } from './import-merge';
 import {
   CreateDealDto,
   CreateDealFieldDto,
@@ -156,23 +157,46 @@ export class DealsService {
   }
 
   // 一括投入(要望): 外部シートを貼り付けてまとめて作成する。既存行の先頭に積む(create()と同じ並び)。
-  async bulkCreate(rows: { values?: Record<string, unknown> }[], userId: string) {
-    if (rows.length === 0) return { ok: true, count: 0 };
-    const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
-    const base = (min._min.manualOrder ?? 0) - 10 * rows.length;
-    const created = await this.prisma.$transaction(
-      rows.map((r, i) =>
-        this.prisma.deal.create({
-          data: {
-            values: clean((r.values ?? {}) as Record<string, unknown>) as Prisma.InputJsonValue,
-            manualOrder: base + i * 10,
-            createdBy: userId,
-            updatedBy: userId,
-          },
+  async bulkCreate(rows: { values?: Record<string, unknown> }[], userId: string, updates: { id: string; values: Record<string, unknown> }[] = []) {
+    let count = 0;
+    if (rows.length > 0) {
+      const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
+      const base = (min._min.manualOrder ?? 0) - 10 * rows.length;
+      const created = await this.prisma.$transaction(
+        rows.map((r, i) => {
+          const values = clean((r.values ?? {}) as Record<string, unknown>);
+          return this.prisma.deal.create({
+            data: {
+              values: values as Prisma.InputJsonValue,
+              // 一括投入で作った案件の値は、次の一括投入で更新してよい
+              importedKeys: Object.keys(values),
+              manualOrder: base + i * 10,
+              createdBy: userId,
+              updatedBy: userId,
+            },
+          });
         }),
-      ),
-    );
-    return { ok: true, count: created.length };
+      );
+      count = created.length;
+    }
+
+    // 既存の案件への追記(要望): 手打ち・システム内で入れた値は絶対に上書きしない
+    let updated = 0;
+    let protectedFields = 0;
+    for (const u of updates) {
+      const existing = await this.prisma.deal.findFirst({ where: { id: u.id, deletedAt: null } });
+      if (!existing) continue;
+      const m = mergeImported((existing.values ?? {}) as Record<string, unknown>, existing.importedKeys, clean(u.values));
+      protectedFields += m.protectedKeys.length;
+      if (m.changed.length === 0) continue;
+      // 読んだあとに手で編集されていたら書き込まない(version で確認)
+      const r = await this.prisma.deal.updateMany({
+        where: { id: existing.id, version: existing.version },
+        data: { values: clean(m.values) as Prisma.InputJsonValue, importedKeys: m.importedKeys, updatedBy: userId, version: { increment: 1 } },
+      });
+      updated += r.count;
+    }
+    return { ok: true, count, updated, protectedFields };
   }
 
   async update(id: string, dto: UpdateDealDto, userId: string) {
@@ -183,7 +207,13 @@ export class DealsService {
     const merged = clean({ ...((existing.values ?? {}) as Record<string, unknown>), ...dto.values });
     const result = await this.prisma.deal.updateMany({
       where: { id, version: dto.version },
-      data: { values: merged as Prisma.InputJsonValue, updatedBy: userId, version: { increment: 1 } },
+      data: {
+        values: merged as Prisma.InputJsonValue,
+        // 手で編集した項目は以後、一括投入で上書きしない(要望)
+        importedKeys: markManual(existing.importedKeys, Object.keys(dto.values ?? {})),
+        updatedBy: userId,
+        version: { increment: 1 },
+      },
     });
     if (result.count === 0) throw new ConflictException('他のユーザーがこのデータを更新しています');
     return this.prisma.deal.findUniqueOrThrow({ where: { id } });

@@ -984,6 +984,9 @@ model DealFieldOption {
 model Deal {
   id          String    @id @default(uuid())
   values      Json      @default("{}") // { "<fieldKey>": string | null }
+  // 今の値が一括投入で入った項目(要望: 手打ち・システム内で入れた値は一括投入で上書きしない)。
+  // 一括投入で書き込めるのは空欄かここにある項目だけ。手で編集するとここから外れる
+  importedKeys String[] @default([])
   manualOrder Int       @default(0)
   version     Int       @default(1)
   createdAt   DateTime  @default(now())
