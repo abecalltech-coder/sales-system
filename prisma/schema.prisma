@@ -1147,6 +1147,8 @@ model Task {
   repeatInterval      Int       @default(1) // 何ヶ月/週/日/時間ごと
   repeatWeekdays      Int[]     @default([]) // 曜日毎のとき 0=日〜6=土
   repeatUntil         DateTime? // 繰り返しの終了日(任意)
+  // 自動で作ったタスクの元(例: deal-shop-support:<案件ID>)。1つの元につき1タスク
+  sourceKey           String?   @unique
   createdBy           String
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt

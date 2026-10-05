@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { markManual, mergeImported } from './import-merge';
+import { DealAutoTasksService } from './deal-auto-tasks.service';
 import {
   CreateDealDto,
   CreateDealFieldDto,
@@ -23,7 +24,10 @@ function slugifyFieldKey(label: string): string {
 
 @Injectable()
 export class DealsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly autoTasks: DealAutoTasksService,
+  ) {}
 
   // ---- 列(フィールド)定義 -------------------------------------------
   listFields(all = false) {
@@ -146,7 +150,7 @@ export class DealsService {
   async create(dto: CreateDealDto, userId: string) {
     // 新規行は一覧の先頭に出す(末尾追加だと気づかれにくいため)
     const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
-    return this.prisma.deal.create({
+    const deal = await this.prisma.deal.create({
       data: {
         values: clean((dto.values ?? {}) as Record<string, unknown>) as Prisma.InputJsonValue,
         manualOrder: (min._min.manualOrder ?? 0) - 10,
@@ -154,11 +158,14 @@ export class DealsService {
         updatedBy: userId,
       },
     });
+    await this.autoTasks.sync([deal.id], userId);
+    return deal;
   }
 
   // 一括投入(要望): 外部シートを貼り付けてまとめて作成する。既存行の先頭に積む(create()と同じ並び)。
   async bulkCreate(rows: { values?: Record<string, unknown> }[], userId: string, updates: { id: string; values: Record<string, unknown> }[] = []) {
     let count = 0;
+    const createdIds: string[] = [];
     if (rows.length > 0) {
       const min = await this.prisma.deal.aggregate({ _min: { manualOrder: true } });
       const base = (min._min.manualOrder ?? 0) - 10 * rows.length;
@@ -178,6 +185,7 @@ export class DealsService {
         }),
       );
       count = created.length;
+      createdIds.push(...created.map((d) => d.id));
     }
 
     // 既存の案件への追記(要望): 手打ち・システム内で入れた値は絶対に上書きしない
@@ -196,6 +204,7 @@ export class DealsService {
       });
       updated += r.count;
     }
+    await this.autoTasks.sync([...createdIds, ...updates.map((u) => u.id)], userId);
     return { ok: true, count, updated, protectedFields };
   }
 
@@ -216,6 +225,7 @@ export class DealsService {
       },
     });
     if (result.count === 0) throw new ConflictException('他のユーザーがこのデータを更新しています');
+    await this.autoTasks.sync([id], userId);
     return this.prisma.deal.findUniqueOrThrow({ where: { id } });
   }
 
@@ -231,6 +241,7 @@ export class DealsService {
       where: { id: { in: ids }, deletedAt: null },
       data: { deletedAt: new Date(), updatedBy: userId },
     });
+    await this.autoTasks.sync(ids, userId); // 削除した案件の自動タスクも消す
     return { ok: true, deleted: result.count };
   }
 }

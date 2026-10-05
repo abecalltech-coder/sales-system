@@ -480,53 +480,38 @@ export function InlineFlexDate({
         }}
         style={{ ...baseStyle, flex: 1, minWidth: 0 }}
       />
-      <button
-        type="button"
-        tabIndex={-1}
-        title="カレンダーから選択"
-        onClick={(e) => {
-          e.stopPropagation();
-          try {
-            pickerRef.current?.showPicker?.();
-          } catch {
-            /* showPicker未対応ブラウザでは何もしない(手入力のみ利用可) */
-          }
-        }}
-        style={{
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 18,
-          height: 18,
-          padding: 0,
-          border: 'none',
-          background: 'transparent',
-          boxShadow: 'none',
-          color: 'var(--color-text-faint)',
-          cursor: 'pointer',
-        }}
-      >
+      {/*
+        カレンダーのアイコンそのものを日付入力にする(要望: 携帯でカレンダーから選べない)。
+        iPhone 等は showPicker() で開けないため、透明な日付入力をアイコンに重ねて直接タップで開く。PCはクリックで showPicker
+      */}
+      <span title="カレンダーから選択" style={{ position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, color: 'var(--color-text-faint)' }}>
         <NavIcon name="calendar" />
-      </button>
-      <input
-        ref={pickerRef}
-        type="date"
-        tabIndex={-1}
-        aria-hidden
-        value={isoToDateKey(iso)}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (!v) {
-            onSave(null);
-            return;
-          }
-          const time = isoToTimeInput(iso) || '00:00';
-          onSave(new Date(`${v}T${time}`).toISOString());
-        }}
-        style={{ position: 'absolute', right: 0, width: 1, height: 1, opacity: 0, pointerEvents: 'none', border: 'none', padding: 0 }}
-      />
+        <input
+          ref={pickerRef}
+          type="date"
+          tabIndex={-1}
+          aria-label={`${label}をカレンダーから選択`}
+          value={isoToDateKey(iso)}
+          onClick={(e) => {
+            e.stopPropagation();
+            try {
+              e.currentTarget.showPicker?.();
+            } catch {
+              /* 未対応の端末はタップで開く */
+            }
+          }}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) {
+              onSave(null);
+              return;
+            }
+            const time = isoToTimeInput(iso) || '00:00';
+            onSave(new Date(`${v}T${time}`).toISOString());
+          }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, border: 'none', padding: 0, margin: 0, fontSize: 16, cursor: 'pointer' }}
+        />
+      </span>
     </div>
   );
 }
