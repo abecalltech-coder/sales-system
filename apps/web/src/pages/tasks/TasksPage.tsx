@@ -39,6 +39,26 @@ export function TasksPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
+  // 作成・編集の途中で他の画面へ移っていたら、戻ったときに開き直す
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || editing) return;
+    const d = readTaskDraft();
+    if (!d) {
+      restored.current = true;
+      return;
+    }
+    if (d.key === 'new') {
+      restored.current = true;
+      setEditing('new');
+    } else if (tasks) {
+      restored.current = true;
+      const t = tasks.find((x) => x.id === d.key);
+      if (t) setEditing(t);
+      else writeTaskDraft(null); // 削除されたタスクの途中内容は捨てる
+    }
+  }, [tasks, editing]);
+
   // 通知の「編集」から ?edit=<id> で開かれたら、そのタスクの編集画面を開く
   const editId = params.get('edit');
   useEffect(() => {
@@ -288,11 +308,36 @@ function toLocalParts(iso: string | null) {
   return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
 }
 
+/**
+ * 作成・編集中の内容(要望: 作成かキャンセルを押すまで消えない)。
+ * 他の画面へ移っても端末に残し、タスク画面に戻ったら同じ内容で開き直す。
+ */
+const DRAFT_KEY = 'tasks.draft';
+type TaskDraft = { key: string; form: Record<string, unknown> };
+export function readTaskDraft(): TaskDraft | null {
+  try {
+    const v = localStorage.getItem(DRAFT_KEY);
+    return v ? (JSON.parse(v) as TaskDraft) : null;
+  } catch {
+    return null;
+  }
+}
+function writeTaskDraft(d: TaskDraft | null) {
+  try {
+    if (d) localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* 保存できない端末でも作成はできる */
+  }
+}
+
 export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: () => void }) {
   const { data: me } = useMe();
   const queryClient = useQueryClient();
   const due = toLocalParts(task?.dueAt ?? null);
-  const [form, setForm] = useState({
+  const draftKey = task ? task.id : 'new';
+  const draft = readTaskDraft();
+  const [form, setForm] = useState(() => ({
     title: task?.title ?? '',
     detail: task?.detail ?? '',
     targetAll: task?.targetAll ?? false,
@@ -306,7 +351,14 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
     repeatInterval: task?.repeatInterval ?? 1,
     repeatWeekdays: task?.repeatWeekdays ?? [],
     repeatUntil: toLocalParts(task?.repeatUntil ?? null).date,
-  });
+    ...(draft?.key === draftKey ? draft.form : {}),
+  }));
+  // 入力のたびに端末へ残す
+  useEffect(() => writeTaskDraft({ key: draftKey, form }), [draftKey, form]);
+  const close = () => {
+    writeTaskDraft(null);
+    onClose();
+  };
   const [error, setError] = useState<string | null>(null);
   const set = (p: Partial<typeof form>) => setForm((f) => ({ ...f, ...p }));
 
@@ -331,7 +383,7 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      onClose();
+      close();
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '保存できませんでした'),
   });
@@ -341,8 +393,9 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
   const lab: React.CSSProperties = { fontSize: 11.5, color: 'var(--color-text-muted)' };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560, width: '100%', padding: 14, maxHeight: '92vh', overflowY: 'auto' }}>
+    // 背景を押しても閉じない(要望: 作成かキャンセルを押すまで消えない)
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 560, width: '100%', padding: 14, maxHeight: '92vh', overflowY: 'auto' }}>
         <h2 style={{ fontSize: 15, margin: '0 0 8px' }}>{task ? 'タスクを編集' : 'タスクを作成'}</h2>
 
         <div style={row}>
@@ -457,7 +510,7 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
 
         {error && <p style={{ color: 'var(--color-danger)', fontSize: 12, margin: '6px 0 0' }}>{error}</p>}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 12 }}>
-          <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+          <button type="button" onClick={close} style={{ fontSize: 12 }}>
             キャンセル
           </button>
           <button type="button" className="btn-primary" disabled={save.isPending || !form.title.trim()} onClick={() => save.mutate()} style={{ fontSize: 12 }}>
