@@ -21,6 +21,10 @@ export interface TaskItem {
   createdByName: string;
   isMine: boolean;
   doneByMe: boolean;
+  /** 自分が担当者として完了操作できるか(他の人の表示では false) */
+  canComplete: boolean;
+  /** 部署・全員表示のとき: 表示中の人のうち担当者と完了状況 */
+  assignees: { id: string; name: string; done: boolean }[] | null;
   doneCount: number;
   targetCount: number;
   canEdit: boolean;
@@ -59,6 +63,7 @@ export const REMIND_OPTIONS: { value: number | null; label: string }[] = [
   { value: 10, label: '10分前' },
   { value: 5, label: '5分前' },
   { value: null, label: '期日ちょうど' },
+  { value: -1, label: 'なし' },
 ];
 
 export const REPEAT_OPTIONS: { value: RepeatType; label: string; unit?: string }[] = [
@@ -82,8 +87,22 @@ export function repeatLabel(t: Pick<TaskItem, 'repeatType' | 'repeatInterval' | 
 export const fmtDue = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '期日なし';
 
-export function useTasks(includeDone: boolean) {
-  return useQuery({ queryKey: ['tasks', 'list', includeDone], queryFn: () => api.get<TaskItem[]>(`/tasks${includeDone ? '?includeDone=1' : ''}`) });
+/** view: 'me'(自分) / 'user:<id>' / 'dept:<id>' / 'all' */
+export function useTasks(includeDone: boolean, view = 'me') {
+  return useQuery({
+    queryKey: ['tasks', 'list', includeDone, view],
+    queryFn: () => api.get<TaskItem[]>(`/tasks?${new URLSearchParams({ ...(includeDone ? { includeDone: '1' } : {}), ...(view !== 'me' ? { view } : {}) })}`),
+  });
+}
+
+export interface TaskViewable {
+  users: { id: string; name: string; departmentId: string | null }[];
+  departments: { id: string; name: string }[];
+  canViewOthers: boolean;
+}
+
+export function useTaskViewable() {
+  return useQuery({ queryKey: ['tasks', 'viewable'], queryFn: () => api.get<TaskViewable>('/tasks/viewable'), staleTime: 60_000 });
 }
 
 export function useTaskAlerts() {

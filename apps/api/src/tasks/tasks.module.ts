@@ -11,8 +11,18 @@ import { AuthenticatedUser } from '../auth/types';
 import { nextOccurrence, NO_DUE } from './occurrence';
 
 const REPEAT_TYPES = ['NONE', 'MONTHLY', 'WEEKLY', 'DAILY', 'WEEKDAYS', 'HOURLY'];
-/** リマインド(要望: 1日前〜5分前) */
-export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5];
+/** リマインドなし(要望): 端末の通知もアプリ内の通知も出さない */
+export const REMIND_NONE = -1;
+/** リマインド(要望: 1日前〜5分前、なし)。null は期日ちょうど */
+export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5, REMIND_NONE];
+/**
+ * 他の人のタスクを見られる範囲(要望):
+ * 統括責任者・システム管理者は全員、部署責任者は自部署の全員+AP全員、APリーダー以上(APリーダー・CL)はAP全員
+ */
+const VIEW_ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'GENERAL_RESPONSIBLE'];
+const VIEW_DEPT_ROLES = ['RESPONSIBLE', 'MANAGER'];
+const VIEW_AP_ROLES = ['AP_LEADER', 'CL', ...VIEW_DEPT_ROLES];
+const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
 const SNOOZE_MS = 5 * 60_000;
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
@@ -35,7 +45,7 @@ class SaveTaskDto {
 type UserLite = { id: string; name: string; departmentId: string | null };
 
 @Injectable()
-class TasksService {
+export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
   constructor(
@@ -62,6 +72,47 @@ class TasksService {
     const set = new Set(task.targetUserIds);
     for (const u of users) if (u.departmentId && task.targetDepartmentIds.includes(u.departmentId)) set.add(u.id);
     return [...set];
+  }
+
+  /** このユーザーが見られる人(自分を含む)。要望の役職ごとの範囲 */
+  private async viewableUsers(user: AuthenticatedUser): Promise<UserLite[]> {
+    const users = await this.prisma.user.findMany({
+      where: { deletedAt: null, status: 'ACTIVE' },
+      select: { id: true, name: true, departmentId: true, roles: { select: { role: { select: { code: true } } } } },
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+    });
+    const has = (codes: string[]) => user.roles.some((r) => codes.includes(r));
+    const all = has(VIEW_ALL_ROLES);
+    return users
+      .filter(
+        (u) =>
+          all ||
+          u.id === user.id ||
+          (has(VIEW_AP_ROLES) && u.roles.some((r) => AP_ROLE_CODES.includes(r.role.code))) ||
+          (has(VIEW_DEPT_ROLES) && !!user.departmentId && u.departmentId === user.departmentId),
+      )
+      .map(({ id, name, departmentId }) => ({ id, name, departmentId }));
+  }
+
+  /** 表示切り替えの選択肢(見られる人と、その人たちの部署) */
+  async viewable(user: AuthenticatedUser) {
+    const users = await this.viewableUsers(user);
+    const deptIds = [...new Set(users.map((u) => u.departmentId).filter((d): d is string => !!d))];
+    const departments = await this.prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
+    return { users, departments, canViewOthers: users.some((u) => u.id !== user.id) };
+  }
+
+  /** view: 'user:<id>' / 'dept:<id>' / 'all' を、見られる人に絞って解決する */
+  private async resolveView(user: AuthenticatedUser, view: string): Promise<{ subjects: UserLite[]; single: boolean }> {
+    const viewable = await this.viewableUsers(user);
+    if (view === 'all') return { subjects: viewable, single: false };
+    if (view.startsWith('dept:')) return { subjects: viewable.filter((u) => u.departmentId === view.slice(5)), single: false };
+    if (view.startsWith('user:')) {
+      const u = viewable.find((x) => x.id === view.slice(5));
+      if (!u) throw new ForbiddenException('この人のタスクを見る権限がありません');
+      return { subjects: [u], single: true };
+    }
+    throw new BadRequestException('表示の指定が正しくありません');
   }
 
   private isTarget(task: Task, user: { id: string; departmentId: string | null }) {
@@ -110,7 +161,10 @@ class TasksService {
     return task.createdBy === user.id || user.roles.some((r) => ADMIN_ROLES.includes(r));
   }
 
-  async list(user: AuthenticatedUser, includeDone: boolean) {
+  async list(user: AuthenticatedUser, includeDone: boolean, view?: string) {
+    // 他の人のタスクを見るとき(要望)。1人なら「その人の目線」、部署・全員なら担当者ごとの完了状況を付ける
+    const other = view && view !== 'me' ? await this.resolveView(user, view) : null;
+    const subject: UserLite | AuthenticatedUser = other?.single ? other.subjects[0] : user;
     const [tasks, users, departments] = await Promise.all([
       this.prisma.task.findMany({ where: { deletedAt: null }, include: { progress: true } }),
       this.activeUsers(),
@@ -121,10 +175,11 @@ class TasksService {
     const now = new Date();
 
     const rows = tasks
-      .filter((t) => t.createdBy === user.id || this.isTarget(t, user))
+      .filter((t) => (other ? other.subjects.some((s) => this.isTarget(t, s)) : t.createdBy === user.id || this.isTarget(t, user)))
       .map((t) => {
-        const mine = this.isTarget(t, user);
-        const myProgress = t.progress.find((p) => p.userId === user.id);
+        // mine/doneByMe は「見ている人」(自分 or 選んだ1人)の状態。部署・全員表示では使わない
+        const mine = (!other || other.single) && this.isTarget(t, subject);
+        const myProgress = t.progress.find((p) => p.userId === subject.id);
         const myCurrent = mine ? this.currentFor(t, myProgress) : null;
         // 表示する期日: 担当者なら自分の今の回。作成者だけなら今後の最初の回
         const shown = mine ? myCurrent : t.repeatType === 'NONE' ? nextOccurrence(t, null) : nextOccurrence(t, new Date(now.getTime() - 1));
@@ -133,10 +188,23 @@ class TasksService {
           const c = this.currentFor(t, t.progress.find((p) => p.userId === uid));
           return c === null || (shown !== null && c.getTime() > shown.getTime());
         }).length;
+        // 部署・全員表示: 表示中の人のうち担当者の完了状況
+        const assignees =
+          other && !other.single
+            ? other.subjects
+                .filter((s) => this.isTarget(t, s))
+                .map((s) => {
+                  const c = this.currentFor(t, t.progress.find((p) => p.userId === s.id));
+                  return { id: s.id, name: s.name, done: c === null || (shown !== null && c.getTime() > shown.getTime()) };
+                })
+            : null;
         return {
           id: t.id,
           title: t.title,
           detail: t.detail,
+          assignees,
+          // 自分が担当者として完了操作できるか(他の人の表示では不可)
+          canComplete: !other && mine,
           targetAll: t.targetAll,
           targetDepartmentIds: t.targetDepartmentIds,
           targetUserIds: t.targetUserIds,
@@ -164,7 +232,7 @@ class TasksService {
           overdue: !!shown && shown.getTime() !== NO_DUE.getTime() && shown.getTime() < now.getTime() && !(mine && myCurrent === null),
         };
       })
-      .filter((r) => includeDone || !r.doneByMe);
+      .filter((r) => includeDone || !(r.doneByMe || (r.assignees && r.assignees.length > 0 && r.assignees.every((a) => a.done))));
 
     // 上から期日順(要望)。期日なしは後ろ、自分の完了済みは最後
     rows.sort((a, b) => {
@@ -184,7 +252,8 @@ class TasksService {
     const t = await this.prisma.task.findFirst({ where: { id, deletedAt: null }, include: { progress: true } });
     if (!t) throw new NotFoundException('タスクが見つかりません');
     if (t.createdBy !== user.id && !this.isTarget(t, user) && !user.roles.some((r) => ADMIN_ROLES.includes(r))) {
-      throw new ForbiddenException('このタスクを見る権限がありません');
+      const viewable = await this.viewableUsers(user);
+      if (!viewable.some((u) => this.isTarget(t, u))) throw new ForbiddenException('このタスクを見る権限がありません');
     }
     const users = await this.activeUsers();
     const mine = this.isTarget(t, user);
@@ -298,6 +367,7 @@ class TasksService {
       const p = t.progress[0];
       const current = this.currentFor(t, p);
       if (!current || current.getTime() === NO_DUE.getTime()) continue;
+      if (t.remindMinutes === REMIND_NONE) continue; // リマインドなし
       // アプリ内の通知は期日の時刻になってから出す(要望: それまでは表示しない)。
       // リマインド(○分前)は端末の通知(sendDue)で知らせる
       if (current.getTime() > now) continue;
@@ -321,6 +391,7 @@ class TasksService {
           const p = t.progress.find((x) => x.userId === uid);
           const current = this.currentFor(t, p);
           if (!current || current.getTime() === NO_DUE.getTime()) continue;
+          if (t.remindMinutes === REMIND_NONE) continue; // リマインドなし
           if (this.alertAt(t, current).getTime() > now) continue;
           if (p?.snoozeUntil && p.snoozeUntil.getTime() > now) continue;
           const sameOccurrence = p?.lastNotifiedOccurrence?.getTime() === current.getTime();
@@ -361,8 +432,14 @@ class TasksController {
   constructor(private readonly tasks: TasksService) {}
 
   @Get()
-  list(@CurrentUser() user: AuthenticatedUser, @Query('includeDone') includeDone?: string) {
-    return this.tasks.list(user, includeDone === '1');
+  list(@CurrentUser() user: AuthenticatedUser, @Query('includeDone') includeDone?: string, @Query('view') view?: string) {
+    return this.tasks.list(user, includeDone === '1', view);
+  }
+
+  /** 他の人のタスクの表示切り替えの選択肢 */
+  @Get('viewable')
+  viewable(@CurrentUser() user: AuthenticatedUser) {
+    return this.tasks.viewable(user);
   }
 
   @Get('alerts')

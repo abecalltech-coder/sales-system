@@ -4,12 +4,36 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useDepartments, useMe, useUserOptions } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { IMPORTANCE, REMIND_OPTIONS, REPEAT_OPTIONS, RepeatType, TaskItem, WEEKDAYS, fmtDue, repeatLabel, useTasks } from '../../lib/tasks';
+import { IMPORTANCE, REMIND_OPTIONS, REPEAT_OPTIONS, RepeatType, TaskItem, WEEKDAYS, fmtDue, repeatLabel, useTasks, useTaskViewable } from '../../lib/tasks';
 
 /** タスク(要望)。自分・他の人・部署全体・All のタスクを1つの一覧で、上から期日順に表示する */
 export function TasksPage() {
   const [includeDone, setIncludeDone] = useState(false);
-  const { data: tasks, isLoading } = useTasks(includeDone);
+  // 誰のタスクを見るか(要望)。選んだものは次に開いたときも残す
+  const [view, setViewState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('tasks.view') || 'me';
+    } catch {
+      return 'me';
+    }
+  });
+  const setView = (v: string) => {
+    setViewState(v);
+    try {
+      localStorage.setItem('tasks.view', v);
+    } catch {
+      /* 保存できなくても表示はできる */
+    }
+  };
+  const { data: viewable } = useTaskViewable();
+  // 見られなくなった選択(役職変更など)は自分に戻す
+  const viewValid =
+    view === 'me' ||
+    (!!viewable &&
+      viewable.canViewOthers &&
+      (view === 'all' || viewable.users.some((u) => `user:${u.id}` === view) || viewable.departments.some((d) => `dept:${d.id}` === view)));
+  const effectiveView = viewValid ? view : 'me';
+  const { data: tasks, isLoading } = useTasks(includeDone, effectiveView);
   const [editing, setEditing] = useState<TaskItem | 'new' | null>(null);
   const [params, setParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -40,7 +64,29 @@ export function TasksPage() {
       <div className="page">
         <div className="page-header">
           <h1 className="page-title">タスク</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {viewable?.canViewOthers && (
+              <select value={effectiveView} onChange={(e) => setView(e.target.value)} aria-label="誰のタスクを見るか" style={{ fontSize: 12, height: 28, maxWidth: 200 }}>
+                <option value="me">自分</option>
+                <option value="all">見られる全員</option>
+                {viewable.departments.length > 0 && (
+                  <optgroup label="部署">
+                    {viewable.departments.map((d) => (
+                      <option key={d.id} value={`dept:${d.id}`}>
+                        部署: {d.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="人">
+                  {viewable.users.map((u) => (
+                    <option key={u.id} value={`user:${u.id}`}>
+                      {u.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
             <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
               <input type="checkbox" checked={includeDone} onChange={(e) => setIncludeDone(e.target.checked)} />
               完了済みも表示
@@ -133,9 +179,32 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
             )}
             <span>作成: {t.createdByName}</span>
           </span>
+          {/* 部署・全員表示: 担当者ごとの完了状況 */}
+          {t.assignees && t.assignees.length > 0 && (
+            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
+              {t.assignees.map((a) => (
+                <span
+                  key={a.id}
+                  style={{
+                    fontSize: 10.5,
+                    padding: '0 6px',
+                    borderRadius: 4,
+                    border: '1px solid var(--color-border)',
+                    background: a.done ? 'var(--color-sunken)' : 'var(--color-surface)',
+                    color: a.done ? 'var(--color-text-faint)' : 'var(--color-text)',
+                    textDecoration: a.done ? 'line-through' : undefined,
+                  }}
+                >
+                  {a.name}
+                </span>
+              ))}
+            </span>
+          )}
         </button>
         <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          {t.isMine &&
+          {/* 他の人の表示では見るだけ(完了にできるのは本人) */}
+          {!t.canComplete && t.isMine && t.doneByMe && <span style={{ fontSize: 11, color: 'var(--color-success)' }}>完了済み</span>}
+          {t.canComplete &&
             (t.doneByMe ? (
               t.repeatType === 'NONE' && (
                 <button type="button" onClick={onReopen} style={{ fontSize: 11, padding: '3px 8px' }}>
