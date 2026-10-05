@@ -73,8 +73,6 @@ export function BulkImportDealsModal({
     protectedFields: number;
     duplicates: number;
     skippedUsers: string[];
-    /** 同じ申込番号で1件に纏めた行(何が反映されたか確認できるように) */
-    groups: { appNo: string; name: string; rows: number }[];
     noAppNo: number;
   } | null>(null);
 
@@ -157,27 +155,33 @@ export function BulkImportDealsModal({
       // 重複判定のため既存の案件を全件取得しておく(取り込む項目だけを比較する)
       const existing = await api.get<{ items: DealListItem[] }>('/deals?page=1&pageSize=5000');
       const existingValuesList = existing.items.map((d) => d.values);
-      const batchValuesList: Record<string, unknown>[] = [];
 
       const rows: { values: Record<string, unknown> }[] = [];
       // 案件名+申込番号が一致する既存の案件へは追記する(要望: 手打ちの値は上書きしない。判定はサーバー側)
       const updates: { id: string; values: Record<string, unknown> }[] = [];
-      const updatedIds = new Set<string>();
       let duplicates = 0;
       let rowsRead = 0;
       let noAppNo = 0;
-      const groupInfo = new Map<string, { appNo: string; name: string; rows: number }>();
-      // 同じ案件(案件名+申込番号)が複数行ある時(拠点ごと・従量/動力)は1件にまとめる。
-      // 後の行は空欄だけ埋め、店サポ付帯有無はどれか1行でもTMSなら「有」(要望)
-      const shopField = fieldByKey.get(SHOP_SUPPORT_KEY);
-      const shopYesId = shopField?.options.find((o) => o.label.startsWith('有'))?.id;
-      const merged = new Map<string, Record<string, unknown>>();
-      const mergeInto = (base: Record<string, unknown>, next: Record<string, unknown>) => {
-        for (const [k, v] of Object.entries(next)) {
-          if (base[k] == null || base[k] === '') base[k] = v;
-          else if (k === SHOP_SUPPORT_KEY && v === shopYesId) base[k] = v;
+      /**
+       * 1行=1件(要望: 纏めない)。同じ申込番号の行(拠点ごと・従量/動力)もそれぞれ1件にする。
+       * 再取り込みでは、同じ申込番号の既存の案件へ上から順に対応させて記載し、足りない分だけ追加する
+       * (一括投入の案件は貼り付けた順に並ぶため、同じ表を貼り直せば同じ行に入る)
+       */
+      const existingByAppNo = new Map<string, DealListItem[]>();
+      if (appNoKey) {
+        // 作成順(同じ取り込み内は貼り付けた順)に並べて対応させる
+        const ordered = [...existing.items].sort((x, y) => {
+          const cx = (x as DealListItem & { createdAt?: string }).createdAt ?? '';
+          const cy = (y as DealListItem & { createdAt?: string }).createdAt ?? '';
+          return cx < cy ? -1 : cx > cy ? 1 : x.manualOrder - y.manualOrder;
+        });
+        for (const d of ordered) {
+          const k = norm(d.values[appNoKey]);
+          if (!k) continue;
+          existingByAppNo.set(k, [...(existingByAppNo.get(k) ?? []), d]);
         }
-      };
+      }
+      const usedPerAppNo = new Map<string, number>();
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
         for (const col of IMPORT_COLUMNS) {
@@ -210,37 +214,25 @@ export function BulkImportDealsModal({
         }
         if (Object.keys(values).length === 0) continue;
         rowsRead += 1;
-        // 申込番号ごとに1件(要望)。同じ申込番号の行(拠点ごと・従量/動力)は1件に纏める
         if (appNoKey && norm(values[appNoKey])) {
-          const mk = norm(values[appNoKey]);
-          const prev = merged.get(mk);
-          if (prev) {
-            mergeInto(prev, values);
-            duplicates += 1;
-            const g = groupInfo.get(mk);
-            if (g) g.rows += 1;
-            continue;
-          }
-          merged.set(mk, values);
-          groupInfo.set(mk, { appNo: mk, name: nameKey ? norm(values[nameKey]) : '', rows: 1 });
-          const target = existing.items.find((d) => norm(d.values[appNoKey]) === mk);
+          const k = norm(values[appNoKey]);
+          const n = usedPerAppNo.get(k) ?? 0;
+          usedPerAppNo.set(k, n + 1);
+          const target = existingByAppNo.get(k)?.[n];
           if (target) {
-            updatedIds.add(target.id);
             updates.push({ id: target.id, values });
             continue;
           }
-          batchValuesList.push(values);
           rows.push({ values });
           continue;
         }
         noAppNo += 1;
         const isDuplicate =
-          existingValuesList.some((ev) => isDuplicateOf(values, ev)) || batchValuesList.some((bv) => isDuplicateOf(values, bv));
+          existingValuesList.some((ev) => isDuplicateOf(values, ev));
         if (isDuplicate) {
           duplicates += 1;
           continue;
         }
-        batchValuesList.push(values);
         rows.push({ values });
       }
       if (rows.length === 0 && updates.length === 0) {
@@ -256,7 +248,6 @@ export function BulkImportDealsModal({
         protectedFields: res.protectedFields ?? 0,
         duplicates,
         skippedUsers: [...skippedUsers],
-        groups: [...groupInfo.values()].filter((g) => g.rows > 1),
         noAppNo,
       });
       onImported();
@@ -276,7 +267,7 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            申込番号ごとに1件の案件を作ります(同じ申込番号の行は1件に纏め、空欄を後の行で埋めます)。申込番号が既存の案件と一致する場合は、その案件へ記載します。
+            貼り付けた1行ごとに1件の案件を作ります(同じ申込番号の行も纏めません)。同じ申込番号の案件が既にある場合は、上から順にその案件へ記載し、足りない分だけ追加します。
             手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
@@ -302,12 +293,7 @@ export function BulkImportDealsModal({
               {summary.duplicates > 0 && (
                 <>
                   <br />
-                  同じ申込番号の行は1件に纏めました:
-                  {summary.groups.map((g) => (
-                    <span key={g.appNo} style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)' }}>
-                      ・{g.appNo} {g.name}({g.rows}行→1件)
-                    </span>
-                  ))}
+                  申込番号が空欄で、取り込む項目が既存の案件と完全一致する{summary.duplicates}行は除外しました。
                 </>
               )}
               {summary.noAppNo > 0 && (
