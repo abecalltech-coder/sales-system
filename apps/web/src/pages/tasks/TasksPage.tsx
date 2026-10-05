@@ -150,33 +150,52 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
   const imp = IMPORTANCE[t.importance] ?? IMPORTANCE[3];
   const repeat = repeatLabel(t);
   const remind = REMIND_OPTIONS.find((o) => o.value === t.remindMinutes)?.label;
+  const chip: React.CSSProperties = { fontSize: 10.5, padding: '0 6px', borderRadius: 4, lineHeight: '17px' };
   return (
-    <div style={{ padding: '7px 10px', borderBottom: '1px solid var(--color-sunken)', opacity: t.doneByMe ? 0.55 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
-        <span title={`重要度 ${t.importance}`} style={{ flexShrink: 0, fontSize: 10.5, padding: '1px 6px', borderRadius: 4, background: imp.color, color: imp.text }}>
-          {t.importance} {imp.label}
-        </span>
+    // 重要度は左端の色だけで表す(要望: 文字は不要)
+    <div
+      title={`重要度: ${imp.label}`}
+      style={{ padding: '7px 10px 7px 9px', borderBottom: '1px solid var(--color-sunken)', borderLeft: `5px solid ${imp.color}`, opacity: t.doneByMe ? 0.55 : 1 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          style={{ flex: '1 1 220px', minWidth: 0, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', textAlign: 'left', font: 'inherit', color: 'inherit' }}
+          style={{ flex: 1, minWidth: 0, padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', textAlign: 'left', font: 'inherit', color: 'inherit' }}
         >
-          <span style={{ fontSize: 14, fontWeight: 900, textDecoration: t.doneByMe ? 'line-through' : undefined }}>{t.title}</span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 3 }}>
-            {/* 個人/部署/All が分かるように(要望) */}
-            {t.categories.map((c, i) => (
-              <span key={i} style={{ fontSize: 10.5, padding: '0 6px', borderRadius: 4, ...CATEGORY_STYLE[c.kind] }}>
-                {c.label}
-              </span>
-            ))}
-          </span>
-          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 3, fontSize: 11.5, color: t.overdue ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
+          <span style={{ display: 'block', fontSize: 14, fontWeight: 900, textDecoration: t.doneByMe ? 'line-through' : undefined }}>{t.title}</span>
+          <span style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 2, fontSize: 11.5, color: t.overdue ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
             <span>
               {t.overdue ? '期限切れ ' : ''}
               {fmtDue(t.currentDueAt)}
             </span>
             {repeat && <span>繰り返し: {repeat}</span>}
             {t.currentDueAt && remind && <span>通知: {remind}</span>}
+            <span>作成: {t.createdByName}</span>
+          </span>
+          {/* 誰のタスクか(要望: 1か所にまとめる)。部署・全員表示では担当者ごとの完了状況、それ以外は対象(All/部署/個人) */}
+          <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 3, marginTop: 3 }}>
+            {t.assignees && t.assignees.length > 0
+              ? t.assignees.map((a) => (
+                  <span
+                    key={a.id}
+                    title={a.done ? '完了' : '未完了'}
+                    style={{
+                      ...chip,
+                      border: '1px solid var(--color-border)',
+                      background: a.done ? 'var(--color-sunken)' : 'var(--color-surface)',
+                      color: a.done ? 'var(--color-text-faint)' : 'var(--color-text)',
+                      textDecoration: a.done ? 'line-through' : undefined,
+                    }}
+                  >
+                    {a.name}
+                  </span>
+                ))
+              : t.categories.map((c, i) => (
+                  <span key={i} style={{ ...chip, ...CATEGORY_STYLE[c.kind] }}>
+                    {c.label}
+                  </span>
+                ))}
             {t.targetCount > 1 && (
               <span
                 role="button"
@@ -192,34 +211,12 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
                   }
                 }}
                 title="誰が完了/未完了か見る"
-                style={{ color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer' }}
+                style={{ fontSize: 11.5, marginLeft: 4, color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer' }}
               >
                 完了 {t.doneCount}/{t.targetCount}人
               </span>
             )}
-            <span>作成: {t.createdByName}</span>
           </span>
-          {/* 部署・全員表示: 担当者ごとの完了状況 */}
-          {t.assignees && t.assignees.length > 0 && (
-            <span style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
-              {t.assignees.map((a) => (
-                <span
-                  key={a.id}
-                  style={{
-                    fontSize: 10.5,
-                    padding: '0 6px',
-                    borderRadius: 4,
-                    border: '1px solid var(--color-border)',
-                    background: a.done ? 'var(--color-sunken)' : 'var(--color-surface)',
-                    color: a.done ? 'var(--color-text-faint)' : 'var(--color-text)',
-                    textDecoration: a.done ? 'line-through' : undefined,
-                  }}
-                >
-                  {a.name}
-                </span>
-              ))}
-            </span>
-          )}
         </button>
         <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {/* 他の人の表示では見るだけ(完了にできるのは本人) */}
@@ -482,7 +479,9 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
         </div>
         <div style={row}>
           <span style={lab}>重要度</span>
-          <span role="radiogroup" aria-label="重要度" style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {/* 色だけで選ぶ(要望: 文字は不要)。左ほど低く、右ほど高い */}
+          <span role="radiogroup" aria-label="重要度" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)' }}>低</span>
             {[1, 2, 3, 4, 5].map((n) => {
               const imp = IMPORTANCE[n];
               const on = form.importance === n;
@@ -492,19 +491,27 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
                   type="button"
                   role="radio"
                   aria-checked={on}
+                  aria-label={`重要度: ${imp.label}`}
+                  title={imp.label}
                   onClick={() => set({ importance: n })}
                   style={{
-                    fontSize: 12,
-                    padding: '4px 10px',
-                    background: on ? imp.color : 'var(--color-surface)',
-                    color: on ? imp.text : imp.color,
-                    borderColor: imp.color,
+                    width: 30,
+                    height: 26,
+                    padding: 0,
+                    background: imp.color,
+                    color: imp.text,
+                    border: on ? '2px solid var(--color-text)' : '2px solid transparent',
+                    outline: on ? '2px solid var(--color-surface)' : undefined,
+                    outlineOffset: -4,
+                    fontSize: 13,
+                    opacity: on ? 1 : 0.45,
                   }}
                 >
-                  {n} {imp.label}
+                  {on ? '✓' : ''}
                 </button>
               );
             })}
+            <span style={{ fontSize: 10.5, color: 'var(--color-text-faint)' }}>高</span>
           </span>
         </div>
 
