@@ -19,6 +19,18 @@ export interface RoleDef {
   permissions: { resource: string; action: string; scope: string }[];
 }
 
+/** タスクの閲覧範囲の初期値(役職を新規作成するときだけ使う。以後はユーザー管理で編集) */
+export const TASK_VIEW_DEFAULTS: Record<string, string[]> = {
+  AP_LEADER: ['AP'],
+  CL: ['AP'],
+  RESPONSIBLE: ['AP', 'DEPT'],
+  MANAGER: ['AP', 'DEPT'],
+  GENERAL_RESPONSIBLE: ['ALL'],
+  SUPER_ADMIN: ['ALL'],
+  ADMIN: ['ALL'],
+};
+export const TASK_VIEW_OPTIONS = ['AP', 'DEPT', 'ALL'];
+
 // ADMIN/SUPER_ADMINはPermissionsGuard側で全許可扱いのため、
 // ここでは代表的な非管理者ロールにのみ具体的な権限を付与する。
 export const ROLE_DEFS: RoleDef[] = [

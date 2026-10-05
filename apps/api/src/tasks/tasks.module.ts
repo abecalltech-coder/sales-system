@@ -15,13 +15,7 @@ const REPEAT_TYPES = ['NONE', 'MONTHLY', 'WEEKLY', 'DAILY', 'WEEKDAYS', 'HOURLY'
 export const REMIND_NONE = -1;
 /** リマインド(要望: 1日前〜5分前、なし)。null は期日ちょうど */
 export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5, REMIND_NONE];
-/**
- * 他の人のタスクを見られる範囲(要望):
- * 統括責任者・システム管理者は全員、部署責任者は自部署の全員+AP全員、APリーダー以上(APリーダー・CL)はAP全員
- */
-const VIEW_ALL_ROLES = ['SUPER_ADMIN', 'ADMIN', 'GENERAL_RESPONSIBLE'];
-const VIEW_DEPT_ROLES = ['RESPONSIBLE', 'MANAGER'];
-const VIEW_AP_ROLES = ['AP_LEADER', 'CL', ...VIEW_DEPT_ROLES];
+/** タスク閲覧範囲「AP全員」の対象になる役職 */
 const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
 const SNOOZE_MS = 5 * 60_000;
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
@@ -74,22 +68,25 @@ export class TasksService {
     return [...set];
   }
 
-  /** このユーザーが見られる人(自分を含む)。要望の役職ごとの範囲 */
+  /**
+   * このユーザーが見られる人(自分を含む)。範囲は役職ごとにユーザー管理で設定(Role.taskView)。
+   * 複数の役職を持つ人は、それぞれの範囲を合わせたもの
+   */
   private async viewableUsers(user: AuthenticatedUser): Promise<UserLite[]> {
+    const roles = await this.prisma.role.findMany({ where: { code: { in: user.roles } }, select: { taskView: true } });
+    const scopes = new Set(roles.flatMap((r) => r.taskView));
     const users = await this.prisma.user.findMany({
       where: { deletedAt: null, status: 'ACTIVE' },
       select: { id: true, name: true, departmentId: true, roles: { select: { role: { select: { code: true } } } } },
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
     });
-    const has = (codes: string[]) => user.roles.some((r) => codes.includes(r));
-    const all = has(VIEW_ALL_ROLES);
     return users
       .filter(
         (u) =>
-          all ||
+          scopes.has('ALL') ||
           u.id === user.id ||
-          (has(VIEW_AP_ROLES) && u.roles.some((r) => AP_ROLE_CODES.includes(r.role.code))) ||
-          (has(VIEW_DEPT_ROLES) && !!user.departmentId && u.departmentId === user.departmentId),
+          (scopes.has('AP') && u.roles.some((r) => AP_ROLE_CODES.includes(r.role.code))) ||
+          (scopes.has('DEPT') && !!user.departmentId && u.departmentId === user.departmentId),
       )
       .map(({ id, name, departmentId }) => ({ id, name, departmentId }));
   }

@@ -24,6 +24,8 @@ export interface RoleItem {
   code: string;
   name: string;
   visibleTabs: string[] | null;
+  /** タスクの閲覧範囲(AP / DEPT / ALL)。空=自分のみ */
+  taskView: string[];
 }
 
 export function useRoles() {

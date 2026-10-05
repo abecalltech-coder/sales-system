@@ -11,7 +11,13 @@ const USERS = [
   { id: 'b2', name: 'b2', departmentId: 'B', roles: [] },
 ];
 
-const service = new TasksService({ user: { findMany: jest.fn().mockResolvedValue(USERS) } } as never, {} as never, {} as never);
+// 役職ごとの閲覧範囲(ユーザー管理の設定。初期値と同じ)
+const TASK_VIEW: Record<string, string[]> = { AP: [], AP_LEADER: ['AP'], CL: ['AP'], RESPONSIBLE: ['AP', 'DEPT'], GENERAL_RESPONSIBLE: ['ALL'], SUPER_ADMIN: ['ALL'] };
+const prisma = {
+  user: { findMany: jest.fn().mockResolvedValue(USERS) },
+  role: { findMany: jest.fn(({ where }) => Promise.resolve(where.code.in.map((c: string) => ({ taskView: TASK_VIEW[c] ?? [] })))) },
+};
+const service = new TasksService(prisma as never, {} as never, {} as never);
 const ids = async (id: string, roles: string[]) => {
   const u = USERS.find((x) => x.id === id)!;
   const list: { id: string }[] = await (service as unknown as { viewableUsers: (u: unknown) => Promise<{ id: string }[]> }).viewableUsers({ id, departmentId: u.departmentId, roles });
@@ -25,4 +31,10 @@ describe('他の人のタスクを見られる範囲', () => {
   it('部署責任者は自部署の全員+AP全員', async () => expect(await ids('a4', ['RESPONSIBLE'])).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'b1']));
   it('統括責任者は全員', async () => expect(await ids('a5', ['GENERAL_RESPONSIBLE'])).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'b1', 'b2']));
   it('システム管理者は全員', async () => expect((await ids('b2', ['SUPER_ADMIN'])).length).toBe(7));
+  it('範囲の設定を変えるとすぐ反映(CLから外すと自分だけ)', async () => {
+    TASK_VIEW.CL = [];
+    expect(await ids('a3', ['CL'])).toEqual(['a3']);
+    TASK_VIEW.CL = ['AP'];
+  });
+  it('複数の役職は範囲を合わせる', async () => expect(await ids('b2', ['AP', 'CL'])).toEqual(['a1', 'a2', 'b1', 'b2']));
 });

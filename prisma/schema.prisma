@@ -165,6 +165,8 @@ model Role {
   // このロールで表示するナビタブ(パス)の一覧。nullは「制限なし=全タブ表示」(既定)。
   // ユーザー管理画面の「役職ごとのタブ表示設定」から編集する。SUPER_ADMINは常に全表示扱いで対象外。
   visibleTabs Json?
+  // タスクの閲覧範囲(ユーザー管理で編集)。AP=AP全員 / DEPT=自部署の全員 / ALL=全員。空=自分のみ
+  taskView    String[]     @default([])
   permissions Permission[]
   users       UserRole[]
 }

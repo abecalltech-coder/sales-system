@@ -13,6 +13,13 @@ import { ALL_NAV_TABS } from '../../lib/navTabs';
 // 表示順(要望): AP / APリーダー / CL / 部署責任者 / 統括責任者 / システム管理者
 const ROLE_OPTIONS = ['AP', 'AP_LEADER', 'CL', 'RESPONSIBLE', 'GENERAL_RESPONSIBLE', 'SUPER_ADMIN'];
 
+/** タスクの閲覧範囲の選択肢(役職ごと) */
+const TASK_VIEW_CHOICES = [
+  { key: 'AP', label: 'AP全員' },
+  { key: 'DEPT', label: '自部署の全員' },
+  { key: 'ALL', label: '全員' },
+];
+
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: 'システム管理者',
   ADMIN: '業務管理者',
@@ -413,9 +420,24 @@ function TabVisibilitySettings() {
 
   const resetToAll = (role: RoleItem) => updateMutation.mutate({ id: role.id, visibleTabs: null });
 
+  // タスクの閲覧範囲(要望: ユーザー管理で編集)
+  const taskViewMutation = useMutation({
+    mutationFn: (v: { id: string; taskView: string[] }) => api.patch(`/roles/${v.id}`, { taskView: v.taskView }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
+  });
+  const toggleTaskView = (role: RoleItem, key: string) => {
+    const cur = role.taskView ?? [];
+    taskViewMutation.mutate({ id: role.id, taskView: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
+  };
+
   return (
     <div style={{ marginTop: 28 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示設定</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示・タスク閲覧範囲の設定</h2>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
         チェックを外すと、そのロールを持つユーザーのサイドナビからタブが消えます(未チェック=非表示)。システム管理者の「ユーザー管理」は締め出し防止のため常に表示です。
       </p>
@@ -438,6 +460,17 @@ function TabVisibilitySettings() {
                       全タブ表示に戻す
                     </button>
                   )}
+                </div>
+                {/* タスクの閲覧範囲(自分のタスクは常に見られる) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11.5, padding: '4px 8px', marginBottom: 8, background: 'var(--color-sunken)', borderRadius: 6 }}>
+                  <span style={{ fontWeight: 900 }}>タスク閲覧範囲</span>
+                  {TASK_VIEW_CHOICES.map((c) => (
+                    <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={(role.taskView ?? []).includes(c.key)} disabled={taskViewMutation.isPending} onChange={() => toggleTaskView(role, c.key)} />
+                      {c.label}
+                    </label>
+                  ))}
+                  <span style={{ color: 'var(--color-text-faint)' }}>{(role.taskView ?? []).length === 0 ? '(自分のみ)' : '+自分'}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 4 }}>
                   {groups.map((g) => (

@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/com
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateRoleDto } from './dto/role.dto';
-import { ROLE_DEFS } from './role-defs';
+import { ROLE_DEFS, TASK_VIEW_DEFAULTS } from './role-defs';
 
 @Injectable()
 export class RolesService implements OnModuleInit {
@@ -30,7 +30,7 @@ export class RolesService implements OnModuleInit {
       for (const def of ROLE_DEFS) {
         let role = existing.find((r) => r.code === def.code);
         if (!role) {
-          const created = await this.prisma.role.create({ data: { code: def.code, name: def.name } });
+          const created = await this.prisma.role.create({ data: { code: def.code, name: def.name, taskView: TASK_VIEW_DEFAULTS[def.code] ?? [] } });
           role = { ...created, permissions: [] };
           writes++;
         } else if (role.name !== def.name) {
@@ -64,7 +64,7 @@ export class RolesService implements OnModuleInit {
   list() {
     return this.prisma.role.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, code: true, name: true, visibleTabs: true },
+      select: { id: true, code: true, name: true, visibleTabs: true, taskView: true },
     });
   }
 
@@ -74,8 +74,10 @@ export class RolesService implements OnModuleInit {
     return this.prisma.role.update({
       where: { id },
       data: {
-        visibleTabs:
-          dto.visibleTabs == null ? Prisma.DbNull : (dto.visibleTabs as Prisma.InputJsonValue),
+        ...(dto.visibleTabs !== undefined
+          ? { visibleTabs: dto.visibleTabs === null ? Prisma.DbNull : (dto.visibleTabs as Prisma.InputJsonValue) }
+          : {}),
+        ...(dto.taskView !== undefined ? { taskView: [...new Set(dto.taskView)] } : {}),
       },
     });
   }
