@@ -65,7 +65,17 @@ export function BulkImportDealsModal({
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; updated: number; protectedFields: number; duplicates: number; skippedUsers: string[] } | null>(null);
+  const [summary, setSummary] = useState<{
+    rowsRead: number;
+    created: number;
+    updated: number;
+    protectedFields: number;
+    duplicates: number;
+    skippedUsers: string[];
+    /** 同じ申込番号で1件に纏めた行(何が反映されたか確認できるように) */
+    groups: { appNo: string; name: string; rows: number }[];
+    noAppNo: number;
+  } | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -153,6 +163,9 @@ export function BulkImportDealsModal({
       const updates: { id: string; values: Record<string, unknown> }[] = [];
       const updatedIds = new Set<string>();
       let duplicates = 0;
+      let rowsRead = 0;
+      let noAppNo = 0;
+      const groupInfo = new Map<string, { appNo: string; name: string; rows: number }>();
       // 同じ案件(案件名+申込番号)が複数行ある時(拠点ごと・従量/動力)は1件にまとめる。
       // 後の行は空欄だけ埋め、店サポ付帯有無はどれか1行でもTMSなら「有」(要望)
       const shopField = fieldByKey.get(SHOP_SUPPORT_KEY);
@@ -191,16 +204,21 @@ export function BulkImportDealsModal({
           }
         }
         if (Object.keys(values).length === 0) continue;
-        if (nameKey && appNoKey && norm(values[appNoKey])) {
-          const mk = `${norm(values[nameKey])}\u0000${norm(values[appNoKey])}`;
+        rowsRead += 1;
+        // 申込番号ごとに1件(要望)。同じ申込番号の行(拠点ごと・従量/動力)は1件に纏める
+        if (appNoKey && norm(values[appNoKey])) {
+          const mk = norm(values[appNoKey]);
           const prev = merged.get(mk);
           if (prev) {
             mergeInto(prev, values);
             duplicates += 1;
+            const g = groupInfo.get(mk);
+            if (g) g.rows += 1;
             continue;
           }
           merged.set(mk, values);
-          const target = existing.items.find((d) => norm(d.values[nameKey]) === norm(values[nameKey]) && norm(d.values[appNoKey]) === norm(values[appNoKey]));
+          groupInfo.set(mk, { appNo: mk, name: nameKey ? norm(values[nameKey]) : '', rows: 1 });
+          const target = existing.items.find((d) => norm(d.values[appNoKey]) === mk);
           if (target) {
             updatedIds.add(target.id);
             updates.push({ id: target.id, values });
@@ -210,6 +228,7 @@ export function BulkImportDealsModal({
           rows.push({ values });
           continue;
         }
+        noAppNo += 1;
         const isDuplicate =
           existingValuesList.some((ev) => isDuplicateOf(values, ev)) || batchValuesList.some((bv) => isDuplicateOf(values, bv));
         if (isDuplicate) {
@@ -225,7 +244,16 @@ export function BulkImportDealsModal({
         return;
       }
       const res = await api.post<{ count: number; updated: number; protectedFields: number }>('/deals/bulk-create', { rows, updates });
-      setSummary({ created: res.count, updated: res.updated ?? 0, protectedFields: res.protectedFields ?? 0, duplicates, skippedUsers: [...skippedUsers] });
+      setSummary({
+        rowsRead,
+        created: res.count,
+        updated: res.updated ?? 0,
+        protectedFields: res.protectedFields ?? 0,
+        duplicates,
+        skippedUsers: [...skippedUsers],
+        groups: [...groupInfo.values()].filter((g) => g.rows > 1),
+        noAppNo,
+      });
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
@@ -243,8 +271,8 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            案件名と申込番号が既存の案件と両方一致する場合は、その案件へ記載します。手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
-            案件名が同じでも申込番号が違えば新しい案件として追加します。
+            申込番号ごとに1件の案件を作ります(同じ申込番号の行は1件に纏め、空欄を後の行で埋めます)。申込番号が既存の案件と一致する場合は、その案件へ記載します。
+            手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
           <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
@@ -253,7 +281,7 @@ export function BulkImportDealsModal({
           {error && <p style={{ color: 'var(--color-danger)', fontSize: 12 }}>{error}</p>}
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
-              {summary.created}件の案件を作成しました。
+              貼り付けた{summary.rowsRead}行から、{summary.created}件の案件を作成しました。
               {summary.updated > 0 && (
                 <>
                   <br />
@@ -269,7 +297,18 @@ export function BulkImportDealsModal({
               {summary.duplicates > 0 && (
                 <>
                   <br />
-                  同じ案件(案件名+申込番号)の行{summary.duplicates}件は1件に纏めました。
+                  同じ申込番号の行は1件に纏めました:
+                  {summary.groups.map((g) => (
+                    <span key={g.appNo} style={{ display: 'block', fontSize: 11, color: 'var(--color-text-muted)' }}>
+                      ・{g.appNo} {g.name}({g.rows}行→1件)
+                    </span>
+                  ))}
+                </>
+              )}
+              {summary.noAppNo > 0 && (
+                <>
+                  <br />
+                  申込番号が空欄の行が{summary.noAppNo}行ありました(取り込む項目が完全一致する行は除外)。
                 </>
               )}
               {summary.skippedUsers.length > 0 && (
