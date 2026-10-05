@@ -4,18 +4,42 @@ import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText } from '../../lib/dateInput';
 import { parseTsv } from '../../lib/tsv';
 
-// 外部シートの列名 → 案件管理の項目名(要望で指定されたマッピング)
-const SOURCE_TO_TARGET_LABEL: [string, string][] = [
-  ['訪問日', '商談日'],
-  ['CL', '担当者名'],
-  ['フック', 'フック'],
-  ['部署', '部署'],
-  ['店舗名', '案件名'],
-  ['ET日', 'エントリー日'],
-  ['進捗', 'ステータス'],
-  ['申込番号', '申込番号'],
-  ['MCOK日', 'MC日'],
+interface ImportColumn {
+  /** 貼り付ける表の列名 */
+  src: string;
+  /** 入れる項目(列名を画面で変えても追えるよう fieldKey で指定。無ければ label で探す) */
+  key?: string;
+  label: string;
+  /** 値の変換。null を返すとその値は入れない */
+  transform?: (raw: string) => string | null;
+}
+
+/** 相対/供給管理費: 6.0円〜12.0円(0.5円刻み)のプルダウンに合う値だけ入れる */
+function supplyFee(raw: string): string | null {
+  const n = Number(raw.replace(/[円\s,]/g, ''));
+  if (!Number.isFinite(n) || n < 6 || n > 12 || Math.round(n * 2) !== n * 2) return null;
+  return `${n.toFixed(1)}円`;
+}
+
+// 外部シートの列名 → 案件管理の項目(要望で指定されたマッピング)
+const IMPORT_COLUMNS: ImportColumn[] = [
+  { src: '訪問日', key: 'meeting_date', label: '商談日' },
+  { src: '申込名義', key: 'application_name', label: '申込名義' },
+  { src: '店舗名', key: 'case_name', label: '案件名' },
+  { src: '進捗', key: 'status', label: 'ステータス' },
+  { src: 'フック', key: 'hook', label: 'フック' },
+  { src: 'CL', key: 'assignee_user_id', label: 'CL' },
+  { src: '部署', key: 'department', label: '部署' },
+  { src: '重説OK日', key: 'contract_date', label: '成約日' },
+  { src: 'ET日', key: 'entry_date', label: 'ET日' },
+  // 獲得プランに「TMS」があれば店サポ付帯有無=有、無ければ無(要望)
+  { src: '獲得プラン', key: 'shop_support_attached', label: '店サポ付帯有無', transform: (raw) => (/TMS/i.test(raw) ? '有' : '無') },
+  { src: 'オプション', key: 'option', label: 'オプション' },
+  { src: '相対/供給管理費', key: 'supply_mgmt_fee', label: '相対/供給管理費', transform: supplyFee },
+  { src: '申込番号', label: '申込番号' },
+  { src: 'MCOK日', key: 'mc_date', label: 'MC日' },
 ];
+const SHOP_SUPPORT_KEY = 'shop_support_attached';
 
 /**
  * 外部シート(見出し行付きの表)をそのまま貼り付けて、指定した列だけを拾って
@@ -50,12 +74,12 @@ export function BulkImportDealsModal({
     const dataLines = table.slice(1);
 
     const sourceIdx = new Map<string, number>();
-    for (const [src] of SOURCE_TO_TARGET_LABEL) {
-      const idx = header.findIndex((h) => h.trim() === src);
-      if (idx >= 0) sourceIdx.set(src, idx);
+    for (const c of IMPORT_COLUMNS) {
+      const idx = header.findIndex((h) => h.trim() === c.src);
+      if (idx >= 0) sourceIdx.set(c.src, idx);
     }
     if (sourceIdx.size === 0) {
-      setError('見出し行に対象の列(訪問日・CL・フック・部署・店舗名・ET日・進捗・申込番号・MCOK日)が見つかりません');
+      setError(`見出し行に対象の列(${IMPORT_COLUMNS.map((c) => c.src).join('・')})が見つかりません`);
       return;
     }
 
@@ -83,8 +107,9 @@ export function BulkImportDealsModal({
      * 案件名が同じでも申込番号が違えば別の申込として追加する。
      * 申込番号が空の行は、これまでどおり取り込む項目の完全一致で判定する。
      */
-    const nameKey = fieldByLabel.get('案件名')?.fieldKey;
-    const appNoKey = fieldByLabel.get('申込番号')?.fieldKey;
+    const fieldOf = (c: { key?: string; label: string }) => (c.key ? fieldByKey.get(c.key) : undefined) ?? fieldByLabel.get(c.label);
+    const nameKey = fieldOf({ key: 'case_name', label: '案件名' })?.fieldKey;
+    const appNoKey = fieldOf({ label: '申込番号' })?.fieldKey;
     const norm = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
     const isDuplicateOf = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
       if (nameKey && appNoKey && norm(a[appNoKey])) {
@@ -99,6 +124,11 @@ export function BulkImportDealsModal({
       const opts = localOptions.get(field.id) ?? [];
       const exact = opts.find((o) => o.label === t);
       if (exact) return exact.id;
+      // 店サポ付帯有無は「有り」「無し」等の表記違いでも既存の選択肢を使う
+      if (field.fieldKey === SHOP_SUPPORT_KEY) {
+        const near = opts.find((o) => o.label.startsWith(t));
+        if (near) return near.id;
+      }
       // 一致する選択肢が無ければ新規に選択肢として追加する(データを失わないため)
       const created = await api.post<{ id: string; label: string }>(`/deals/fields/${field.id}/options`, { label: t });
       localOptions.set(field.id, [...opts, { id: created.id, label: created.label }]);
@@ -118,14 +148,27 @@ export function BulkImportDealsModal({
       const updates: { id: string; values: Record<string, unknown> }[] = [];
       const updatedIds = new Set<string>();
       let duplicates = 0;
+      // 同じ案件(案件名+申込番号)が複数行ある時(拠点ごと・従量/動力)は1件にまとめる。
+      // 後の行は空欄だけ埋め、店サポ付帯有無はどれか1行でもTMSなら「有」(要望)
+      const shopField = fieldByKey.get(SHOP_SUPPORT_KEY);
+      const shopYesId = shopField?.options.find((o) => o.label.startsWith('有'))?.id;
+      const merged = new Map<string, Record<string, unknown>>();
+      const mergeInto = (base: Record<string, unknown>, next: Record<string, unknown>) => {
+        for (const [k, v] of Object.entries(next)) {
+          if (base[k] == null || base[k] === '') base[k] = v;
+          else if (k === SHOP_SUPPORT_KEY && v === shopYesId) base[k] = v;
+        }
+      };
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
-        for (const [src, targetLabel] of SOURCE_TO_TARGET_LABEL) {
-          const idx = sourceIdx.get(src);
+        for (const col of IMPORT_COLUMNS) {
+          const idx = sourceIdx.get(col.src);
           if (idx === undefined) continue;
-          const raw = (line[idx] ?? '').trim();
+          const original = (line[idx] ?? '').trim();
+          if (!original) continue;
+          const raw = col.transform ? col.transform(original) : original;
           if (!raw) continue;
-          const field = fieldByLabel.get(targetLabel);
+          const field = fieldOf(col);
           if (!field) continue;
           if (field.dataType === 'DATE') {
             const p = parseDateText(raw);
@@ -144,15 +187,23 @@ export function BulkImportDealsModal({
         }
         if (Object.keys(values).length === 0) continue;
         if (nameKey && appNoKey && norm(values[appNoKey])) {
-          const target = existing.items.find((d) => norm(d.values[nameKey]) === norm(values[nameKey]) && norm(d.values[appNoKey]) === norm(values[appNoKey]));
-          if (target) {
-            if (updatedIds.has(target.id)) duplicates += 1;
-            else {
-              updatedIds.add(target.id);
-              updates.push({ id: target.id, values });
-            }
+          const mk = `${norm(values[nameKey])}\u0000${norm(values[appNoKey])}`;
+          const prev = merged.get(mk);
+          if (prev) {
+            mergeInto(prev, values);
+            duplicates += 1;
             continue;
           }
+          merged.set(mk, values);
+          const target = existing.items.find((d) => norm(d.values[nameKey]) === norm(values[nameKey]) && norm(d.values[appNoKey]) === norm(values[appNoKey]));
+          if (target) {
+            updatedIds.add(target.id);
+            updates.push({ id: target.id, values });
+            continue;
+          }
+          batchValuesList.push(values);
+          rows.push({ values });
+          continue;
         }
         const isDuplicate =
           existingValuesList.some((ev) => isDuplicateOf(values, ev)) || batchValuesList.some((bv) => isDuplicateOf(values, bv));
@@ -192,7 +243,7 @@ export function BulkImportDealsModal({
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
           <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
-            {SOURCE_TO_TARGET_LABEL.map(([src, dst]) => `${src}→${dst}`).join(' / ')}
+            {IMPORT_COLUMNS.map((c) => (c.key === SHOP_SUPPORT_KEY ? '獲得プラン(TMSあり)→店サポ付帯有無' : `${c.src}→${fields.find((f) => f.fieldKey === c.key)?.label ?? c.label}`)).join(' / ')}
           </div>
           {error && <p style={{ color: 'var(--color-danger)', fontSize: 12 }}>{error}</p>}
           {summary && (
@@ -213,7 +264,7 @@ export function BulkImportDealsModal({
               {summary.duplicates > 0 && (
                 <>
                   <br />
-                  重複{summary.duplicates}件は除外しました。
+                  同じ案件(案件名+申込番号)の行{summary.duplicates}件は1件に纏めました。
                 </>
               )}
               {summary.skippedUsers.length > 0 && (
