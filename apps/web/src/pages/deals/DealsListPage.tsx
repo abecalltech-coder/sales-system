@@ -343,8 +343,31 @@ export function DealsListPage() {
     if (personFilter) {
       filtered = filtered.filter((r) => r.values[ASSIGNEE_FIELD_KEY] === personFilter);
     }
+
+    // 案件名が同じ案件は自動で纏める(要望)。最初に出てくる位置にまとめ、それ以外の並びは変えない
+    const nameKey = fields?.find((f) => f.label === '案件名')?.fieldKey;
+    if (nameKey) {
+      const groups = new Map<string, DealListItem[]>();
+      const order: DealListItem[][] = [];
+      for (const r of filtered) {
+        const v = r.values[nameKey];
+        const name = typeof v === 'string' ? v.trim() : '';
+        if (!name) {
+          order.push([r]);
+          continue;
+        }
+        const g = groups.get(name);
+        if (g) g.push(r);
+        else {
+          const ng = [r];
+          groups.set(name, ng);
+          order.push(ng);
+        }
+      }
+      filtered = order.flat();
+    }
     return filtered;
-  }, [rawRows, keyword, filters, columnSearch, personFilter, columns]);
+  }, [rawRows, keyword, filters, columnSearch, personFilter, columns, fields]);
 
   return (
     <AppLayout>

@@ -78,6 +78,20 @@ export function BulkImportDealsModal({
       if (keys.length === 0) return false;
       return keys.every((k) => valuesEqual(k, a[k], b[k]));
     };
+    /**
+     * 重複の判定(要望): 案件名と申込番号が両方一致したら重複として除外する。
+     * 案件名が同じでも申込番号が違えば別の申込として追加する。
+     * 申込番号が空の行は、これまでどおり取り込む項目の完全一致で判定する。
+     */
+    const nameKey = fieldByLabel.get('案件名')?.fieldKey;
+    const appNoKey = fieldByLabel.get('申込番号')?.fieldKey;
+    const norm = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
+    const isDuplicateOf = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
+      if (nameKey && appNoKey && norm(a[appNoKey])) {
+        return norm(a[nameKey]) === norm(b[nameKey]) && norm(a[appNoKey]) === norm(b[appNoKey]);
+      }
+      return isSameRecord(a, b);
+    };
 
     const resolveSelectOption = async (field: DealFieldItem, rawLabel: string): Promise<string | null> => {
       const t = rawLabel.trim();
@@ -127,7 +141,7 @@ export function BulkImportDealsModal({
         }
         if (Object.keys(values).length === 0) continue;
         const isDuplicate =
-          existingValuesList.some((ev) => isSameRecord(values, ev)) || batchValuesList.some((bv) => isSameRecord(values, bv));
+          existingValuesList.some((ev) => isDuplicateOf(values, ev)) || batchValuesList.some((bv) => isDuplicateOf(values, bv));
         if (isDuplicate) {
           duplicates += 1;
           continue;
@@ -159,7 +173,8 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            取り込む項目が既存の案件・貼り付け内の他の行と完全一致する場合は重複として除外します。
+            案件名と申込番号が既存の案件・貼り付け内の他の行と両方一致する場合は重複として除外します(案件名が同じでも申込番号が違えば追加)。
+            申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
           <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
             {SOURCE_TO_TARGET_LABEL.map(([src, dst]) => `${src}→${dst}`).join(' / ')}
@@ -171,7 +186,7 @@ export function BulkImportDealsModal({
               {summary.duplicates > 0 && (
                 <>
                   <br />
-                  取り込み項目が完全一致する重複{summary.duplicates}件は除外しました。
+                  重複{summary.duplicates}件は除外しました。
                 </>
               )}
               {summary.skippedUsers.length > 0 && (

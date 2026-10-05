@@ -210,9 +210,11 @@ function RowInner<T>({
   // 固定表示(sticky)セルは他列がスクロールして裏に隠れる際も不透明でないと
   // 文字が透けて重なって見えるため、transparentの代わりに不透明な地の色を使う(要望対応の副修正)
   // 行に色がある場合はその色(マスタの塗りつぶし色)を固定セルにも使う
+  // 半透明の色(期限切れの薄い赤・選択中の色など)でも裏の列が透けないよう、不透明な地の上に重ねる(要望)
+  const opaque = (c: string) => `linear-gradient(${c}, ${c}), var(--color-surface)`;
   const stickyBackground =
     rowStyle?.(row)?.background != null
-      ? restingBackground
+      ? opaque(String(restingBackground))
       : i % 2 === 1
         ? 'var(--color-sunken)'
         : 'var(--color-surface)';
@@ -305,14 +307,19 @@ function RowInner<T>({
                     : cursor
                       ? `inset 0 0 0 2px ${cursor.color}`
                       : undefined,
-                backgroundColor:
-                  selected && !isFocusCell
-                    ? 'var(--color-primary-soft)'
-                    : cursor
-                      ? `${cursor.color}1a`
-                      : frozen
-                        ? stickyBackground
-                        : undefined,
+                // 固定列(案件名など)は常に不透明に(要望: 背景が透けて見えづらい)
+                ...(frozen
+                  ? {
+                      background:
+                        selected && !isFocusCell
+                          ? 'var(--color-primary-soft)'
+                          : cursor
+                            ? opaque(`${cursor.color}1a`)
+                            : stickyBackground,
+                    }
+                  : {
+                      backgroundColor: selected && !isFocusCell ? 'var(--color-primary-soft)' : cursor ? `${cursor.color}1a` : undefined,
+                    }),
               }}
             >
               {cursor && (
