@@ -1,23 +1,57 @@
-import { useEffect } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from "react";
+import { io, Socket } from "socket.io-client";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshAccessToken } from "./api";
 
 let socket: Socket | null = null;
 
 /** アプリ全体で単一のSocket.IO接続を共有する(プレゼンス/カーソル共有など複数フックから利用) */
 export function getSocket(): Socket {
   if (!socket) {
-    socket = io('/', { withCredentials: true, path: '/socket.io' });
+    const s = io("/", { withCredentials: true, path: "/socket.io" });
+    socket = s;
+    /**
+     * サーバーの再起動・端末のスリープ等で切れたあと、再接続時のログイン情報(access_token)が
+     * 期限切れだとサーバーが接続を切り、Socket.IO はそれ以上自動で繋ぎ直さない。
+     * その結果「ログイン中」が誰もいない表示になっていた(要望)。ログインを更新してから繋ぎ直す。
+     */
+    let retrying = false;
+    let failures = 0;
+    const reconnectWithFreshLogin = async () => {
+      if (retrying || s.connected) return;
+      retrying = true;
+      const ok = await refreshAccessToken();
+      retrying = false;
+      if (!ok) return; // ログアウト済みなら繋がない(ログイン後の画面遷移で再度呼ばれる)
+      failures += 1;
+      window.setTimeout(
+        () => !s.connected && s.connect(),
+        Math.min(30_000, 1000 * failures),
+      );
+    };
+    s.on("connect", () => {
+      failures = 0;
+    });
+    s.on("disconnect", (reason) => {
+      // サーバー側から切られた(=認証が通らなかった)ときは自動再接続されないので自分で繋ぎ直す
+      if (reason === "io server disconnect") void reconnectWithFreshLogin();
+    });
+    s.on("connect_error", () => void reconnectWithFreshLogin());
+    // 画面に戻ってきたときに切れていれば繋ぎ直す
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && !s.connected)
+        void reconnectWithFreshLogin();
+    });
   }
   return socket;
 }
 
 const ENTITY_QUERY_KEY: Record<string, string> = {
-  TOSS_CASE: 'toss-cases',
-  APPOINTMENT: 'appointments',
-  VISIT: 'visits',
-  CONTRACT: 'contracts',
-  CUSTOMER: 'customers',
+  TOSS_CASE: "toss-cases",
+  APPOINTMENT: "appointments",
+  VISIT: "visits",
+  CONTRACT: "contracts",
+  CUSTOMER: "customers",
 };
 
 interface CaseUpdatedEvent {
@@ -42,9 +76,11 @@ export function useRealtimeSync() {
     let timer: number | undefined;
     const flush = () => {
       timer = undefined;
-      for (const key of pending) queryClient.invalidateQueries({ queryKey: [key] });
+      for (const key of pending)
+        queryClient.invalidateQueries({ queryKey: [key] });
       // トス・アポが変わればサマリーの集計も変わる
-      if (pending.size) queryClient.invalidateQueries({ queryKey: ['department-summary'] });
+      if (pending.size)
+        queryClient.invalidateQueries({ queryKey: ["department-summary"] });
       pending.clear();
     };
     const handleCaseUpdated = (event: CaseUpdatedEvent) => {
@@ -54,40 +90,47 @@ export function useRealtimeSync() {
       if (timer === undefined) timer = window.setTimeout(flush, 800);
     };
 
-    s.on('case.updated', handleCaseUpdated);
+    s.on("case.updated", handleCaseUpdated);
     // チャット: 中身は送られてこないので、該当ルームの一覧・発言・未読数を取り直す
     const handleChat = (e: { roomId?: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] });
-      queryClient.invalidateQueries({ queryKey: ['chat', 'unread'] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
+      queryClient.invalidateQueries({ queryKey: ["chat", "unread"] });
       if (e?.roomId) {
-        queryClient.invalidateQueries({ queryKey: ['chat', 'messages', e.roomId] });
-        queryClient.invalidateQueries({ queryKey: ['chat', 'room', e.roomId] });
+        queryClient.invalidateQueries({
+          queryKey: ["chat", "messages", e.roomId],
+        });
+        queryClient.invalidateQueries({ queryKey: ["chat", "room", e.roomId] });
       }
     };
     // アカウント写真の変更
     const handleUsers = () => {
-      queryClient.invalidateQueries({ queryKey: ['user-options'] });
-      queryClient.invalidateQueries({ queryKey: ['chat'] });
+      queryClient.invalidateQueries({ queryKey: ["user-options"] });
+      queryClient.invalidateQueries({ queryKey: ["chat"] });
     };
     // 申込情報/明細(全員で共有)
     const handleSheets = (e: { id?: string }) => {
-      queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
-      if (e?.id) queryClient.invalidateQueries({ queryKey: ['application-sheet-photos', e.id] });
+      queryClient.invalidateQueries({ queryKey: ["application-sheets"] });
+      if (e?.id)
+        queryClient.invalidateQueries({
+          queryKey: ["application-sheet-photos", e.id],
+        });
     };
-    s.on('application-sheets.updated', handleSheets);
-    const handleSummary = () => queryClient.invalidateQueries({ queryKey: ['department-summary'] });
-    s.on('department-summary.updated', handleSummary);
-    const handleTasks = () => queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    s.on('tasks.updated', handleTasks);
-    s.on('chat.updated', handleChat);
-    s.on('users.updated', handleUsers);
+    s.on("application-sheets.updated", handleSheets);
+    const handleSummary = () =>
+      queryClient.invalidateQueries({ queryKey: ["department-summary"] });
+    s.on("department-summary.updated", handleSummary);
+    const handleTasks = () =>
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    s.on("tasks.updated", handleTasks);
+    s.on("chat.updated", handleChat);
+    s.on("users.updated", handleUsers);
     return () => {
-      s.off('case.updated', handleCaseUpdated);
-      s.off('chat.updated', handleChat);
-      s.off('application-sheets.updated', handleSheets);
-      s.off('department-summary.updated', handleSummary);
-      s.off('tasks.updated', handleTasks);
-      s.off('users.updated', handleUsers);
+      s.off("case.updated", handleCaseUpdated);
+      s.off("chat.updated", handleChat);
+      s.off("application-sheets.updated", handleSheets);
+      s.off("department-summary.updated", handleSummary);
+      s.off("tasks.updated", handleTasks);
+      s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [queryClient]);

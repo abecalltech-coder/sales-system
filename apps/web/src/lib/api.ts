@@ -13,7 +13,7 @@ export class ApiError extends Error {
 // (案件管理で担当者を選ぶと出ていた「Unauthorized」の原因)、以後ログインし直すまで
 // 何をしても401になっていた。in-flightのPromiseを共有して呼び出しを1回にまとめる。
 let refreshPromise: Promise<boolean> | null = null;
-function refreshAccessToken(): Promise<boolean> {
+export function refreshAccessToken(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
       .then((r) => r.ok)
