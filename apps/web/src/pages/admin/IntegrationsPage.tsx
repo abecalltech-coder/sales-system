@@ -57,7 +57,13 @@ function GoogleCalendarIntegrationSection() {
           </div>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '8px 0' }}>
             商談形式が「HPZOOM」のアポ詳細作成時に、このアカウントのカレンダーへ予定を作成し Google Meet の URL を自動発行します。
+            また、案件管理の「シートから更新」で、このアカウントが閲覧できるスプレッドシートを読み取ります。
           </p>
+          {!status.canReadSheets && (
+            <p style={{ fontSize: 12, color: 'var(--color-warning)', margin: '0 0 8px', lineHeight: 1.6 }}>
+              スプレッドシートの読み取りがまだ許可されていません。「アカウントを切り替える」から同じ(またはシートを見られる)アカウントで連携し直し、読み取りを許可してください。
+            </p>
+          )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={connect}>アカウントを切り替える</button>
             <button onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending}>

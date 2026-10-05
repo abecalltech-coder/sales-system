@@ -765,6 +765,8 @@ export interface GoogleCalendarStatus {
   accountEmail: string | null;
   connectedAt: string | null;
   calendarId: string;
+  /** スプレッドシートの読み取りが許可済みか(案件管理の「シートから更新」) */
+  canReadSheets?: boolean;
   redirectUri: string | null;
 }
 
