@@ -14,10 +14,15 @@ interface ImportColumn {
   transform?: (raw: string) => string | null;
 }
 
-/** 相対/供給管理費: 6.0円〜12.0円(0.5円刻み)のプルダウンに合う値だけ入れる */
+/**
+ * 相対/供給管理費: 数値は「8.0円」の形に(6.0円〜12.0円のプルダウンに合わせる)、
+ * 「15％」のような%表示はそのまま入れる(要望。無い選択肢は追加される)。「-」等は入れない
+ */
 function supplyFee(raw: string): string | null {
-  const n = Number(raw.replace(/[円\s,]/g, ''));
-  if (!Number.isFinite(n) || n < 6 || n > 12 || Math.round(n * 2) !== n * 2) return null;
+  const t = raw.trim();
+  if (/^[0-9０-９.．]+\s*[%％]$/.test(t)) return t.replace(/\s+/g, '');
+  const n = Number(t.replace(/[円\s,]/g, ''));
+  if (!t || !Number.isFinite(n)) return null;
   return `${n.toFixed(1)}円`;
 }
 
@@ -36,7 +41,7 @@ const IMPORT_COLUMNS: ImportColumn[] = [
   { src: '獲得プラン', key: 'shop_support_attached', label: '店サポ付帯有無', transform: (raw) => (/TMS/i.test(raw) ? '有' : '無') },
   { src: 'オプション', key: 'option', label: 'オプション' },
   { src: '相対/供給管理費', key: 'supply_mgmt_fee', label: '相対/供給管理費', transform: supplyFee },
-  { src: '申込番号', label: '申込番号' },
+  { src: '申込番号', key: 'application_number', label: '申込番号' },
   { src: 'MCOK日', key: 'mc_date', label: 'MC日' },
 ];
 const SHOP_SUPPORT_KEY = 'shop_support_attached';
@@ -109,7 +114,7 @@ export function BulkImportDealsModal({
      */
     const fieldOf = (c: { key?: string; label: string }) => (c.key ? fieldByKey.get(c.key) : undefined) ?? fieldByLabel.get(c.label);
     const nameKey = fieldOf({ key: 'case_name', label: '案件名' })?.fieldKey;
-    const appNoKey = fieldOf({ label: '申込番号' })?.fieldKey;
+    const appNoKey = fieldOf({ key: 'application_number', label: '申込番号' })?.fieldKey;
     const norm = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
     const isDuplicateOf = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
       if (nameKey && appNoKey && norm(a[appNoKey])) {
