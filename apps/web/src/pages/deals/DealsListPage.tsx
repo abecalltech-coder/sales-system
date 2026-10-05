@@ -12,7 +12,6 @@ import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
 import { BulkImportDealsModal } from './BulkImportDealsModal';
-import { SheetSyncModal, SheetSyncResult, sheetResultText, useSheetSync } from './SheetSyncModal';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
@@ -53,10 +52,6 @@ export function DealsListPage() {
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
-  // シートから更新(要望: 「CSV貼り付け用」シートを読んで反映。シートは常に更新されるためボタンで最新を取り込む)
-  const [sheetSettingsOpen, setSheetSettingsOpen] = useState(false);
-  const { data: sheetSync } = useSheetSync();
-  const [sheetMessage, setSheetMessage] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
   // 列の絞り込みポップオーバー内で検索した文字列(列ごと)。チェックが入っている値に加え、
   // ここにヒットする値も一覧に表示する(要望: 絞り込み内検索がそのまま一覧表示に反映されるように)
@@ -128,23 +123,6 @@ export function DealsListPage() {
   });
 
   const invalidateFields = () => queryClient.invalidateQueries({ queryKey: ['deal-fields'] });
-  const sheetRun = useMutation({
-    mutationFn: () => api.post<SheetSyncResult>('/deal-sheet-sync/run', {}),
-    onSuccess: (r) => {
-      setError(null);
-      setSheetMessage(
-        `シートから更新しました: ${sheetResultText(r)}${r.skippedUsers.length ? `(担当者名が一致せず未設定: ${r.skippedUsers.join('、')})` : ''}`,
-      );
-      invalidate();
-      invalidateFields();
-      queryClient.invalidateQueries({ queryKey: ['deal-sheet-sync'] });
-    },
-    onError: (err) => {
-      setSheetMessage(null);
-      setError(err instanceof ApiError ? err.message : 'シートから更新できませんでした');
-    },
-  });
-  const sheetReady = !!sheetSync?.url && Object.keys(sheetSync.mapping ?? {}).length > 0;
 
   // 列も行と同様に削除・並び替えできるように(要望)。列の管理パネルと同じAPIを使う。
   const deleteFieldMutation = useMutation({
@@ -396,35 +374,13 @@ export function DealsListPage() {
       <div className="page">
         <div className="page-header">
           <h1 className="page-title">案件管理</h1>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => openPanel()} style={{ fontSize: 13 }}>
               列を管理
             </button>
             <button onClick={() => setBulkImportOpen(true)} style={{ fontSize: 13 }}>
               一括投入
             </button>
-            <span style={{ display: 'inline-flex' }}>
-              <button
-                onClick={() => (sheetReady ? sheetRun.mutate() : setSheetSettingsOpen(true))}
-                disabled={sheetRun.isPending}
-                title={
-                  sheetSync?.lastResult
-                    ? `前回: ${new Date(sheetSync.lastResult.at).toLocaleString('ja-JP')}(${sheetSync.lastResult.by}) ${sheetResultText(sheetSync.lastResult)}`
-                    : 'シートの最新の内容を案件管理へ反映'
-                }
-                style={{ fontSize: 13, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-              >
-                {sheetRun.isPending ? '更新中...' : '⟳ シートから更新'}
-              </button>
-              <button
-                onClick={() => setSheetSettingsOpen(true)}
-                title="シート連携の設定(シートのURL・取り込む列)"
-                aria-label="シート連携の設定"
-                style={{ fontSize: 13, padding: '0 8px', borderLeft: 'none', borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-              >
-                ⚙
-              </button>
-            </span>
             <button className="btn-primary" onClick={() => setAddOpen(true)} style={{ fontSize: 13 }}>
               ＋ 案件追加
             </button>
@@ -432,14 +388,6 @@ export function DealsListPage() {
         </div>
 
         {displayedError && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{displayedError}</p>}
-        {sheetMessage && (
-          <p style={{ color: 'var(--color-success)', fontSize: 12.5, marginBottom: 10 }}>
-            {sheetMessage}
-            <button type="button" onClick={() => setSheetMessage(null)} style={{ marginLeft: 8, fontSize: 11, padding: '1px 6px' }}>
-              閉じる
-            </button>
-          </p>
-        )}
 
         <PresenceBar viewers={presence.viewers} />
 
@@ -521,7 +469,6 @@ export function DealsListPage() {
         />
       )}
 
-      {sheetSettingsOpen && <SheetSyncModal fields={fields ?? []} onClose={() => setSheetSettingsOpen(false)} />}
       {bulkImportOpen && (
         <BulkImportDealsModal
           fields={fields ?? []}

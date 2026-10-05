@@ -7,8 +7,6 @@ const PROVIDER = 'google_calendar';
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/userinfo.email',
-  // 案件管理の「シートから更新」(要望): 連携したアカウントが見られるスプレッドシートを読む(読み取りのみ)
-  'https://www.googleapis.com/auth/spreadsheets.readonly',
   'openid',
 ].join(' ');
 
@@ -44,8 +42,6 @@ export class GoogleCalendarService {
       accountEmail: row?.accountEmail ?? null,
       connectedAt: row?.connectedAt ?? null,
       calendarId: row?.calendarId ?? 'primary',
-      // 案件管理の「シートから更新」に必要な読み取りの許可があるか(この機能より前に連携した場合は再連携が必要)
-      canReadSheets: Boolean(row?.scope?.includes('spreadsheets')),
       redirectUri: cfg?.redirectUri ?? null,
     };
   }
@@ -177,37 +173,6 @@ export class GoogleCalendarService {
       },
     });
     return token.access_token;
-  }
-
-  /** スプレッドシートの1シート(gid で指定)を表示どおりの文字で読む(案件管理の「シートから更新」) */
-  async readSheet(spreadsheetId: string, gid: number | null): Promise<string[][]> {
-    const accessToken = await this.getAccessToken();
-    if (!accessToken) throw new BadRequestException('Google連携が未設定です。連携設定ページで「Googleアカウントを連携」をしてください');
-    const headers = { Authorization: `Bearer ${accessToken}` };
-    const fail = async (res: Response): Promise<never> => {
-      const body = await res.text();
-      this.logger.warn(`sheets api ${res.status}: ${body.slice(0, 300)}`);
-      if (body.includes('SERVICE_DISABLED') || body.includes('has not been used')) {
-        throw new BadRequestException('Google Cloud で「Google Sheets API」が有効になっていません。有効にしてから再度お試しください');
-      }
-      if (res.status === 403 && body.includes('insufficient')) {
-        throw new BadRequestException('シートを読む許可がありません。連携設定ページで「Googleアカウントを連携」をやり直してください(シートの読み取りを許可)');
-      }
-      if (res.status === 403 || res.status === 404) {
-        throw new BadRequestException('シートを開けません。連携しているGoogleアカウントにシートの閲覧権限があるか確認してください');
-      }
-      throw new BadRequestException(`シートを読めませんでした(${res.status})`);
-    };
-    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(sheetId,title)`, { headers });
-    if (!metaRes.ok) await fail(metaRes);
-    const meta = (await metaRes.json()) as { sheets?: { properties: { sheetId: number; title: string } }[] };
-    const sheet = (meta.sheets ?? []).find((s) => gid === null || s.properties.sheetId === gid) ?? null;
-    if (!sheet) throw new BadRequestException('指定のシート(タブ)が見つかりません。URLを確認してください');
-    const range = encodeURIComponent(`'${sheet.properties.title.replace(/'/g, "''")}'`);
-    const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${range}?valueRenderOption=FORMATTED_VALUE`, { headers });
-    if (!valRes.ok) await fail(valRes);
-    const vals = (await valRes.json()) as { values?: unknown[][] };
-    return (vals.values ?? []).map((row) => row.map((c) => (c == null ? '' : String(c))));
   }
 
   /**
