@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
@@ -121,20 +121,57 @@ export function TasksPage() {
         <div className="m-card-list">
           {isLoading && <p style={{ padding: 16, fontSize: 12, color: 'var(--color-text-faint)' }}>読み込み中...</p>}
           {!isLoading && (tasks ?? []).length === 0 && <p style={{ padding: 16, fontSize: 12, color: 'var(--color-text-faint)' }}>タスクはありません</p>}
-          {(tasks ?? []).map((t) => (
+          {(tasks ?? []).map((t, i, list) => (
+            <Fragment key={t.id}>
+              {(i === 0 || dayGroup(list[i - 1]).key !== dayGroup(t).key) && <DayHeader group={dayGroup(t)} />}
             <TaskRow
-              key={t.id}
               t={t}
               onComplete={() => act.mutate({ id: t.id, action: 'complete' })}
               onReopen={() => act.mutate({ id: t.id, action: 'reopen' })}
               onEdit={() => setEditing(t)}
               onDelete={() => window.confirm(`「${t.title}」を削除しますか？`) && act.mutate({ id: t.id, action: 'delete' })}
             />
+            </Fragment>
           ))}
         </div>
       </div>
       {editing && <TaskEditor task={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
     </AppLayout>
+  );
+}
+
+/** 日ごとの区切り(要望: 日毎に分かりやすく大きく区切る)。一覧は期日順で、自分の完了済みは最後にまとまる */
+function dayGroup(t: TaskItem): { key: string; label: string; tone?: 'today' | 'past' } {
+  if (t.doneByMe) return { key: 'done', label: '完了済み' };
+  if (!t.currentDueAt) return { key: 'none', label: '期日なし' };
+  const d = new Date(t.currentDueAt);
+  const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const today = new Date();
+  const dayDiff = Math.round(
+    (new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000,
+  );
+  const base = `${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAYS[d.getDay()]})`;
+  const rel = dayDiff === 0 ? '今日' : dayDiff === 1 ? '明日' : dayDiff === -1 ? '昨日' : '';
+  return { key, label: rel ? `${rel}  ${base}` : base, tone: dayDiff === 0 ? 'today' : dayDiff < 0 ? 'past' : undefined };
+}
+
+function DayHeader({ group }: { group: ReturnType<typeof dayGroup> }) {
+  const color = group.tone === 'today' ? 'var(--color-primary)' : group.tone === 'past' ? 'var(--color-danger)' : 'var(--color-text)';
+  return (
+    <div
+      style={{
+        padding: '10px 10px 5px',
+        marginTop: 6,
+        fontSize: 15,
+        fontWeight: 800,
+        color,
+        background: 'var(--color-sunken)',
+        borderTop: `3px solid ${color}`,
+        whiteSpace: 'pre',
+      }}
+    >
+      {group.label}
+    </div>
   );
 }
 
@@ -219,10 +256,10 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
           </span>
         </button>
         <span style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-          {/* 他の人の表示では見るだけ(完了にできるのは本人) */}
+          {/* 完了にできるのは担当者本人の分だけ(他の人・部署・全員の表示でも自分の分は押せる) */}
           {!t.canComplete && t.isMine && t.doneByMe && <span style={{ fontSize: 11, color: 'var(--color-success)' }}>完了済み</span>}
           {t.canComplete &&
-            (t.doneByMe ? (
+            (t.doneByViewer ? (
               t.repeatType === 'NONE' && (
                 <button type="button" onClick={onReopen} style={{ fontSize: 11, padding: '3px 8px' }}>
                   未完了に戻す
@@ -343,7 +380,8 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
     date: due.date,
     time: due.time || '10:00',
     importance: task?.importance ?? 3,
-    remindMinutes: task ? task.remindMinutes : 30,
+    // リマインドの初期値は「なし」(要望)
+    remindMinutes: task ? task.remindMinutes : -1,
     repeatType: (task?.repeatType ?? 'NONE') as RepeatType,
     repeatInterval: task?.repeatInterval ?? 1,
     repeatWeekdays: task?.repeatWeekdays ?? [],

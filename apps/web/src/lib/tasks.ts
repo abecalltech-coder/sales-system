@@ -21,8 +21,10 @@ export interface TaskItem {
   createdByName: string;
   isMine: boolean;
   doneByMe: boolean;
-  /** 自分が担当者として完了操作できるか(他の人の表示では false) */
+  /** 見ている本人が担当者として完了操作できるか(どの表示でも自分の分は可) */
   canComplete: boolean;
+  /** 見ている本人の分が完了済みか */
+  doneByViewer: boolean;
   /** 部署・全員表示のとき: 表示中の人のうち担当者と完了状況 */
   assignees: { id: string; name: string; done: boolean }[] | null;
   doneCount: number;

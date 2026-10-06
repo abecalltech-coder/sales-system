@@ -180,6 +180,9 @@ export class TasksService {
         const myCurrent = mine ? this.currentFor(t, myProgress) : null;
         // 表示する期日: 担当者なら自分の今の回。作成者だけなら今後の最初の回
         const shown = mine ? myCurrent : t.repeatType === 'NONE' ? nextOccurrence(t, null) : nextOccurrence(t, new Date(now.getTime() - 1));
+        // 見ている本人が担当者なら、どの表示でも自分の分を完了にできる(要望)
+        const viewerTarget = this.isTarget(t, user);
+        const viewerDone = viewerTarget && this.currentFor(t, t.progress.find((p) => p.userId === user.id)) === null;
         const targets = this.targetsOf(t, users);
         const doneCount = targets.filter((uid) => {
           const c = this.currentFor(t, t.progress.find((p) => p.userId === uid));
@@ -200,8 +203,9 @@ export class TasksService {
           title: t.title,
           detail: t.detail,
           assignees,
-          // 自分が担当者として完了操作できるか(他の人の表示では不可)
-          canComplete: !other && mine,
+          // 自分が担当者として完了操作できるか(他の人・部署・全員の表示でも自分の分は可)
+          canComplete: viewerTarget,
+          doneByViewer: viewerDone,
           targetAll: t.targetAll,
           targetDepartmentIds: t.targetDepartmentIds,
           targetUserIds: t.targetUserIds,
@@ -406,7 +410,8 @@ export class TasksService {
             body: `期日 ${when}${t.detail ? `\n${t.detail.slice(0, 80)}` : ''}`,
             url: `/tasks?edit=${t.id}`,
             tag: `task:${t.id}`,
-            requireInteraction: true,
+            // 常時表示にしない(要望)。端末の通常の通知と同じく時間が経てば通知欄へ下がる
+            requireInteraction: false,
             actions: [
               { action: 'task-done', title: '対応完了' },
               { action: 'task-snooze', title: '5分後再通知' },
