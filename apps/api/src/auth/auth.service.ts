@@ -9,7 +9,8 @@ import { JwtPayload } from './types';
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 const ACCESS_TOKEN_TTL = '15m';
-const REFRESH_TOKEN_TTL_DAYS = 14;
+// 要望: 開くたびにログインさせない(月1回程度でよい)。使うたびに延長されるので、30日開かなければ再ログイン
+const REFRESH_TOKEN_TTL_DAYS = 30;
 
 @Injectable()
 export class AuthService {

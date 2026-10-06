@@ -22,7 +22,7 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: isProd,
   sameSite: 'lax' as const,
   path: '/api/auth',
-  maxAge: 14 * 24 * 60 * 60 * 1000,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 @Controller('auth')
