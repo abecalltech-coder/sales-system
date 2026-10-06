@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
 export interface Me {
   id: string;
@@ -13,7 +13,12 @@ export interface Me {
 }
 
 export function useMe() {
-  return useQuery({ queryKey: ['me'], queryFn: () => api.get<Me>('/auth/me') });
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get<Me>('/auth/me'),
+    // 通信エラーは数回やり直す(ログイン切れ=401はやり直さない)
+    retry: (count, err) => !(err instanceof ApiError && err.status === 401) && count < 3,
+  });
 }
 
 // ============================================================
