@@ -27,10 +27,11 @@ function supplyFee(raw: string): string | null {
   return `${n.toFixed(1)}円`;
 }
 
-function countHc(raw: string): string | null {
-  const n = raw.split(/[\s,、，;；/／・]+/).filter((t) => t && !/^[-－ー―]+$/.test(t)).length;
-  return n > 0 ? String(n) : null;
+/** HC番号のセルを番号ごとに分ける(1つのセルに改行・カンマ・空白区切りで複数入っていてもよい。「-」は数えない) */
+function hcNumbers(raw: string): string[] {
+  return raw.split(/[\s,、，;；/／・]+/).filter((t) => t && !/^[-－ー―]+$/.test(t));
 }
+const HC_SRC = 'HC番号';
 
 // 外部シートの列名 → 案件管理の項目(要望で指定されたマッピング)
 const IMPORT_COLUMNS: ImportColumn[] = [
@@ -48,10 +49,9 @@ const IMPORT_COLUMNS: ImportColumn[] = [
   { src: 'オプション', key: 'option', label: 'オプション' },
   { src: '相対/供給管理費', key: 'supply_mgmt_fee', label: '相対/供給管理費', transform: supplyFee },
   { src: '申込番号', key: 'application_number', label: '申込番号' },
-  // 同じ申込番号の行(拠点ごと)を見分ける(要望: 申込番号+地点番号で当てはめる)
   { src: '地点番号', key: 'point_number', label: '地点番号' },
-  // HC番号の数=地点数(要望)。1つのセルに複数のHC番号が改行・カンマ・空白区切りで入っていれば、その数
-  { src: 'HC番号', key: 'point_count', label: '地点数', transform: countHc },
+  // HC番号ごとに案件は作らず、同じ申込番号のHC番号の数を地点数に入れる(要望)
+  { src: HC_SRC, key: 'point_count', label: '地点数' },
   { src: 'MCOK日', key: 'mc_date', label: 'MC日' },
 ];
 const SHOP_SUPPORT_KEY = 'shop_support_attached';
@@ -133,7 +133,6 @@ export function BulkImportDealsModal({
     const fieldOf = (c: { key?: string; label: string }) => (c.key ? fieldByKey.get(c.key) : undefined) ?? fieldByLabel.get(c.label);
     const nameKey = fieldOf({ key: 'case_name', label: '案件名' })?.fieldKey;
     const appNoKey = fieldOf({ key: 'application_number', label: '申込番号' })?.fieldKey;
-    const pointKey = fieldOf({ key: 'point_number', label: '地点番号' })?.fieldKey;
     const norm = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
     const isDuplicateOf = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
       if (nameKey && appNoKey && norm(a[appNoKey])) {
@@ -173,14 +172,11 @@ export function BulkImportDealsModal({
       let rowsRead = 0;
       let noAppNo = 0;
       /**
-       * 1行=1件(要望: 纏めない)。同じ申込番号の行(拠点ごと・従量/動力)もそれぞれ1件にする。
-       * 再取り込みでは「申込番号+地点番号」が同じ既存の案件へ記載する(要望)。
-       * 地点番号がまだ入っていない既存の案件(地点番号の列を足す前に取り込んだもの)へは、同じ申込番号の中で
-       * 作成順に対応させて記載する(このとき地点番号も入る)。当てはまる案件が無ければ追加する。
+       * 申込番号ごとに1件(要望: HC番号ごとに案件を作らない)。同じ申込番号の行は1件に纏め、
+       * 各項目は先に出てきた行の値(空なら後の行の値)を使い、地点数にはHC番号の数(重複は1つ)を入れる。
+       * 再取り込みでは同じ申込番号の既存の案件(作成順で最初のもの)へ記載し、無ければ追加する。
        */
       const existingByAppNo = new Map<string, DealListItem[]>();
-      const existingByPoint = new Map<string, DealListItem[]>();
-      const pointOf = (v: Record<string, unknown>) => (pointKey ? norm(v[pointKey]) : '');
       if (appNoKey) {
         // 作成順(同じ取り込み内は貼り付けた順)に並べて対応させる
         const ordered = [...existing.items].sort((x, y) => {
@@ -191,22 +187,25 @@ export function BulkImportDealsModal({
         for (const d of ordered) {
           const k = norm(d.values[appNoKey]);
           if (!k) continue;
-          const pt = pointOf(d.values);
-          if (pt) existingByPoint.set(`${k}	${pt}`, [...(existingByPoint.get(`${k}	${pt}`) ?? []), d]);
-          else existingByAppNo.set(k, [...(existingByAppNo.get(k) ?? []), d]);
+          existingByAppNo.set(k, [...(existingByAppNo.get(k) ?? []), d]);
         }
       }
-      // 1回の取り込みで同じ既存の案件へ2行入らないよう、使った案件を覚えておく
-      const used = new Set<string>();
-      const byAppNo: { appNo: string; values: Record<string, unknown> }[] = [];
-      const takeNext = (list: DealListItem[] | undefined) => list?.find((d) => !used.has(d.id));
+      const pointCountKey = fieldOf({ key: 'point_count', label: '地点数' })?.fieldKey;
+      // 申込番号 → 纏めた値・HC番号(貼り付けた順を保つ)
+      const byAppNo = new Map<string, { values: Record<string, unknown>; hc: Set<string> }>();
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
+        let hc: string[] = [];
         for (const col of IMPORT_COLUMNS) {
           const idx = sourceIdx.get(col.src);
           if (idx === undefined) continue;
           const original = (line[idx] ?? '').trim();
           if (!original) continue;
+          if (col.src === HC_SRC) {
+            hc = hcNumbers(original);
+            if (pointCountKey && hc.length > 0) values[pointCountKey] = String(hc.length);
+            continue;
+          }
           const raw = col.transform ? col.transform(original) : original;
           if (!raw) continue;
           const field = fieldOf(col);
@@ -232,17 +231,14 @@ export function BulkImportDealsModal({
         }
         if (Object.keys(values).length === 0) continue;
         rowsRead += 1;
-        if (appNoKey && norm(values[appNoKey])) byAppNo.push({ appNo: norm(values[appNoKey]), values });
         if (appNoKey && norm(values[appNoKey])) {
           const k = norm(values[appNoKey]);
-          const pt = pointOf(values);
-          const target = (pt ? takeNext(existingByPoint.get(`${k}	${pt}`)) : undefined) ?? takeNext(existingByAppNo.get(k));
-          if (target) {
-            used.add(target.id);
-            updates.push({ id: target.id, values });
-            continue;
+          const group = byAppNo.get(k);
+          if (!group) byAppNo.set(k, { values, hc: new Set(hc) });
+          else {
+            for (const [key, v] of Object.entries(values)) if (group.values[key] === undefined) group.values[key] = v;
+            for (const h of hc) group.hc.add(h);
           }
-          rows.push({ values });
           continue;
         }
         noAppNo += 1;
@@ -254,15 +250,11 @@ export function BulkImportDealsModal({
         }
         rows.push({ values });
       }
-      // 地点数 = 同じ申込番号の行にあるHC番号の合計(要望。1行に複数のHC番号があっても、行が分かれていても数える)
-      const pointCountKey = fieldOf({ key: 'point_count', label: '地点数' })?.fieldKey;
-      if (pointCountKey) {
-        const total = new Map<string, number>();
-        for (const r of byAppNo) total.set(r.appNo, (total.get(r.appNo) ?? 0) + Number(r.values[pointCountKey] ?? 0));
-        for (const r of byAppNo) {
-          const n = total.get(r.appNo) ?? 0;
-          if (n > 0) r.values[pointCountKey] = String(n);
-        }
+      for (const [k, { values, hc }] of byAppNo) {
+        if (pointCountKey && hc.size > 0) values[pointCountKey] = String(hc.size);
+        const target = existingByAppNo.get(k)?.[0];
+        if (target) updates.push({ id: target.id, values });
+        else rows.push({ values });
       }
       if (rows.length === 0 && updates.length === 0) {
         setError(duplicates > 0 ? `全て重複していたため取り込みませんでした(${duplicates}件)` : '取り込めるデータ行がありませんでした');
@@ -296,7 +288,7 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            貼り付けた1行ごとに1件の案件を作ります(同じ申込番号の行も纏めません)。「申込番号+地点番号」が同じ案件が既にある場合はその案件へ記載し、無ければ追加します。地点数には同じ申込番号のHC番号の数を入れます。
+            申込番号ごとに1件の案件を作ります(HC番号ごとの行は1件に纏め、地点数にHC番号の数を入れます)。同じ申込番号の案件が既にある場合はその案件へ記載し、無ければ追加します。
             手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
