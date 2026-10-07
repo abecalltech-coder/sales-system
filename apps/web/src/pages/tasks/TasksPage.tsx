@@ -380,8 +380,8 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
     date: due.date,
     time: due.time || '10:00',
     importance: task?.importance ?? 3,
-    // リマインドの初期値は「なし」(要望)
-    remindMinutes: task ? task.remindMinutes : -1,
+    // 初期値は前もってのリマインド無し=期日ちょうどに通知(要望)。-1(通知しない)にすると通知が一切来なくなる
+    remindMinutes: task ? task.remindMinutes : null,
     repeatType: (task?.repeatType ?? 'NONE') as RepeatType,
     repeatInterval: task?.repeatInterval ?? 1,
     repeatWeekdays: task?.repeatWeekdays ?? [],

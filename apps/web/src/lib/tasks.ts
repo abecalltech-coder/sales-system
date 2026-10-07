@@ -65,7 +65,7 @@ export const REMIND_OPTIONS: { value: number | null; label: string }[] = [
   { value: 10, label: '10分前' },
   { value: 5, label: '5分前' },
   { value: null, label: '期日ちょうど' },
-  { value: -1, label: 'なし' },
+  { value: -1, label: '通知しない' },
 ];
 
 export const REPEAT_OPTIONS: { value: RepeatType; label: string; unit?: string }[] = [
