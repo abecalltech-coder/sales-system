@@ -281,7 +281,7 @@ function RowInner<T>({
               key={col.key}
               data-row={i}
               data-col={colIdx}
-              title={cursor ? `${cursor.userName}さんが編集中` : undefined}
+              title={cursor ? `${cursor.userName}さんが選択中` : undefined}
               onFocusCapture={() => onCellFocus(rowId, col.key)}
               onBlurCapture={() => onCellBlur(rowId, col.key)}
               onMouseDown={(e) => onCellMouseDown(e, i, colIdx)}
@@ -642,6 +642,8 @@ function DataTableGrid<T>({
   const undoRef = useRef<UndoOp[]>([]);
   const redoRef = useRef<UndoOp[]>([]);
   const pendingEditRef = useRef<{ rowId: string; colKey: string; before: string } | null>(null);
+  // セルの中の入力欄・プルダウンにフォーカスがある間だけ入る(見出しの絞り込み等の入力欄と区別する)
+  const editingCellRef = useRef<{ rowId: string; colKey: string } | null>(null);
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -1019,6 +1021,23 @@ function DataTableGrid<T>({
     const inTextField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
     const mod = e.ctrlKey || e.metaKey;
 
+    // 矢印キーはセルの移動だけに使う(要望)。セルの入力中・プルダウンでも、文字カーソルの移動や
+    // 選択肢の切り替えはせず、入力を確定して隣のセルへ移る
+    const arrow = ({ ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key];
+    if (arrow && (inTextField || isSelect) && !mod && !e.altKey && editingCellRef.current && sel) {
+      e.preventDefault();
+      t.blur();
+      const [dr, dc] = arrow;
+      setSel((s) => {
+        if (!s) return s;
+        const fr = Math.max(0, Math.min(rowsRef.current.length - 1, s.fr + dr));
+        const fc = Math.max(0, Math.min(columnsRef.current.length - 1, s.fc + dc));
+        return e.shiftKey ? { ...s, fr, fc } : { ar: fr, ac: fc, fr, fc };
+      });
+      gridRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
     // Ctrl+B(太字)は入力中でもセル単位で切り替える
     if (inTextField && mod && (e.key === 'b' || e.key === 'B') && styleOf && sel) {
       e.preventDefault();
@@ -1232,16 +1251,32 @@ function DataTableGrid<T>({
     };
   }, [menu]);
 
+  // 選択しているセルを同じ画面を開いている人へ知らせる(要望: クリック・矢印キーどちらで選んでも、
+  // 入力欄を開いていなくても、相手の画面にアカウントの色で表示される)
+  const selFocusRow = sel ? rowsRef.current[sel.fr] : undefined;
+  const selFocusKey = sel && selFocusRow && columnsRef.current[sel.fc] ? `${getRowId(selFocusRow)}	${columnsRef.current[sel.fc].key}` : null;
+  const sentCursorRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selFocusKey) {
+      const [rowId, colKey] = selFocusKey.split('	');
+      onCellFocusRef.current?.(rowId, colKey);
+    } else if (sentCursorRef.current) {
+      const [rowId, colKey] = sentCursorRef.current.split('	');
+      onCellBlurRef.current?.(rowId, colKey);
+    }
+    sentCursorRef.current = selFocusKey;
+  }, [selFocusKey]);
+
   // --- 単一セル編集の undo 記録 -----------------------------------
   const handleCellFocus = useCallback((rowId: string, colKey: string) => {
-    onCellFocusRef.current?.(rowId, colKey);
+    editingCellRef.current = { rowId, colKey };
     const col = columnsRef.current.find((x) => x.key === colKey);
     const row = findRowById(rowId);
     if (col?.copyValue && row) pendingEditRef.current = { rowId, colKey, before: col.copyValue(row) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const handleCellBlur = useCallback((rowId: string, colKey: string) => {
-    onCellBlurRef.current?.(rowId, colKey);
+    editingCellRef.current = null;
     // 入力欄を抜けたあと何もフォーカスされていなければ、キーボード操作を続けられるよう
     // グリッドにフォーカスを戻す(Enter / Escape で編集を終えた直後など)
     window.setTimeout(() => {

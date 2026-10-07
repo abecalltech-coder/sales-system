@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { RealtimeService } from '../realtime/realtime.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { markManual, mergeImported } from './import-merge';
@@ -27,7 +28,13 @@ export class DealsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoTasks: DealAutoTasksService,
+    private readonly realtime: RealtimeService,
   ) {}
+
+  /** 他の人の案件管理の一覧を取り直させる(要望: 同時に操作しても最新の内容で編集できるように) */
+  private notifyChanged() {
+    this.realtime.emitToAll('deals.updated', {});
+  }
 
   // ---- 列(フィールド)定義 -------------------------------------------
   listFields(all = false) {
@@ -159,6 +166,7 @@ export class DealsService {
       },
     });
     await this.autoTasks.sync([deal.id], userId);
+    this.notifyChanged();
     return deal;
   }
 
@@ -205,34 +213,42 @@ export class DealsService {
       updated += r.count;
     }
     await this.autoTasks.sync([...createdIds, ...updates.map((u) => u.id)], userId);
+    this.notifyChanged();
     return { ok: true, count, updated, protectedFields };
   }
 
+  /**
+   * 送られてきた項目だけを最新の内容へ重ねて保存する。他の人が同じ案件の別の項目を先に更新していても
+   * 「他のユーザーがこのデータを更新しています」で止めない(要望: 同時に操作できるように)。
+   * 読んでから書くまでの間に更新が挟まったときだけ、最新を読み直してやり直す。
+   */
   async update(id: string, dto: UpdateDealDto, userId: string) {
-    const existing = await this.findOne(id);
-    if (existing.version !== dto.version) {
-      throw new ConflictException({ message: '他のユーザーがこのデータを更新しています', latest: existing });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existing = await this.findOne(id);
+      const merged = clean({ ...((existing.values ?? {}) as Record<string, unknown>), ...dto.values });
+      const result = await this.prisma.deal.updateMany({
+        where: { id, version: existing.version },
+        data: {
+          values: merged as Prisma.InputJsonValue,
+          // 手で編集した項目は以後、一括投入で上書きしない(要望)
+          importedKeys: markManual(existing.importedKeys, Object.keys(dto.values ?? {})),
+          updatedBy: userId,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count === 0) continue;
+      await this.autoTasks.sync([id], userId);
+      this.notifyChanged();
+      return this.prisma.deal.findUniqueOrThrow({ where: { id } });
     }
-    const merged = clean({ ...((existing.values ?? {}) as Record<string, unknown>), ...dto.values });
-    const result = await this.prisma.deal.updateMany({
-      where: { id, version: dto.version },
-      data: {
-        values: merged as Prisma.InputJsonValue,
-        // 手で編集した項目は以後、一括投入で上書きしない(要望)
-        importedKeys: markManual(existing.importedKeys, Object.keys(dto.values ?? {})),
-        updatedBy: userId,
-        version: { increment: 1 },
-      },
-    });
-    if (result.count === 0) throw new ConflictException('他のユーザーがこのデータを更新しています');
-    await this.autoTasks.sync([id], userId);
-    return this.prisma.deal.findUniqueOrThrow({ where: { id } });
+    throw new ConflictException('同時に更新が重なったため保存できませんでした。もう一度お試しください');
   }
 
   async reorder(ids: string[]) {
     await this.prisma.$transaction(
       ids.map((id, i) => this.prisma.deal.update({ where: { id }, data: { manualOrder: (i + 1) * 10 } })),
     );
+    this.notifyChanged();
     return { ok: true, count: ids.length };
   }
 
@@ -242,6 +258,7 @@ export class DealsService {
       data: { deletedAt: new Date(), updatedBy: userId },
     });
     await this.autoTasks.sync(ids, userId); // 削除した案件の自動タスクも消す
+    this.notifyChanged();
     return { ok: true, deleted: result.count };
   }
 }

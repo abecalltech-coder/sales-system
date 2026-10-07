@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSocket } from './useRealtimeSync';
+import { colorFor } from '../components/Avatar';
 
 export interface PresenceViewer {
   socketId: string;
@@ -20,13 +21,9 @@ interface CursorSnapshot {
   cursors: CursorInfo[];
 }
 
-const CURSOR_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#0ea5e9', '#6366f1', '#d946ef', '#14b8a6'];
-
-/** userIdから決定的に色を割り当てる(同じユーザーは常に同じ色になる) */
+/** userIdからアカウントの色を返す(要望: アカウントのアイコンと同じ色で選択中のセルを表示する) */
 export function colorForUser(userId: string): string {
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0;
-  return CURSOR_COLORS[hash % CURSOR_COLORS.length];
+  return colorFor(userId);
 }
 
 /**

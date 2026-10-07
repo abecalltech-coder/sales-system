@@ -91,6 +91,12 @@ export function useRealtimeSync() {
     };
 
     s.on("case.updated", handleCaseUpdated);
+    // 案件管理: 誰かが更新したら一覧を取り直す(同時編集で古い内容のまま操作しないように)
+    const handleDeals = () => {
+      pending.add("deals");
+      if (timer === undefined) timer = window.setTimeout(flush, 800);
+    };
+    s.on("deals.updated", handleDeals);
     // チャット: 中身は送られてこないので、該当ルームの一覧・発言・未読数を取り直す
     const handleChat = (e: { roomId?: string }) => {
       queryClient.invalidateQueries({ queryKey: ["chat", "rooms"] });
@@ -126,6 +132,7 @@ export function useRealtimeSync() {
     s.on("users.updated", handleUsers);
     return () => {
       s.off("case.updated", handleCaseUpdated);
+      s.off("deals.updated", handleDeals);
       s.off("chat.updated", handleChat);
       s.off("application-sheets.updated", handleSheets);
       s.off("department-summary.updated", handleSummary);

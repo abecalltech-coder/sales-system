@@ -1,6 +1,7 @@
 const PALETTE = ['#3453d1', '#0e7c66', '#b45309', '#7c3aed', '#be185d', '#0369a1', '#4d7c0f', '#9f1239'];
 
-function colorFor(seed: string): string {
+/** アカウントの色(写真が無いときのアイコンの色。一覧で選択中のセルの色にも使う) */
+export function colorFor(seed: string): string {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return PALETTE[h % PALETTE.length];

@@ -403,7 +403,10 @@ export function DealsListPage() {
     <AppLayout>
       <div className="page">
         <div className="page-header">
-          <h1 className="page-title">案件管理</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h1 className="page-title">案件管理</h1>
+            <PresenceBar viewers={presence.viewers} style={{ marginBottom: 0 }} />
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => openPanel()} style={{ fontSize: 13 }}>
               列を管理
@@ -418,8 +421,6 @@ export function DealsListPage() {
         </div>
 
         {displayedError && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginBottom: 12 }}>{displayedError}</p>}
-
-        <PresenceBar viewers={presence.viewers} />
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <input
