@@ -33,6 +33,15 @@ const SHOP_SUPPORT_BG_PAST = 'rgba(190, 24, 93, 0.16)'; // 当月より前(薄�
 const SHOP_SUPPORT_BG_CURRENT = 'rgba(190, 24, 93, 0.38)'; // 当月(濃い赤紫)
 
 /** 対象の日付が当月より前/当月/当月より後のどれかを、日を見ず年月だけで判定する */
+/** 先頭(固定列)は申込名義、2列目は案件名(要望)。列の並び替えをしてもこの2列は動かさない */
+const LEADING_FIELD_KEYS = ['application_name', 'case_name'];
+function pinLeadingFields(fields: DealFieldItem[] | undefined): DealFieldItem[] | undefined {
+  if (!fields) return fields;
+  const sorted = [...fields].sort((a, b) => a.order - b.order);
+  const lead = LEADING_FIELD_KEYS.map((k) => sorted.find((f) => f.fieldKey === k)).filter((f): f is DealFieldItem => !!f);
+  return [...lead, ...sorted.filter((f) => !LEADING_FIELD_KEYS.includes(f.fieldKey))];
+}
+
 function monthCompareToNow(iso: string | null | undefined): 'past' | 'current' | 'future' | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -67,7 +76,8 @@ export function DealsListPage() {
   // 検索は全項目を対象にクライアント側で行う(要望: 案件名だけでなく全項目を検索対象に)。
   // 既に全件をクライアントに読み込んでいるため、キーワードをAPIへ送らず即座に絞り込める。
   const { data, isLoading, error: listError } = useDeals({ page, pageSize });
-  const { data: fields } = useDealFields();
+  const { data: rawFields } = useDealFields();
+  const fields = useMemo(() => pinLeadingFields(rawFields), [rawFields]);
   const { data: userOptions } = useUserOptions();
   const { data: me } = useMe();
   const presence = usePresence('DEAL', me?.id);
@@ -286,7 +296,7 @@ export function DealsListPage() {
 
   // 携帯のコンパクト表示(要望): 先頭の列を見出し、最初のプルダウン列をラベル、残りの数列を2行目に出す
   const mobileCard = useMemo<MobileCardConfig<DealListItem> | undefined>(() => {
-    const sorted = [...(fields ?? [])].sort((a, b) => a.order - b.order);
+    const sorted = fields ?? [];
     if (sorted.length === 0) return undefined;
     const title = sorted[0];
     const badge = sorted.find((f) => f.dataType === 'SELECT' && f !== title);
@@ -479,7 +489,7 @@ export function DealsListPage() {
             if (id) deleteFieldMutation.mutate(id);
           }}
           onReorderColumns={(keys) => {
-            const ids = keys
+            const ids = [...LEADING_FIELD_KEYS, ...keys.filter((k) => !LEADING_FIELD_KEYS.includes(k))]
               .filter((k) => k !== ADD_COLUMN_KEY)
               .map((k) => fields?.find((f) => f.fieldKey === k)?.id)
               .filter((id): id is string => !!id);

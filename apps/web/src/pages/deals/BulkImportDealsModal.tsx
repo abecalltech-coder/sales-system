@@ -43,6 +43,8 @@ const IMPORT_COLUMNS: ImportColumn[] = [
   { src: 'オプション', key: 'option', label: 'オプション' },
   { src: '相対/供給管理費', key: 'supply_mgmt_fee', label: '相対/供給管理費', transform: supplyFee },
   { src: '申込番号', key: 'application_number', label: '申込番号' },
+  // 同じ申込番号の行(拠点ごと)を見分ける(要望: 申込番号+地点番号で当てはめる)
+  { src: '地点番号', key: 'point_number', label: '地点番号' },
   { src: 'MCOK日', key: 'mc_date', label: 'MC日' },
 ];
 const SHOP_SUPPORT_KEY = 'shop_support_attached';
@@ -124,6 +126,7 @@ export function BulkImportDealsModal({
     const fieldOf = (c: { key?: string; label: string }) => (c.key ? fieldByKey.get(c.key) : undefined) ?? fieldByLabel.get(c.label);
     const nameKey = fieldOf({ key: 'case_name', label: '案件名' })?.fieldKey;
     const appNoKey = fieldOf({ key: 'application_number', label: '申込番号' })?.fieldKey;
+    const pointKey = fieldOf({ key: 'point_number', label: '地点番号' })?.fieldKey;
     const norm = (v: unknown) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim());
     const isDuplicateOf = (a: Record<string, unknown>, b: Record<string, unknown>): boolean => {
       if (nameKey && appNoKey && norm(a[appNoKey])) {
@@ -164,10 +167,13 @@ export function BulkImportDealsModal({
       let noAppNo = 0;
       /**
        * 1行=1件(要望: 纏めない)。同じ申込番号の行(拠点ごと・従量/動力)もそれぞれ1件にする。
-       * 再取り込みでは、同じ申込番号の既存の案件へ上から順に対応させて記載し、足りない分だけ追加する
-       * (一括投入の案件は貼り付けた順に並ぶため、同じ表を貼り直せば同じ行に入る)
+       * 再取り込みでは「申込番号+地点番号」が同じ既存の案件へ記載する(要望)。
+       * 地点番号がまだ入っていない既存の案件(地点番号の列を足す前に取り込んだもの)へは、同じ申込番号の中で
+       * 作成順に対応させて記載する(このとき地点番号も入る)。当てはまる案件が無ければ追加する。
        */
       const existingByAppNo = new Map<string, DealListItem[]>();
+      const existingByPoint = new Map<string, DealListItem[]>();
+      const pointOf = (v: Record<string, unknown>) => (pointKey ? norm(v[pointKey]) : '');
       if (appNoKey) {
         // 作成順(同じ取り込み内は貼り付けた順)に並べて対応させる
         const ordered = [...existing.items].sort((x, y) => {
@@ -178,10 +184,14 @@ export function BulkImportDealsModal({
         for (const d of ordered) {
           const k = norm(d.values[appNoKey]);
           if (!k) continue;
-          existingByAppNo.set(k, [...(existingByAppNo.get(k) ?? []), d]);
+          const pt = pointOf(d.values);
+          if (pt) existingByPoint.set(`${k}	${pt}`, [...(existingByPoint.get(`${k}	${pt}`) ?? []), d]);
+          else existingByAppNo.set(k, [...(existingByAppNo.get(k) ?? []), d]);
         }
       }
-      const usedPerAppNo = new Map<string, number>();
+      // 1回の取り込みで同じ既存の案件へ2行入らないよう、使った案件を覚えておく
+      const used = new Set<string>();
+      const takeNext = (list: DealListItem[] | undefined) => list?.find((d) => !used.has(d.id));
       for (const line of dataLines) {
         const values: Record<string, unknown> = {};
         for (const col of IMPORT_COLUMNS) {
@@ -216,10 +226,10 @@ export function BulkImportDealsModal({
         rowsRead += 1;
         if (appNoKey && norm(values[appNoKey])) {
           const k = norm(values[appNoKey]);
-          const n = usedPerAppNo.get(k) ?? 0;
-          usedPerAppNo.set(k, n + 1);
-          const target = existingByAppNo.get(k)?.[n];
+          const pt = pointOf(values);
+          const target = (pt ? takeNext(existingByPoint.get(`${k}	${pt}`)) : undefined) ?? takeNext(existingByAppNo.get(k));
           if (target) {
+            used.add(target.id);
             updates.push({ id: target.id, values });
             continue;
           }
@@ -267,7 +277,7 @@ export function BulkImportDealsModal({
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-            貼り付けた1行ごとに1件の案件を作ります(同じ申込番号の行も纏めません)。同じ申込番号の案件が既にある場合は、上から順にその案件へ記載し、足りない分だけ追加します。
+            貼り付けた1行ごとに1件の案件を作ります(同じ申込番号の行も纏めません)。「申込番号+地点番号」が同じ案件が既にある場合はその案件へ記載し、無ければ追加します。
             手打ち・システム内で入力した値は上書きせず、空欄と前回の一括投入で入った項目だけを記載します。
             申込番号が空の行は、取り込む項目が完全一致する場合に除外します。一覧では案件名が同じ案件が自動で纏まって表示されます。
           </p>
