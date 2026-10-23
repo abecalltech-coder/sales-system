@@ -15,6 +15,10 @@ export interface FieldDef {
   placeholder?: string;
   /** この項目の前に空行を入れる(書式の区切り) */
   gapBefore?: boolean;
+  /** 入力に合わせて自動で整える(date: 1980/01/23・month: 2026/09) */
+  format?: 'date' | 'month';
+  /** 決まった桁数(違うときは赤字で知らせる) */
+  digits?: number;
 }
 
 export const INPUT_CODES = ['CT', 'CH'];
@@ -25,7 +29,7 @@ export const APPLICATION_FIELDS: FieldDef[] = [
   { key: 'address', label: '申し込み住所', kind: 'zipAddress', bullet: true },
   { key: 'repName', label: '代表者名', bullet: true },
   { key: 'repNameKana', label: '代表者名(フリガナ)', bullet: true },
-  { key: 'repBirth', label: '代表生年月日', bullet: true, placeholder: '例: 1980/01/23' },
+  { key: 'repBirth', label: '代表生年月日', bullet: true, format: 'date', placeholder: '例: 1980/01/23' },
   { key: 'repPhone', label: '代表者電話番号', bullet: true },
   { key: 'storePhone', label: '店舗番号（あれば）', bullet: true },
   { key: 'callbackTime', label: '後確希望時間', bullet: true },
@@ -35,7 +39,7 @@ export const APPLICATION_FIELDS: FieldDef[] = [
 
 const ELECTRIC_COMMON: FieldDef[] = [
   { key: 'company', label: '契約電力会社' },
-  { key: 'spid', label: '供給地点特定番号', placeholder: '22桁' },
+  { key: 'spid', label: '供給地点特定番号', placeholder: '22桁', digits: 22 },
   { key: 'customerNo', label: 'お客様番号' },
   { key: 'address', label: 'でんきの使用住所', kind: 'zipAddress' },
   { key: 'capacity', label: '契約容量' },
@@ -48,7 +52,7 @@ const ELECTRIC_COMMON: FieldDef[] = [
 export const JURYO_FIELDS: FieldDef[] = [
   ...ELECTRIC_COMMON,
   { key: 'paperBill', label: '紙明細', kind: 'select', options: ['なし', 'あり'] },
-  { key: 'billMonth', label: '明細月' },
+  { key: 'billMonth', label: '明細月', format: 'month', placeholder: '例: 2026/09' },
   { key: 'charge', label: '料金', kind: 'yen' },
   { key: 'usage', label: '使用量', kind: 'kwh' },
 ];
@@ -56,7 +60,7 @@ export const JURYO_FIELDS: FieldDef[] = [
 export const DORYOKU_FIELDS: FieldDef[] = [
   ...ELECTRIC_COMMON,
   { key: 'paperBill', label: '紙明細', kind: 'select', options: ['あり', 'なし'] },
-  { key: 'billMonth', label: '明細月' },
+  { key: 'billMonth', label: '明細月', format: 'month', placeholder: '例: 2026/09' },
   { key: 'charge', label: '料金', kind: 'yen' },
   { key: 'usage', label: '使用量', kind: 'kwh' },
   { key: 'period', label: '使用期間' },
@@ -110,6 +114,38 @@ export function normalizeSheetData(raw: Partial<SheetData> | null | undefined): 
 export function formatZip(v: string | undefined): string {
   const d = (v ?? '').replace(/[^0-9]/g, '');
   return d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : (v ?? '');
+}
+
+const toHalf = (v: string) => v.replace(/[０-９／，．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+
+/**
+ * 日付・年月の入力を「/」区切りに整える(要望: 数字だけ入れても「/」が入る)。
+ * 自分で「/」を決まった位置以外に入れたとき(1980/1/23 など)はそのまま残す。
+ */
+export function formatSlashDate(raw: string, kind: 'date' | 'month'): string {
+  const v = toHalf(raw);
+  const slashAt = kind === 'date' ? [4, 7] : [4];
+  if (!/^[\d/]*$/.test(v) || [...v].some((c, i) => c === '/' && !slashAt.includes(i))) return v;
+  const d = v.replace(/\//g, '').slice(0, kind === 'date' ? 8 : 6);
+  if (d.length <= 4) return d;
+  if (kind === 'month' || d.length <= 6) return `${d.slice(0, 4)}/${d.slice(4)}`;
+  return `${d.slice(0, 4)}/${d.slice(4, 6)}/${d.slice(6)}`;
+}
+
+/** 入力を終えたら「1980/1/23」「2026年9月」なども 1980/01/23・2026/09 にそろえる */
+export function normalizeSlashDate(raw: string, kind: 'date' | 'month'): string {
+  const m = /^\s*(\d{4})\s*[/.\-年]\s*(\d{1,2})\s*(?:[/.\-月]\s*(?:(\d{1,2})\s*日?)?)?\s*$/.exec(toHalf(raw));
+  if (!m) return raw;
+  if (kind === 'month') return m[3] ? raw : `${m[1]}/${m[2].padStart(2, '0')}`;
+  return m[3] ? `${m[1]}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}` : raw;
+}
+
+/** 料金は3桁ごとに「,」を入れる(要望)。数字以外が混じるときはそのまま */
+export function formatComma(raw: string): string {
+  const v = toHalf(raw).replace(/,/g, '').trim();
+  const m = /^(\d+)(\.\d*)?$/.exec(v);
+  if (!m) return raw;
+  return `${m[1].replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${m[2] ?? ''}`;
 }
 
 function valueText(f: FieldDef, s: Section): string {

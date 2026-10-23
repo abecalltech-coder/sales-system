@@ -18,6 +18,9 @@ import {
   newContract,
   CONTACT_FIELDS,
   ElectricKind,
+  formatComma,
+  formatSlashDate,
+  normalizeSlashDate,
   sheetText,
 } from '../../lib/applicationSheet';
 
@@ -371,10 +374,27 @@ function FieldInput({ f, values, onChange }: { f: FieldDef; values: Section; onC
   }
   if (f.kind === 'zipAddress') return <ZipAddress zip={values[`${f.key}Zip`] ?? ''} address={v} onChange={(zip, address) => onChange({ [`${f.key}Zip`]: zip, [f.key]: address })} />;
   const unit = f.kind === 'yen' ? '円' : f.kind === 'kwh' ? 'kwh' : f.kind === 'percent' ? '%' : null;
+  // 生年月日・明細月は「/」、料金は「,」を自動で入れる(要望)
+  const format = (val: string) => (f.format ? formatSlashDate(val, f.format) : f.kind === 'yen' ? formatComma(val) : val);
+  const digitCount = f.digits ? v.replace(/[\s-]/g, '').length : 0;
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <AutoText value={v} onChange={set} placeholder={f.placeholder} />
-      {unit && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{unit}</span>}
+    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <AutoText
+          value={v}
+          onChange={(val) => set(format(val))}
+          onBlur={f.format ? () => v && set(normalizeSlashDate(v, f.format!)) : undefined}
+          placeholder={f.placeholder}
+          inputMode={f.format || f.kind === 'yen' || f.digits ? 'numeric' : undefined}
+        />
+        {unit && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{unit}</span>}
+      </span>
+      {/* 桁数が決まっている項目(供給地点特定番号=22桁)は違うときに赤字で知らせる */}
+      {f.digits && v.trim() && digitCount !== f.digits ? (
+        <span style={{ fontSize: 11, color: 'var(--color-danger)' }}>
+          {f.digits}桁ではありません(現在{digitCount}桁)
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -383,20 +403,48 @@ function FieldInput({ f, values, onChange }: { f: FieldDef; values: Section; onC
  * 長い文字は折り返して全文を表示する入力欄(要望: 明細情報のテキスト全体が見えるように)。
  * 内容に合わせて高さが伸びる。改行は入れない(Enterは無視)。
  */
-function AutoText({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function AutoText({
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  inputMode,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  inputMode?: 'numeric';
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
+  // 高さは折り返した行数に合わせる(要望)。枠線ぶんも足し、幅が変わったとき(画面幅・表示直後など)も測り直す
+  const fit = () => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !el.offsetWidth) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  };
+  useLayoutEffect(fit, [value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let width = el.offsetWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.offsetWidth === width) return;
+      width = el.offsetWidth;
+      fit();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <textarea
       ref={ref}
       rows={1}
       value={value}
       placeholder={placeholder}
+      inputMode={inputMode}
+      onBlur={onBlur}
       onChange={(e) => onChange(e.target.value.replace(/\r?\n/g, ''))}
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.preventDefault();
@@ -464,9 +512,9 @@ function billPatch(text: string, doryoku: boolean): Section {
   put('spid', fields['供給地点特定番号']);
   put('customerNo', fields['お客さま番号']);
   put('capacity', fields['契約容量・電力']);
-  put('charge', fields['請求金額']?.replace(/\s*円$/, ''));
+  put('charge', fields['請求金額'] && formatComma(fields['請求金額'].replace(/\s*円$/, '')));
   put('usage', fields['使用量']?.replace(/\s*kWh$/i, ''));
-  put('billMonth', fields['明細月']);
+  put('billMonth', fields['明細月'] && normalizeSlashDate(fields['明細月'], 'month'));
   put('addressZip', fields['郵便番号']);
   put('address', fields['住所']);
   if (doryoku) {
