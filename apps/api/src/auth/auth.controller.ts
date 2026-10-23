@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import { AuthService, REFRESH_TOKEN_TTL_DAYS } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from '../common/decorators/permissions.decorator';
@@ -22,7 +22,7 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: isProd,
   sameSite: 'lax' as const,
   path: '/api/auth',
-  maxAge: 30 * 24 * 60 * 60 * 1000,
+  maxAge: REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
 };
 
 @Controller('auth')

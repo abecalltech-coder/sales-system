@@ -9,8 +9,9 @@ import { JwtPayload } from './types';
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 const ACCESS_TOKEN_TTL = '15m';
-// 要望: 開くたびにログインさせない(月1回程度でよい)。使うたびに延長されるので、30日開かなければ再ログイン
-const REFRESH_TOKEN_TTL_DAYS = 30;
+// 要望: 端末でログインしていればログアウトさせない。使うたびに延長されるので、1年開かなければ再ログイン
+// (ブラウザがCookieを保持できる上限は約400日)
+export const REFRESH_TOKEN_TTL_DAYS = 365;
 
 @Injectable()
 export class AuthService {

@@ -12,10 +12,18 @@ export class ApiError extends Error {
 // 「失効済みトークンの再利用」とみなされ、不正利用対策でセッション全体が失効してしまい
 // (案件管理で担当者を選ぶと出ていた「Unauthorized」の原因)、以後ログインし直すまで
 // 何をしても401になっていた。in-flightのPromiseを共有して呼び出しを1回にまとめる。
+// 別タブ・別ウィンドウ(チャット)・通知(Service Worker)も同じ refresh_token を使うため、上の対策だけでは
+// それらが同時に更新したときに同じことが起き、端末でログイン中でも突然ログアウトされていた(要望)。
+// ブラウザ全体で共有できる Web Locks で順番待ちにし、後から更新する側は入れ替え後のトークンで更新させる。
+export function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  return locks ? (locks.request('auth-refresh', fn) as Promise<T>) : fn();
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 export function refreshAccessToken(): Promise<boolean> {
   if (!refreshPromise) {
-    refreshPromise = fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' })
+    refreshPromise = withRefreshLock(() => fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' }))
       .then((r) => r.ok)
       .catch(() => false)
       .finally(() => {

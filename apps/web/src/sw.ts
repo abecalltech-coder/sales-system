@@ -63,7 +63,9 @@ async function callApi(path: string): Promise<boolean> {
   const run = () => fetch(`/api${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   let res = await run();
   if (res.status === 401) {
-    const refreshed = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    // 開いている画面と同時に更新すると全セッションが失効するため、画面側と同じロックで順番待ちにする
+    const doRefresh = () => fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+    const refreshed = self.navigator.locks ? await self.navigator.locks.request('auth-refresh', doRefresh) : await doRefresh();
     if (refreshed.ok) res = await run();
   }
   return res.ok;
