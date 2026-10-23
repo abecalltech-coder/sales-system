@@ -32,26 +32,49 @@ const TARGET_KEYS: { id: string; label: string }[] = [
   { id: 'memo', label: '備考' },
 ];
 
+/** アポ登録フォーム(アポ詳細を単品で作る)の保存先 */
+const APO_TARGET_KEYS: { id: string; label: string }[] = [
+  { id: 'corporateName', label: '店舗名' },
+  { id: 'phone', label: '店舗連絡先' },
+  { id: 'address', label: '住所' },
+  { id: 'contactName', label: '担当者名' },
+  { id: 'existingContract', label: '電気会社(既契約)' },
+  { id: 'listName', label: 'リスト' },
+  { id: 'department', label: '部署' },
+  { id: 'hook', label: 'フック(商談形式)' },
+  { id: 'industry', label: '業種' },
+  { id: 'apStaffName', label: 'AP' },
+  { id: 'preConfirmStaffName', label: '前確者' },
+  { id: 'closerName', label: 'CL' },
+  { id: 'meetingStartAt', label: '商談日時' },
+  { id: 'preContactAt', label: '前連日時' },
+  { id: 'memo', label: '備考(アポ詳細の末尾に追記)' },
+];
+
 const CHOICE_TYPES = ['SELECT', 'MULTISELECT', 'RADIO'];
 
-export function TossFormAdminPage() {
-  const { data: fields, isLoading } = useTossFormFields(true);
+/** トスフォーム設定 / アポフォーム設定(kind=APPOINTMENT)。項目の作りは共通 */
+export function TossFormAdminPage({ kind = 'TOSS' }: { kind?: 'TOSS' | 'APPOINTMENT' }) {
+  const isApo = kind === 'APPOINTMENT';
+  const base = isApo ? '/apo-form' : '/toss-form';
+  const targetKeys = isApo ? APO_TARGET_KEYS : TARGET_KEYS;
+  const { data: fields, isLoading } = useTossFormFields(true, kind);
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['toss-form-fields'] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['toss-form-fields', kind] });
 
   const updateMutation = useMutation({
-    mutationFn: (vars: { id: string; patch: Partial<TossFormField> }) => api.patch(`/toss-form/fields/${vars.id}`, vars.patch),
+    mutationFn: (vars: { id: string; patch: Partial<TossFormField> }) => api.patch(`${base}/fields/${vars.id}`, vars.patch),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
   });
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/toss-form/fields/${id}`),
+    mutationFn: (id: string) => api.delete(`${base}/fields/${id}`),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : '削除に失敗しました'),
   });
   const createMutation = useMutation({
-    mutationFn: (order: number) => api.post('/toss-form/fields', { targetKey: 'memo', label: '新しい項目', fieldType: 'TEXT', order }),
+    mutationFn: (order: number) => api.post(`${base}/fields`, { targetKey: 'memo', label: '新しい項目', fieldType: 'TEXT', order }),
     onSuccess: invalidate,
     onError: (e) => setError(e instanceof ApiError ? e.message : '追加に失敗しました'),
   });
@@ -72,7 +95,7 @@ export function TossFormAdminPage() {
     <AppLayout>
       <div className="page" style={{ maxWidth: 760 }}>
         <div className="page-header">
-          <h1 className="page-title">トスフォーム設定</h1>
+          <h1 className="page-title">{isApo ? 'アポフォーム設定' : 'トスフォーム設定'}</h1>
           <button
             onClick={() => createMutation.mutate((list.length ? list[list.length - 1].order : 0) + 10)}
             className="btn-primary"
@@ -82,7 +105,9 @@ export function TossFormAdminPage() {
           </button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 14, lineHeight: 1.8 }}>
-          アポインターが「トス登録」画面で入力する項目です。上から表示順に並びます。
+          {isApo
+            ? '「アポ登録」画面(アポ詳細を単品で作る)で入力する項目です。上から表示順に並びます。アポ詳細の本文はマスタ管理のアポ詳細FMTから作られます。'
+            : 'アポインターが「トス登録」画面で入力する項目です。上から表示順に並びます。'}
           <br />
           選択肢が「マスタ管理と連動」「ユーザー一覧と連動」の項目は、それぞれ <b>マスタ管理</b> / <b>ユーザー管理</b> で選択肢を編集します。
         </p>
@@ -102,7 +127,8 @@ export function TossFormAdminPage() {
                 field={f}
                 first={idx === 0}
                 last={idx === list.length - 1}
-                targetLabel={TARGET_KEYS.find((t) => t.id === f.targetKey)?.label ?? f.targetKey}
+                targetKeys={targetKeys}
+                targetLabel={isApo ? 'アポ詳細' : 'トス実績'}
                 onMoveUp={() => move(idx, -1)}
                 onMoveDown={() => move(idx, 1)}
                 onPatch={(p) => patch(f.id, p)}
@@ -120,6 +146,8 @@ function FieldCard({
   field: f,
   first,
   last,
+  targetKeys,
+  targetLabel,
   onMoveUp,
   onMoveDown,
   onPatch,
@@ -128,6 +156,7 @@ function FieldCard({
   field: TossFormField;
   first: boolean;
   last: boolean;
+  targetKeys: { id: string; label: string }[];
   targetLabel: string;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -179,9 +208,9 @@ function FieldCard({
       {/* 保存先 + タイプ */}
       <div style={{ display: 'flex', gap: 12, padding: '10px', flexWrap: 'wrap' }}>
         <div style={{ minWidth: 180, flex: 1 }}>
-          <span style={metaLabel}>保存先(トス実績のどの欄に入るか)</span>
+          <span style={metaLabel}>保存先({targetLabel}のどの欄に入るか)</span>
           <select value={f.targetKey} onChange={(e) => onPatch({ targetKey: e.target.value })} style={{ ...cell, width: '100%' }}>
-            {TARGET_KEYS.map((t) => (
+            {targetKeys.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
               </option>

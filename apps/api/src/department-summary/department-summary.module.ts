@@ -66,7 +66,7 @@ class DepartmentSummaryService {
       }),
       this.prisma.appointment.findMany({
         where: { deletedAt: null, periodMonth: period },
-        select: { tossCaseId: true, apStaffName: true, closerStatusId: true, progressStatusId: true, meetingStatusId: true, anshinBizPoints: true },
+        select: { tossCaseId: true, idempotencyKey: true, apStaffName: true, closerStatusId: true, progressStatusId: true, meetingStatusId: true, anshinBizPoints: true },
       }),
       this.prisma.summaryBudget.findMany({ where: { periodMonth: period } }),
     ]);
@@ -119,6 +119,8 @@ class DepartmentSummaryService {
       const myTosses = name ? tosses.filter((t) => norm(t.apStaffName) === name) : [];
       const preOk = myTosses.filter((t) => isPreOk(t.progressStatusId));
       const validPreOk = preOk.filter((t) => !isInvalidAppo(appoByToss.get(t.id)?.progressStatusId ?? null));
+      // アポ登録フォームで単品作成したアポ詳細(トスを通らない)も、AP本人のアポとして前確OKに数える(要望)
+      const formAppos = name ? appointments.filter((a) => a.idempotencyKey?.startsWith('apo-form:') && norm(a.apStaffName) === name) : [];
       // アポ側: CLは「CL」欄が本人、それ以外は「AP」欄が本人の案件
       const myAppos = !name
         ? []
@@ -133,8 +135,8 @@ class DepartmentSummaryService {
         workHours: h,
         calls: c,
         tossCount: myTosses.length,
-        preOk: preOk.length,
-        validPreOk: validPreOk.length,
+        preOk: preOk.length + formAppos.length,
+        validPreOk: validPreOk.length + formAppos.filter((a) => !isInvalidAppo(a.progressStatusId)).length,
         meetingDone: myAppos.filter((a) => isMeetingDone(a.meetingStatusId)).length,
         et: myAppos.filter((a) => isEt(a.progressStatusId)).length,
         reschedule: myAppos.filter((a) => isResche(a.progressStatusId)).length,

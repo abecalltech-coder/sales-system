@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
 import { TossEntryPage } from './pages/toss-cases/TossEntryPage';
+import { ApoEntryPage } from './pages/appointments/ApoEntryPage';
 import { AppointmentsListPage } from './pages/appointments/AppointmentsListPage';
 import { CLCalendarPage } from './pages/CLCalendarPage';
 import { ContractsListPage } from './pages/contracts/ContractsListPage';
@@ -41,6 +42,7 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/toss/new" element={protect(<TossEntryPage />)} />
+        <Route path="/appointments/new" element={protect(<ApoEntryPage />)} />
         <Route path="/toss-cases" element={protect(<TossCasesListPage />)} />
         <Route path="/appointments" element={protect(<AppointmentsListPage />)} />
         <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
@@ -58,6 +60,7 @@ export function App() {
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
         <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
+        <Route path="/admin/apo-form" element={protectAdmin(<TossFormAdminPage kind="APPOINTMENT" />)} />
         <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
         <Route path="/admin/integrations" element={protectAdmin(<IntegrationsPage />)} />

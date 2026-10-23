@@ -159,7 +159,7 @@ function OptionPill({ label, checked, onClick }: { label: string; checked: boole
   );
 }
 
-function FieldInput({
+export function FieldInput({
   field: f,
   value,
   onText,

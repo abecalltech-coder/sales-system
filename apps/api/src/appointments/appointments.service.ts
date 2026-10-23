@@ -272,6 +272,197 @@ export class AppointmentsService {
     }
   }
 
+  /**
+   * アポ登録フォームからアポ詳細を単品で作る(要望: トスを通さずに作成)。
+   * 備考の雛形・カレンダー題名・HPZOOMのMeet発行はトス→アポ変換(createFromTossAutomation)と揃える。
+   * 月次サマリー・部署別サマリーのアポ件数にも入る(AP=apoUserId/apStaffName で集計される)。
+   */
+  async createStandalone(
+    input: {
+      corporateName?: string;
+      phone?: string;
+      address?: string;
+      contactName?: string;
+      department?: string;
+      hook?: string;
+      apStaffName?: string;
+      preConfirmName?: string;
+      closerName?: string;
+      industry?: string;
+      listName?: string;
+      existingContract?: string;
+      meetingStartAt?: Date;
+      preContactAt?: Date;
+      memo?: string;
+    },
+    actorUserId: string,
+  ) {
+    const hook = input.hook ?? '';
+    const isOnline = hook === 'HPZOOM';
+    const [meetingStatusId, progressStatusId, actor, apUser, departmentStatus, preConfirmStatus, closerStatus, zoomTemplate, visitTemplate] =
+      await Promise.all([
+        this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED'),
+        this.statusResolver.resolveId('APPOINTMENT_PROGRESS', 'PROG_NEW_VISIT').catch(() => undefined),
+        this.prisma.user.findUnique({ where: { id: actorUserId }, select: { departmentId: true, teamId: true } }),
+        input.apStaffName ? this.prisma.user.findFirst({ where: { name: input.apStaffName, deletedAt: null }, select: { id: true } }) : null,
+        input.department
+          ? this.prisma.statusMaster.findFirst({ where: { category: 'DEPARTMENT_BRANCH', OR: [{ id: input.department }, { displayName: input.department }] } })
+          : null,
+        input.preConfirmName ? this.prisma.statusMaster.findFirst({ where: { category: 'TOSS_PRE_CONFIRM', displayName: input.preConfirmName } }) : null,
+        input.closerName
+          ? this.prisma.statusMaster.findFirst({ where: { category: { startsWith: 'APPOINTMENT_CLOSER' }, displayName: input.closerName } })
+          : null,
+        this.systemSettings.getOne('tossAppointmentMemoTemplate'),
+        this.systemSettings.getOne('tossAppointmentMemoTemplateVisit'),
+      ]);
+
+    const storeName = input.corporateName ?? '';
+    const calendarTitle = buildCalendarTitle({
+      departmentLabel: departmentStatus?.displayName ?? input.department ?? '',
+      closerSurname: closerSurname(closerStatus?.displayName),
+      prefecture: extractPrefecture(input.address),
+      hook,
+      storeName: storeName || '(店舗名未設定)',
+    });
+    const memoTemplate = isOnline ? zoomTemplate : visitTemplate;
+    const rendered =
+      typeof memoTemplate === 'string'
+        ? renderTemplate(memoTemplate, {
+            acquisitionAngle: hook,
+            nextActionAt: '',
+            meetingAt: formatJaDateTimeWithWeekday(input.meetingStartAt),
+            storeName,
+            address: input.address ?? '',
+            industry: input.industry ?? '',
+            storePhone: input.phone ?? '',
+            contactName: input.contactName ?? '',
+            apStaffName: input.apStaffName ?? '',
+            preConfirmName: preConfirmStatus?.displayName ?? '',
+            listName: input.listName ?? '',
+            preContactAt: formatJaDateTimeWithWeekday(input.preContactAt),
+            hook,
+            meetingUrl: '',
+          })
+        : '';
+    const memo = [rendered, input.memo].filter((s) => s && s.trim()).join('\n\n') || undefined;
+
+    const customer =
+      storeName || input.phone || input.address || input.contactName
+        ? await this.prisma.customer.create({
+            data: {
+              corporateName: storeName || undefined,
+              phone: input.phone,
+              address: input.address,
+              contactName: input.contactName,
+              createdBy: actorUserId,
+              updatedBy: actorUserId,
+            },
+          })
+        : null;
+
+    const appointment = await this.prisma.appointment.create({
+      data: {
+        caseNumber: await this.sequence.nextCaseNumber('APPOINTMENT'),
+        caseName: storeName || undefined,
+        customerId: customer?.id,
+        snapshotDepartmentId: actor?.departmentId,
+        snapshotTeamId: actor?.teamId,
+        apoUserId: apUser?.id ?? actorUserId,
+        meetingStartAt: input.meetingStartAt,
+        meetingType: isOnline ? 'GOOGLE_MEET' : 'VISIT',
+        meetingStatusId,
+        progressStatusId,
+        // アポ登録フォームで作ったものを「自分が登録したアポ詳細」として探せるように印を付ける
+        idempotencyKey: `apo-form:${randomUUID()}`,
+        preContactAt: input.preContactAt,
+        periodMonth: toPeriodMonth(input.preContactAt ?? input.meetingStartAt ?? new Date()),
+        calendarTitle,
+        memo,
+        apStaffName: input.apStaffName,
+        department: departmentStatus?.id ?? input.department,
+        listName: input.listName,
+        industry: input.industry,
+        hook: input.hook,
+        existingContract: input.existingContract,
+        closerStatusId: closerStatus?.id,
+        preConfirmStatusId: await this.appointmentPreConfirmId(preConfirmStatus),
+        createdBy: actorUserId,
+        updatedBy: actorUserId,
+      },
+    });
+    await this.caseHistory.record({
+      entityType: 'APPOINTMENT',
+      entityId: appointment.id,
+      field: 'created',
+      before: null,
+      after: { source: 'APO_FORM' },
+      changedBy: actorUserId,
+    });
+    this.emitCreated(appointment, actorUserId);
+    if (isOnline) await this.googleCalendar.tryAutoCreateMeet(appointment.id, calendarTitle || 'オンライン商談');
+    return this.prisma.appointment.findUniqueOrThrow({ where: { id: appointment.id }, include: { customer: true } });
+  }
+
+  /** アポ登録フォームで作ったアポ詳細(管理者は全員分、それ以外は自分が登録したもの) */
+  listFromApoForm(actorUserId: string, all: boolean) {
+    return this.prisma.appointment.findMany({
+      where: { deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, ...(all ? {} : { createdBy: actorUserId }) },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        caseNumber: true,
+        memo: true,
+        hook: true,
+        apStaffName: true,
+        meetingStartAt: true,
+        createdAt: true,
+        createdBy: true,
+        version: true,
+        customer: { select: { corporateName: true } },
+      },
+    });
+  }
+
+  /** アポ登録フォームで作ったアポ詳細の本文(備考)を直す。本人(管理者は全員分)のものだけ */
+  async updateApoFormMemo(id: string, memo: string, actorUserId: string, all: boolean) {
+    const existing = await this.prisma.appointment.findFirst({
+      where: { id, deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, ...(all ? {} : { createdBy: actorUserId }) },
+    });
+    if (!existing) throw new NotFoundException('アポ詳細が見つかりません');
+    const updated = await this.prisma.appointment.update({
+      where: { id },
+      data: { memo, updatedBy: actorUserId, version: { increment: 1 } },
+    });
+    await this.caseHistory.record({
+      entityType: 'APPOINTMENT',
+      entityId: id,
+      field: 'memo',
+      before: existing.memo,
+      after: memo,
+      changedBy: actorUserId,
+    });
+    this.realtime.emitCaseUpdated(
+      ['company:default', ...(updated.snapshotDepartmentId ? [`department:${updated.snapshotDepartmentId}`] : []), `appointment:${id}`],
+      { entityType: 'APPOINTMENT', id, version: updated.version, updatedAt: updated.updatedAt.toISOString(), updatedBy: actorUserId, action: 'updated' },
+    );
+    return { id, memo: updated.memo, version: updated.version };
+  }
+
+  private emitCreated(appointment: { id: string; snapshotDepartmentId: string | null; version: number; updatedAt: Date }, actorUserId: string) {
+    this.realtime.emitCaseUpdated(
+      ['company:default', ...(appointment.snapshotDepartmentId ? [`department:${appointment.snapshotDepartmentId}`] : []), `appointment:${appointment.id}`],
+      {
+        entityType: 'APPOINTMENT',
+        id: appointment.id,
+        version: appointment.version,
+        updatedAt: appointment.updatedAt.toISOString(),
+        updatedBy: actorUserId,
+        action: 'created',
+      },
+    );
+  }
+
   /** CLカレンダーから直接予定を作成する(トス経由の自動作成ルートとは別、セクション追加要望) */
   async create(dto: CreateAppointmentDto, userId: string) {
     const caseNumber = await this.sequence.nextCaseNumber('APPOINTMENT');

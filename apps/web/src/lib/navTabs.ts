@@ -11,6 +11,7 @@ export interface NavTabDef {
 export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/summary', label: 'サマリー', group: 'トップ' },
   { key: '/toss/new', label: 'トス登録', group: '営業' },
+  { key: '/appointments/new', label: 'アポ登録', group: '営業' },
   { key: '/toss-cases', label: 'トス実績管理', group: '営業' },
   { key: '/appointments', label: 'アポ実績管理', group: '営業' },
   { key: '/contracts', label: 'エントリー管理', group: '営業' },
@@ -23,6 +24,7 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/admin/organizations', label: '組織管理', group: '管理' },
   { key: '/admin/masters', label: 'マスタ管理', group: '管理' },
   { key: '/admin/toss-form', label: 'トスフォーム設定', group: '管理' },
+  { key: '/admin/apo-form', label: 'アポフォーム設定', group: '管理' },
   { key: '/admin/final-report-fields', label: '最終報告項目', group: '管理' },
   { key: '/admin/integrations', label: '連携設定', group: '管理' },
   { key: '/admin/audit-logs', label: '操作ログ', group: '管理' },

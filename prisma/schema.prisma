@@ -272,6 +272,8 @@ model Source {
 // アプリ内トス登録フォーム(アポインター用)の項目定義。管理タブ「トスフォーム設定」で編集する。
 model TossFormField {
   id             String   @id @default(uuid())
+  // どのフォームの項目か: TOSS=トス登録 / APPOINTMENT=アポ登録(アポ詳細を単品で作る)
+  form           String   @default("TOSS")
   // マッピング先のキー(corporateName/phone/address/industry/hook/... サーバーが解釈できる固定値)
   targetKey      String
   label          String
@@ -288,7 +290,7 @@ model TossFormField {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@index([order])
+  @@index([form, order])
 }
 
 model StatusMaster {

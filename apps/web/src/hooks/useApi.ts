@@ -818,9 +818,10 @@ export interface TossFormField {
   options: string[];
 }
 
-export function useTossFormFields(all = false) {
+/** kind: TOSS=トス登録 / APPOINTMENT=アポ登録(アポ詳細を単品で作る) */
+export function useTossFormFields(all = false, kind: 'TOSS' | 'APPOINTMENT' = 'TOSS') {
   return useQuery({
-    queryKey: ['toss-form-fields', all],
-    queryFn: () => api.get<TossFormField[]>(`/toss-form/fields${all ? '?all=1' : ''}`),
+    queryKey: ['toss-form-fields', kind, all],
+    queryFn: () => api.get<TossFormField[]>(`/${kind === 'APPOINTMENT' ? 'apo-form' : 'toss-form'}/fields${all ? '?all=1' : ''}`),
   });
 }

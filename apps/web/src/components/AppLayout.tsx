@@ -47,6 +47,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: '営業',
     items: [
       { to: '/toss/new', label: 'トス登録', icon: 'edit' },
+      { to: '/appointments/new', label: 'アポ登録', icon: 'edit' },
       { to: '/toss-cases', label: 'トス実績管理', icon: 'inbox' },
       { to: '/appointments', label: 'アポ実績管理', icon: 'calendarCheck' },
       { to: '/contracts', label: 'エントリー管理', icon: 'document' },
@@ -69,6 +70,7 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/organizations', label: '組織管理', icon: 'building' },
     { to: '/admin/masters', label: 'マスタ管理', icon: 'sliders' },
     { to: '/admin/toss-form', label: 'トスフォーム設定', icon: 'form' },
+    { to: '/admin/apo-form', label: 'アポフォーム設定', icon: 'form' },
     { to: '/admin/final-report-fields', label: '最終報告項目', icon: 'clipboard' },
     { to: '/admin/integrations', label: '連携設定', icon: 'link' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },
@@ -87,6 +89,7 @@ const PHONE_LABELS: Record<string, string> = {
   '/admin/organizations': '組織',
   '/admin/masters': 'マスタ',
   '/admin/toss-form': 'トスフォーム',
+  '/admin/apo-form': 'アポフォーム',
   '/admin/final-report-fields': '報告項目',
   '/admin/integrations': '連携',
 };
@@ -95,6 +98,8 @@ function PhoneTabLink({ item }: { item: NavItem }) {
   return (
     <NavLink
       to={item.to}
+      // アポ登録(/appointments/new)を開いているときにアポ実績管理まで選択中にしない
+      end={item.to === '/appointments'}
       style={({ isActive }) => ({
         position: 'relative',
         flex: '0 0 auto',
@@ -227,6 +232,8 @@ function renderNavItem(item: NavItem, collapsed: boolean) {
     <NavLink
       key={item.to}
       to={item.to}
+      // アポ登録(/appointments/new)を開いているときにアポ実績管理まで選択中にしない
+      end={item.to === '/appointments'}
       title={collapsed ? item.label : undefined}
       style={({ isActive }) => ({
         position: 'relative',

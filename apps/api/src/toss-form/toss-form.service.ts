@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TossCasesService } from '../toss-cases/toss-cases.service';
+import { AppointmentsService } from '../appointments/appointments.service';
 import { CreateTossFormFieldDto, SubmitTossFormDto, UpdateTossFormFieldDto } from './dto/toss-form.dto';
 
 // フォーム項目のマッピング先として許可するキー
@@ -21,7 +22,29 @@ const TARGET_KEYS = [
   'preferredCallAt',
   'memo',
 ] as const;
-type TargetKey = (typeof TARGET_KEYS)[number];
+
+// アポ登録フォーム(アポ詳細を単品で作る)の保存先
+const APO_TARGET_KEYS = [
+  'department',
+  'hook',
+  'apStaffName',
+  'preConfirmStaffName',
+  'closerName',
+  'corporateName',
+  'phone',
+  'address',
+  'contactName',
+  'industry',
+  'listName',
+  'existingContract',
+  'meetingStartAt',
+  'preContactAt',
+  'memo',
+] as const;
+
+/** TOSS=トス登録 / APPOINTMENT=アポ登録 */
+export type FormKind = 'TOSS' | 'APPOINTMENT';
+const targetKeysOf = (form: FormKind): readonly string[] => (form === 'APPOINTMENT' ? APO_TARGET_KEYS : TARGET_KEYS);
 
 const FIELD_TYPES = ['TEXT', 'TEXTAREA', 'SELECT', 'MULTISELECT', 'RADIO', 'DATE', 'DATETIME'];
 const OPTIONS_MODES = ['NONE', 'STATIC', 'MASTER', 'USERS'];
@@ -31,12 +54,13 @@ export class TossFormService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tossCases: TossCasesService,
+    private readonly appointments: AppointmentsService,
   ) {}
 
   /** フォーム項目一覧。includeInactive=false のとき有効なもののみ(アポインターのフォーム用) */
-  async listFields(includeInactive = false) {
+  async listFields(includeInactive = false, form: FormKind = 'TOSS') {
     const fields = await this.prisma.tossFormField.findMany({
-      where: includeInactive ? {} : { active: true },
+      where: { form, ...(includeInactive ? {} : { active: true }) },
       orderBy: { order: 'asc' },
     });
     // MASTER / USERS の選択肢を解決して埋める
@@ -72,8 +96,8 @@ export class TossFormService {
     }));
   }
 
-  private validateField(dto: CreateTossFormFieldDto | UpdateTossFormFieldDto) {
-    if (dto.targetKey !== undefined && !TARGET_KEYS.includes(dto.targetKey as TargetKey)) {
+  private validateField(dto: CreateTossFormFieldDto | UpdateTossFormFieldDto, form: FormKind) {
+    if (dto.targetKey !== undefined && !targetKeysOf(form).includes(dto.targetKey)) {
       throw new BadRequestException(`マッピング先(targetKey)が不正です: ${dto.targetKey}`);
     }
     if (dto.fieldType !== undefined && !FIELD_TYPES.includes(dto.fieldType)) {
@@ -84,11 +108,12 @@ export class TossFormService {
     }
   }
 
-  async createField(dto: CreateTossFormFieldDto) {
-    this.validateField(dto);
-    const max = await this.prisma.tossFormField.aggregate({ _max: { order: true } });
+  async createField(dto: CreateTossFormFieldDto, form: FormKind = 'TOSS') {
+    this.validateField(dto, form);
+    const max = await this.prisma.tossFormField.aggregate({ where: { form }, _max: { order: true } });
     return this.prisma.tossFormField.create({
       data: {
+        form,
         targetKey: dto.targetKey,
         label: dto.label,
         fieldType: dto.fieldType ?? 'TEXT',
@@ -103,10 +128,10 @@ export class TossFormService {
     });
   }
 
-  async updateField(id: string, dto: UpdateTossFormFieldDto) {
-    this.validateField(dto);
+  async updateField(id: string, dto: UpdateTossFormFieldDto, form: FormKind = 'TOSS') {
+    this.validateField(dto, form);
     return this.prisma.tossFormField.update({
-      where: { id },
+      where: { id, form },
       data: {
         ...(dto.targetKey !== undefined ? { targetKey: dto.targetKey } : {}),
         ...(dto.label !== undefined ? { label: dto.label } : {}),
@@ -122,31 +147,64 @@ export class TossFormService {
     });
   }
 
-  async deleteField(id: string) {
-    await this.prisma.tossFormField.delete({ where: { id } });
+  async deleteField(id: string, form: FormKind = 'TOSS') {
+    await this.prisma.tossFormField.delete({ where: { id, form } });
     return { ok: true };
   }
 
-  /** アポインターがフォームから送信 → トス案件を作成する */
-  async submit(dto: SubmitTossFormDto, actorUserId: string) {
-    const fields = await this.prisma.tossFormField.findMany({ where: { active: true } });
-    const answers = dto.answers ?? {};
-
-    // 必須チェック
+  /** 必須チェックをして、回答を文字列で取り出す関数を返す */
+  private async readAnswers(form: FormKind, answers: SubmitTossFormDto['answers']) {
+    const fields = await this.prisma.tossFormField.findMany({ where: { form, active: true } });
     for (const f of fields) {
       if (!f.required) continue;
       const v = answers[f.targetKey];
       const empty = v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
       if (empty) throw new BadRequestException(`「${f.label}」は必須です`);
     }
-
-    const val = (key: string): string | undefined => {
+    return (key: string): string | undefined => {
       const v = answers[key];
       if (v === undefined || v === null) return undefined;
       if (Array.isArray(v)) return v.filter(Boolean).join('・') || undefined;
       const s = String(v).trim();
       return s || undefined;
     };
+  }
+
+  /** アポ登録フォームから送信 → アポ詳細を単品で作る */
+  async submitAppointment(dto: SubmitTossFormDto, actorUserId: string) {
+    const val = await this.readAnswers('APPOINTMENT', dto.answers ?? {});
+    const date = (key: string) => {
+      const v = val(key);
+      if (!v) return undefined;
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) throw new BadRequestException('日時の形式が正しくありません');
+      return d;
+    };
+    return this.appointments.createStandalone(
+      {
+        corporateName: val('corporateName'),
+        phone: val('phone'),
+        address: val('address'),
+        contactName: val('contactName'),
+        department: val('department'),
+        hook: val('hook'),
+        apStaffName: val('apStaffName'),
+        preConfirmName: val('preConfirmStaffName'),
+        closerName: val('closerName'),
+        industry: val('industry'),
+        listName: val('listName'),
+        existingContract: val('existingContract'),
+        meetingStartAt: date('meetingStartAt'),
+        preContactAt: date('preContactAt'),
+        memo: val('memo'),
+      },
+      actorUserId,
+    );
+  }
+
+  /** アポインターがフォームから送信 → トス案件を作成する */
+  async submit(dto: SubmitTossFormDto, actorUserId: string) {
+    const val = await this.readAnswers('TOSS', dto.answers ?? {});
 
     // AP(旧「トス担当者名」) → tossUserId + トス実績の AP 欄(apStaffName)へ反映
     let tossUserId: string | undefined;
