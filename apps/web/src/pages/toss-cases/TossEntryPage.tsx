@@ -164,11 +164,14 @@ export function FieldInput({
   value,
   onText,
   onToggle,
+  otherText,
 }: {
   field: TossFormField;
   value: AnswerValue | undefined;
   onText: (v: string) => void;
   onToggle: (opt: string) => void;
+  /** 選択肢に「その他」があるプルダウンで、その他を選んだら内容を自由入力させる(アポ登録の「提案」) */
+  otherText?: boolean;
 }) {
   const wrap = (child: React.ReactNode) => (
     <div style={{ marginBottom: 16 }}>
@@ -198,6 +201,32 @@ export function FieldInput({
         onChange={(e) => onText(e.target.value)}
         style={inputStyle}
       />,
+    );
+  }
+  if (f.fieldType === 'SELECT' && otherText && f.options.includes('その他')) {
+    // 自由入力した内容がそのまま値になる(未入力なら「その他」)
+    const v = (value as string) ?? '';
+    const isOther = v !== '' && !f.options.filter((o) => o !== 'その他').includes(v);
+    return wrap(
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <select value={isOther ? 'その他' : v} onChange={(e) => onText(e.target.value)} style={{ ...inputStyle, flex: '1 1 140px' }}>
+          <option value="">選択してください</option>
+          {f.options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        {isOther && (
+          <input
+            autoFocus
+            value={v === 'その他' ? '' : v}
+            onChange={(e) => onText(e.target.value || 'その他')}
+            placeholder="その他の内容を入力"
+            style={{ ...inputStyle, flex: '2 1 200px' }}
+          />
+        )}
+      </div>,
     );
   }
   if (f.fieldType === 'SELECT') {

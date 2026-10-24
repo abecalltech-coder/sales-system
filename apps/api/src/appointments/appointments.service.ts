@@ -13,7 +13,15 @@ import { GoogleCalendarService } from '../integrations/google-calendar/google-ca
 import { toDateOrUndefined } from '../common/utils/date.util';
 import { extractPrefecture } from '../common/utils/prefecture.util';
 import { previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
-import { buildCalendarTitle, closerSurname, formatJaDateTimeWithWeekday, renderTemplate } from './toss-appointment-automation.util';
+import {
+  apoFormTokens,
+  buildCalendarTitle,
+  closerSurname,
+  fillApoFormLines,
+  formatJaDateTimeWithWeekday,
+  markHomeProposal,
+  renderTemplate,
+} from './toss-appointment-automation.util';
 
 @Injectable()
 export class AppointmentsService {
@@ -294,11 +302,27 @@ export class AppointmentsService {
       meetingStartAt?: Date;
       preContactAt?: Date;
       memo?: string;
+      /** 以下はアポ詳細の本文にだけ入る項目(要望) */
+      acquisitionAngle?: string;
+      nextActionAt?: Date;
+      mobilePhone?: string;
+      contactAge?: string;
+      contactGender?: string;
+      charge?: string;
+      billPrep?: string;
+      corporateType?: string;
+      outOfScope?: string;
+      pointsJuryo?: string;
+      pointsDoryoku?: string;
+      proposal?: string;
+      smsTo?: string;
+      storeHp?: string;
     },
     actorUserId: string,
   ) {
     const hook = input.hook ?? '';
-    const isOnline = hook === 'HPZOOM';
+    // フックは自由入力のため、全角・小文字・空白の違いがあっても HPZOOM ならオンライン扱いにする
+    const isOnline = hook.normalize('NFKC').replace(/\s/g, '').toUpperCase() === 'HPZOOM';
     const [meetingStatusId, progressStatusId, actor, apUser, departmentStatus, preConfirmStatus, closerStatus, zoomTemplate, visitTemplate] =
       await Promise.all([
         this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED'),
@@ -328,8 +352,8 @@ export class AppointmentsService {
     const rendered =
       typeof memoTemplate === 'string'
         ? renderTemplate(memoTemplate, {
-            acquisitionAngle: hook,
-            nextActionAt: '',
+            acquisitionAngle: input.acquisitionAngle ?? '',
+            nextActionAt: formatJaDateTimeWithWeekday(input.nextActionAt),
             meetingAt: formatJaDateTimeWithWeekday(input.meetingStartAt),
             storeName,
             address: input.address ?? '',
@@ -342,9 +366,13 @@ export class AppointmentsService {
             preContactAt: formatJaDateTimeWithWeekday(input.preContactAt),
             hook,
             meetingUrl: '',
+            ...apoFormTokens(input),
           })
         : '';
-    const memo = [rendered, input.memo].filter((s) => s && s.trim()).join('\n\n') || undefined;
+    const filled = fillApoFormLines(rendered, input);
+    // 提案が自宅なら、本文の一番最初の【フック】の前に★を付ける(要望)
+    const marked = input.proposal === '自宅' && filled ? markHomeProposal(filled) : filled;
+    const memo = [marked, input.memo].filter((s) => s && s.trim()).join('\n\n') || undefined;
 
     const customer =
       storeName || input.phone || input.address || input.contactName
@@ -384,6 +412,7 @@ export class AppointmentsService {
         industry: input.industry,
         hook: input.hook,
         existingContract: input.existingContract,
+        proposalLocation: input.proposal,
         closerStatusId: closerStatus?.id,
         preConfirmStatusId: await this.appointmentPreConfirmId(preConfirmStatus),
         createdBy: actorUserId,

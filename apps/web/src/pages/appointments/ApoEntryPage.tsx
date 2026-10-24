@@ -120,7 +120,14 @@ export function ApoEntryPage() {
         ) : (
           <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)', padding: '16px 18px' }}>
             {(fields ?? []).map((f) => (
-              <FieldInput key={f.id} field={f} value={answers[f.targetKey]} onText={(v) => set(f.targetKey, v)} onToggle={(opt) => toggleMulti(f.targetKey, opt)} />
+              <FieldInput
+                key={f.id}
+                field={f}
+                value={answers[f.targetKey]}
+                onText={(v) => set(f.targetKey, v)}
+                onToggle={(opt) => toggleMulti(f.targetKey, opt)}
+                otherText
+              />
             ))}
             <button
               className="btn-primary"
@@ -200,20 +207,29 @@ function MemoEditor({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(640px, 96vw)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 14, flex: 1 }}>アポ詳細 {item.customer?.corporateName ? `- ${item.customer.corporateName}` : ''}</h3>
+      {/* 余白を広めに取る(要望: 編集画面の余白が少なく見づらい) */}
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 'min(680px, 96vw)', display: 'flex', flexDirection: 'column', gap: 14, padding: '22px 24px', boxSizing: 'border-box' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 10, borderBottom: '1px solid var(--color-border)' }}>
+          <h3 style={{ margin: 0, fontSize: 15, flex: 1 }}>アポ詳細 {item.customer?.corporateName ? `- ${item.customer.corporateName}` : ''}</h3>
           <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
             閉じる
           </button>
         </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} style={{ width: '100%', minHeight: '50vh', fontSize: 13, lineHeight: 1.55, padding: '8px 10px' }} />
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', minHeight: '52vh', fontSize: 13, lineHeight: 1.75, padding: '14px 16px', borderRadius: 8 }}
+        />
         {error && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={() => onCopy({ ...item, memo: text })} disabled={!text} style={{ fontSize: 12 }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+          <button type="button" onClick={() => onCopy({ ...item, memo: text })} disabled={!text} style={{ fontSize: 12, padding: '6px 16px' }}>
             コピー
           </button>
-          <button type="button" className="btn-primary" disabled={!dirty || save.isPending} onClick={() => save.mutate()} style={{ fontSize: 12 }}>
+          <button type="button" className="btn-primary" disabled={!dirty || save.isPending} onClick={() => save.mutate()} style={{ fontSize: 12, padding: '6px 18px' }}>
             {save.isPending ? '保存中...' : '保存'}
           </button>
         </div>
