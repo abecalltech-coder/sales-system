@@ -18,6 +18,8 @@ export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5, REMI
 /** タスク閲覧範囲「AP全員」の対象になる役職 */
 const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
 const SNOOZE_MS = 5 * 60_000;
+/** 期日の通知(リマインドとは別に鳴らす分)を送る猶予。これより前に期日を過ぎたものは送らない */
+const DUE_PUSH_WINDOW_MS = 30 * 60_000;
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
 class SaveTaskDto {
@@ -397,7 +399,12 @@ export class TasksService {
           if (p?.snoozeUntil && p.snoozeUntil.getTime() > now) continue;
           const sameOccurrence = p?.lastNotifiedOccurrence?.getTime() === current.getTime();
           const afterSnooze = !!p?.snoozeUntil && (!p.lastNotifiedAt || p.lastNotifiedAt.getTime() < p.snoozeUntil.getTime());
-          if (sameOccurrence && !afterSnooze) continue;
+          // 要望: リマインド(○分前)とは別に、期日の時刻にも必ず鳴らす(期日前に送ったのがリマインドだけなら期日にもう1回)
+          const isDue = current.getTime() <= now;
+          // 期日から時間が経った分は送らない(反映直後に過去の期限切れタスクが一斉に鳴らないように)
+          const dueAfterRemind =
+            isDue && now - current.getTime() < DUE_PUSH_WINDOW_MS && (t.remindMinutes ?? 0) > 0 && !!p?.lastNotifiedAt && p.lastNotifiedAt.getTime() < current.getTime();
+          if (sameOccurrence && !afterSnooze && !dueAfterRemind) continue;
 
           await this.prisma.taskProgress.upsert({
             where: { taskId_userId: { taskId: t.id, userId: uid } },
@@ -406,8 +413,8 @@ export class TasksService {
           });
           const when = current.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
           await this.push.sendToUser(uid, {
-            title: `【タスク】${t.title}`,
-            body: `期日 ${when}${t.detail ? `\n${t.detail.slice(0, 80)}` : ''}`,
+            title: isDue ? `【タスク期日】${t.title}` : `【タスク】${t.title}`,
+            body: `${isDue ? `期日になりました ${when}` : `期日 ${when}`}${t.detail ? `\n${t.detail.slice(0, 80)}` : ''}`,
             url: `/tasks?edit=${t.id}`,
             tag: `task:${t.id}`,
             // 常時表示にしない(要望)。端末の通常の通知と同じく時間が経てば通知欄へ下がる
