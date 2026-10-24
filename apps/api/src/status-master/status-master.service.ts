@@ -4,6 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { APPOINTMENT_ID_FIELDS, SHARE_SETTING_KEY, SPLITTABLE_CATEGORIES, appointmentScoped } from './master-share';
 import { CreateStatusMasterDto, UpdateStatusMasterDto } from './dto/status-master.dto';
 
+/** 部署は組織管理を正にしている(要望: 組織設定の統一) */
+const DEPARTMENT_IN_ORG = '部署の追加・名前の変更・並び順・表示/非表示は「組織管理」で行います(マスタ管理では色だけ変えられます)';
+
 @Injectable()
 export class StatusMasterService {
   constructor(private readonly prisma: PrismaService) {}
@@ -16,6 +19,7 @@ export class StatusMasterService {
   }
 
   async create(dto: CreateStatusMasterDto) {
+    if (dto.category === 'DEPARTMENT_BRANCH') throw new BadRequestException(DEPARTMENT_IN_ORG);
     const existing = await this.prisma.statusMaster.findUnique({
       where: { category_internalCode: { category: dto.category, internalCode: dto.internalCode } },
     });
@@ -41,6 +45,10 @@ export class StatusMasterService {
   async update(id: string, dto: UpdateStatusMasterDto) {
     const existing = await this.prisma.statusMaster.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('ステータスが見つかりません');
+    // 部署は組織管理と同期しているため、ここでは色だけ変えられる
+    if (existing.category === 'DEPARTMENT_BRANCH' && (dto.displayName !== undefined || dto.order !== undefined || dto.active !== undefined)) {
+      throw new BadRequestException(DEPARTMENT_IN_ORG);
+    }
     // 色は空文字で「色なし」に戻す
     const data = {
       ...dto,
@@ -128,6 +136,7 @@ export class StatusMasterService {
   async delete(id: string) {
     const existing = await this.prisma.statusMaster.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('ステータスが見つかりません');
+    if (existing.category === 'DEPARTMENT_BRANCH') throw new BadRequestException(DEPARTMENT_IN_ORG);
     const protectedCategories = ['TOSS', 'APPOINTMENT', 'VISIT', 'MATCHING'];
     if (protectedCategories.includes(existing.category)) {
       throw new ConflictException('基本ステータスは自動処理で使うため削除できません');

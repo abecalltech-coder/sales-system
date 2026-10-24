@@ -38,6 +38,8 @@ model Department {
   name        String
   order       Int      @default(0)
   active      Boolean  @default(true)
+  // マスタの部署(StatusMaster DEPARTMENT_BRANCH)。組織管理を正として名前・並び・有効を同期する(要望: 組織設定の統一)
+  branchStatusId String? @unique
   version     Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

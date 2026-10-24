@@ -371,6 +371,7 @@ export interface DepartmentItem {
   active: boolean;
   version: number;
   teams: TeamItem[];
+  company?: { name: string };
 }
 
 export function useDepartments() {

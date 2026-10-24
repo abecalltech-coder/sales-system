@@ -30,7 +30,7 @@ export const GOOGLE_FORM_FIELD_MAP: GoogleFormFieldMapEntry[] = [
   { aliases: ['業種'], kind: 'TOSS_TEXT', field: 'industry' },
   { aliases: ['フック'], kind: 'TOSS_TEXT', field: 'hook' },
   { aliases: ['既契約'], kind: 'TOSS_TEXT', field: 'existingContract' },
-  // 部署はマスタ(CT/CH東/CH西)へ解決せず、フォームの文言をそのまま反映する(要望)。
+  // 部署はマスタ(組織管理と同期した部署)へ解決せず、フォームの文言をそのまま反映する(要望)。
   { aliases: ['部署'], kind: 'TOSS_TEXT', field: 'department' },
 
   // マスタ選択肢(回答文字列とStatusMaster.displayNameが一致した場合のみ反映)

@@ -254,7 +254,10 @@ function OptionRow({
   canUp,
   canDown,
   onDelete,
+  locked,
 }: {
+  /** 名前・並び・削除を変えられない(部署は組織管理で変更する) */
+  locked?: boolean;
   name: string;
   color: string | null | undefined;
   textColor: string | null | undefined;
@@ -272,17 +275,18 @@ function OptionRow({
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0', borderBottom: '1px solid var(--color-sunken)' }}>
       <span style={{ display: 'inline-flex', flexDirection: 'column', flexShrink: 0 }}>
-        <button type="button" disabled={!canUp} onClick={() => onMove(-1)} title="上へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
+        <button type="button" disabled={locked || !canUp} onClick={() => onMove(-1)} title="上へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
           ▲
         </button>
-        <button type="button" disabled={!canDown} onClick={() => onMove(1)} title="下へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
+        <button type="button" disabled={locked || !canDown} onClick={() => onMove(1)} title="下へ" style={{ width: 18, height: 12, padding: 0, fontSize: 8, lineHeight: 1 }}>
           ▼
         </button>
       </span>
       <input
         key={name}
         defaultValue={name}
-        onBlur={(e) => e.target.value !== name && onRename(e.target.value)}
+        readOnly={locked}
+        onBlur={(e) => !locked && e.target.value !== name && onRename(e.target.value)}
         style={{
           flex: 1,
           padding: 4,
@@ -299,7 +303,7 @@ function OptionRow({
           <ColorPick label="塗り" value={color} onChange={onColor} />
         </>
       )}
-      <button type="button" onClick={onDelete} title="削除" style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11, color: 'var(--color-danger)' }}>
+      <button type="button" onClick={onDelete} disabled={locked} title="削除" style={{ flexShrink: 0, padding: '2px 6px', fontSize: 11, color: 'var(--color-danger)', ...(locked ? { visibility: 'hidden' } : {}) }}>
         削除
       </button>
     </div>
@@ -723,16 +727,22 @@ function CategoryCard({
       ) : (
         <div style={{ marginBottom: 10 }}>
           {statuses?.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>まだ登録がありません</p>}
-          {statuses?.map((s, i) => (
+          {isDepartment && (
+            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 0 6px' }}>
+              部署の追加・名前の変更・並び順は「組織管理」で行います(ここでは色だけ変えられます)
+            </p>
+          )}
+          {statuses?.filter((s) => !isDepartment || s.active).map((s, i, list) => (
             <OptionRow
               key={s.id}
+              locked={isDepartment}
               name={s.displayName}
               color={s.color}
               textColor={s.textColor}
               showColors={rowColor}
               preview
               canUp={i > 0}
-              canDown={i < statuses.length - 1}
+              canDown={i < list.length - 1}
               onMove={(dir) => move(i, dir)}
               onRename={(v) => updateMutation.mutate({ id: s.id, displayName: v })}
               onColor={(v) => updateMutation.mutate({ id: s.id, color: v })}
@@ -767,7 +777,7 @@ function CategoryCard({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 6 }}>
+      <div style={{ display: isDepartment ? 'none' : 'flex', gap: 6 }}>
         {!simpleLabel && (
           <input placeholder="内部コード" value={newCode} onChange={(e) => setNewCode(e.target.value)} style={{ width: 90, padding: 5, fontSize: 12 }} />
         )}

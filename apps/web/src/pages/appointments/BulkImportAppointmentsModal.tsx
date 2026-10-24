@@ -172,6 +172,11 @@ export function BulkImportAppointmentsModal({
         const opts = optionsCache.get(category) ?? [];
         const exact = opts.find((o) => o.displayName === label);
         if (exact) return exact.id;
+        // 部署は組織管理で管理するため取込では作らない(表記ゆれだけ吸収して既存の部署に合わせる)
+        if (category === 'DEPARTMENT_BRANCH') {
+          const norm = (v: string) => v.normalize('NFKC').replace(/\s/g, '');
+          return opts.find((o) => norm(o.displayName) === norm(label))?.id;
+        }
         const created = await api.post<StatusMasterItem>('/status-master', {
           category,
           internalCode: `${category}_IMPORT_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
