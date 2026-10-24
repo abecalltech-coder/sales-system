@@ -41,10 +41,12 @@ export function buildCalendarTitle(params: {
   prefecture: string | null;
   hook: string;
   storeName: string;
+  /** 提案が自宅なら【フック】の前に★を付ける(要望) */
+  home?: boolean;
 }): string {
   const prefectureInitial = params.prefecture ? params.prefecture.slice(0, 1) : '';
   const head = [params.departmentLabel, params.closerSurname, prefectureInitial].map((s) => (s ?? '').trim()).filter(Boolean);
-  return `${head.join(' ')} 【${params.hook}】${params.storeName}`.replace(/\s+/g, ' ').trim();
+  return `${head.join(' ')} ${params.home ? '★' : ''}【${params.hook}】${params.storeName}`.replace(/\s+/g, ' ').trim();
 }
 
 /** 前連予定用のタイトル。例: "CT 山田 東【前連】〇〇商店" */

@@ -347,6 +347,7 @@ export class AppointmentsService {
       prefecture: extractPrefecture(input.address),
       hook,
       storeName: storeName || '(店舗名未設定)',
+      home: input.proposal === '自宅',
     });
     const memoTemplate = isOnline ? zoomTemplate : visitTemplate;
     const rendered =
@@ -653,6 +654,7 @@ export class AppointmentsService {
     hook: string | null;
     prefecture: string | null;
     storeName: string | null;
+    home?: boolean;
   }): Promise<string> {
     const [branch, closer] = await Promise.all([
       params.departmentBranchId ? this.prisma.statusMaster.findUnique({ where: { id: params.departmentBranchId } }) : null,
@@ -664,6 +666,7 @@ export class AppointmentsService {
       prefecture: params.prefecture,
       hook: params.hook ?? '',
       storeName: params.storeName ?? '(店舗名未設定)',
+      home: params.home,
     });
   }
 
@@ -684,6 +687,7 @@ export class AppointmentsService {
       prefecture:
         dto.address !== undefined ? extractPrefecture(dto.address) : extractPrefecture(existing.customer?.address ?? undefined),
       storeName: (dto.corporateName !== undefined ? dto.corporateName : existing.customer?.corporateName ?? existing.storeName) as string | null,
+      home: pick('proposalLocation', existing.proposalLocation) === '自宅',
     });
 
     const {

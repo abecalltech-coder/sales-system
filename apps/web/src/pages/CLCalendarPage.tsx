@@ -369,6 +369,7 @@ function eventLabel(ev: AppointmentListItem, branchLabel: string, closerName: st
     prefecture: ev.prefecture,
     hook: ev.hook ?? '',
     storeName: ev.storeName ?? '(店舗名未設定)',
+    home: ev.proposalLocation === '自宅',
   });
   return composed || ev.storeName || '(店舗名未設定)';
 }
