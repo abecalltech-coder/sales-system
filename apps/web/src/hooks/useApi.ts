@@ -31,6 +31,7 @@ export interface RoleItem {
   visibleTabs: string[] | null;
   /** タスクの閲覧範囲(AP / DEPT / ALL)。空=自分のみ */
   taskView: string[];
+  canEditWorkRules: boolean;
 }
 
 export function useRoles() {

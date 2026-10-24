@@ -21,7 +21,8 @@ export type IconName =
   | 'folder'
   | 'chat'
   | 'task'
-  | 'memo';
+  | 'memo'
+  | 'book';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -121,6 +122,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <rect x="4" y="4" width="16" height="16" rx="3" />
       <path d="M8.5 12l2.5 2.5 4.5-5" />
+    </>
+  ),
+  // 稼働ルール
+  book: (
+    <>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z" />
+      <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z" />
     </>
   ),
   gear: (

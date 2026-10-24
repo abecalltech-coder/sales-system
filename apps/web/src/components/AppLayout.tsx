@@ -28,7 +28,8 @@ const TOP_NAV: NavItem[] = [
 ];
 /** チャット・申込情報/明細は全員で使うため、役職ごとのタブ表示設定に関わらず常に表示する */
 // 申込情報/明細も全員で共有して使う(要望: 他のアカウントからも見られるように)
-const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets', '/tasks', '/memos']);
+// 稼働ルールは全員が閲覧できる(要望。編集はユーザー管理の役職ごとの設定)
+const ALWAYS_VISIBLE = new Set(['/chat', '/application-sheets', '/tasks', '/memos', '/work-rules']);
 
 /** チャットの未読数バッジ */
 function ChatUnreadBadge({ floating }: { floating?: boolean }) {
@@ -63,6 +64,8 @@ const SHIFT_NAV_GROUP: NavGroup = {
   items: [{ to: '/shift', label: 'シフト', icon: 'calendar' }],
 };
 
+const WORK_RULES_NAV: NavItem = { to: '/work-rules', label: '稼働ルール', icon: 'book' };
+
 const ADMIN_NAV_GROUP: NavGroup = {
   title: '管理',
   items: [
@@ -74,6 +77,7 @@ const ADMIN_NAV_GROUP: NavGroup = {
     { to: '/admin/final-report-fields', label: '最終報告項目', icon: 'clipboard' },
     { to: '/admin/integrations', label: '連携設定', icon: 'link' },
     { to: '/admin/audit-logs', label: '操作ログ', icon: 'list' },
+    WORK_RULES_NAV,
   ],
 };
 
@@ -285,7 +289,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { data: me } = useMe();
   const isManager = me ? me.roles.some((r) => MANAGER_ROLES.includes(r)) : false;
   const isAdmin = me ? me.roles.some((r) => ADMIN_ROLES.includes(r)) : false;
-  const allGroups = isAdmin ? [...NAV_GROUPS, SHIFT_NAV_GROUP, ADMIN_NAV_GROUP] : [...NAV_GROUPS, SHIFT_NAV_GROUP];
+  // 管理者以外も「管理(スマホは設定)」の中に稼働ルールだけ出す
+  const allGroups = isAdmin
+    ? [...NAV_GROUPS, SHIFT_NAV_GROUP, ADMIN_NAV_GROUP]
+    : [...NAV_GROUPS, SHIFT_NAV_GROUP, { title: ADMIN_NAV_GROUP.title, items: [WORK_RULES_NAV] }];
 
   // 役職ごとのタブ表示設定(ユーザー管理)。visibleTabsがnullなら制限なし(全表示)。
   const visibleTabs = me?.visibleTabs ?? null;

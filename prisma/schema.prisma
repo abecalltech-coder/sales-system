@@ -169,6 +169,8 @@ model Role {
   visibleTabs Json?
   // タスクの閲覧範囲(ユーザー管理で編集)。AP=AP全員 / DEPT=自部署の全員 / ALL=全員。空=自分のみ
   taskView    String[]     @default([])
+  // 稼働ルールの作成・編集・削除ができるか(ユーザー管理で編集)。閲覧は全員。管理者は常に可
+  canEditWorkRules Boolean @default(false)
   permissions Permission[]
   users       UserRole[]
 }
@@ -1193,3 +1195,29 @@ model Memo {
   @@index([userId, updatedAt])
 }
 
+
+// 稼働ルール(要望: 様々なルールをジャンルごとに一覧で確認できる。閲覧は全員、編集はユーザー管理で許可した役職)
+model WorkRuleGroup {
+  id        String     @id @default(uuid())
+  name      String
+  order     Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  rules     WorkRule[]
+}
+
+model WorkRule {
+  id        String        @id @default(uuid())
+  groupId   String
+  group     WorkRuleGroup @relation(fields: [groupId], references: [id])
+  title     String
+  body      String        @default("")
+  pinned    Boolean       @default(false)
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+
+  @@index([groupId])
+}

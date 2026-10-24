@@ -19,6 +19,7 @@ const RESOURCE_TABS: Record<string, string> = {
   roles: 'ユーザー管理',
   organizations: '組織管理',
   'status-master': 'マスタ管理',
+  'work-rules': '稼働ルール',
   'automation-rules': 'マスタ管理',
   'toss-form': 'トスフォーム設定',
   'custom-fields': 'カスタム項目管理',

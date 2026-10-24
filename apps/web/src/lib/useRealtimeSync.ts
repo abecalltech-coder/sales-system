@@ -128,6 +128,10 @@ export function useRealtimeSync() {
     const handleTasks = () =>
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     s.on("tasks.updated", handleTasks);
+    // 稼働ルール(全員で閲覧)
+    const handleWorkRules = () =>
+      queryClient.invalidateQueries({ queryKey: ["work-rules"] });
+    s.on("work-rules.updated", handleWorkRules);
     s.on("chat.updated", handleChat);
     s.on("users.updated", handleUsers);
     return () => {
@@ -137,6 +141,7 @@ export function useRealtimeSync() {
       s.off("application-sheets.updated", handleSheets);
       s.off("department-summary.updated", handleSummary);
       s.off("tasks.updated", handleTasks);
+      s.off("work-rules.updated", handleWorkRules);
       s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };

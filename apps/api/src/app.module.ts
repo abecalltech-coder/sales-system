@@ -42,6 +42,7 @@ import { ApplicationSheetsModule } from './application-sheets/application-sheets
 import { DepartmentSummaryModule } from './department-summary/department-summary.module';
 import { TasksModule } from './tasks/tasks.module';
 import { MemosModule } from './memos/memos.module';
+import { WorkRulesModule } from './work-rules/work-rules.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { MemosModule } from './memos/memos.module';
     DepartmentSummaryModule,
     TasksModule,
     MemosModule,
+    WorkRulesModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

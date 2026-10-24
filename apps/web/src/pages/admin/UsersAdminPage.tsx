@@ -435,9 +435,21 @@ function TabVisibilitySettings() {
     taskViewMutation.mutate({ id: role.id, taskView: cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key] });
   };
 
+  // 稼働ルールの編集権限(要望: 閲覧は全員、編集はユーザー管理で変更)
+  const workRulesMutation = useMutation({
+    mutationFn: (v: { id: string; canEditWorkRules: boolean }) => api.patch(`/roles/${v.id}`, { canEditWorkRules: v.canEditWorkRules }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['work-rules'] });
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
+  });
+  const isAdminRole = (role: RoleItem) => role.code === 'SUPER_ADMIN' || role.code === 'ADMIN';
+
   return (
     <div style={{ marginTop: 28 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示・タスク閲覧範囲の設定</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示・タスク閲覧範囲・稼働ルール編集の設定</h2>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
         チェックを外すと、そのロールを持つユーザーのサイドナビからタブが消えます(未チェック=非表示)。システム管理者の「ユーザー管理」は締め出し防止のため常に表示です。
       </p>
@@ -471,6 +483,17 @@ function TabVisibilitySettings() {
                     </label>
                   ))}
                   <span style={{ color: 'var(--color-text-faint)' }}>{(role.taskView ?? []).length === 0 ? '(自分のみ)' : '+自分'}</span>
+                  <span style={{ fontWeight: 900, marginLeft: 8 }}>稼働ルール</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={isAdminRole(role) || role.canEditWorkRules}
+                      disabled={isAdminRole(role) || workRulesMutation.isPending}
+                      onChange={() => workRulesMutation.mutate({ id: role.id, canEditWorkRules: !role.canEditWorkRules })}
+                    />
+                    編集できる
+                  </label>
+                  <span style={{ color: 'var(--color-text-faint)' }}>{isAdminRole(role) ? '(管理者は常に可)' : '(閲覧は全員)'}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 4 }}>
                   {groups.map((g) => (

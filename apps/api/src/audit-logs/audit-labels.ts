@@ -135,6 +135,7 @@ export const FIELD_LABELS: Record<string, string> = {
   employeeCode: '社員番号',
   roleCodes: 'ロール(役職)',
   visibleTabs: '表示タブ',
+  canEditWorkRules: '稼働ルールの編集',
   newPassword: 'パスワード',
 
   // 項目定義(マスタ・トスフォーム・カスタム項目・最終報告項目・案件管理の列)

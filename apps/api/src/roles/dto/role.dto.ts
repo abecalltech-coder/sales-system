@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, ValidateIf } from 'class-validator';
 import { TASK_VIEW_OPTIONS } from '../role-defs';
 
 export class UpdateRoleDto {
@@ -13,4 +13,9 @@ export class UpdateRoleDto {
   @IsArray()
   @IsIn(TASK_VIEW_OPTIONS, { each: true })
   taskView?: string[];
+
+  // 稼働ルールの作成・編集・削除を許可するか(閲覧は全員)
+  @IsOptional()
+  @IsBoolean()
+  canEditWorkRules?: boolean;
 }
