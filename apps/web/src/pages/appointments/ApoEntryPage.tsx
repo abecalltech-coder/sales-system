@@ -5,6 +5,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { useTossFormFields, useMe } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { logCopy } from '../../lib/copyLog';
+import { useIsPhone } from '../../lib/useIsPhone';
 import { FieldInput } from '../toss-cases/TossEntryPage';
 
 type AnswerValue = string | string[];
@@ -31,6 +32,7 @@ const fmt = (iso: string | null) =>
 export function ApoEntryPage() {
   const { data: fields, isLoading } = useTossFormFields(false, 'APPOINTMENT');
   const { data: me } = useMe();
+  const isPhone = useIsPhone();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
@@ -110,7 +112,8 @@ export function ApoEntryPage() {
 
   return (
     <AppLayout>
-      <div className="page" style={{ maxWidth: 760 }}>
+      {/* スマホは左右に余白を取り、枠が画面からはみ出さないようにする(要望) */}
+      <div className="page" style={{ maxWidth: 760, ...(isPhone ? { padding: '16px 16px 24px' } : {}) }}>
         <div className="page-header">
           <h1 className="page-title">アポ登録</h1>
           <button onClick={() => navigate('/appointments')} style={{ fontSize: 12 }}>
@@ -135,7 +138,18 @@ export function ApoEntryPage() {
         {isLoading ? (
           <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>
         ) : (
-          <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)', padding: '16px 18px' }}>
+          <div
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 10,
+              boxShadow: 'var(--shadow-sm)',
+              padding: isPhone ? '18px 16px' : '16px 18px',
+              width: '100%',
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
             {(fields ?? []).map((f) => (
               <FieldInput
                 key={f.id}

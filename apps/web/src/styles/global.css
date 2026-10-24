@@ -222,6 +222,22 @@ textarea::placeholder {
   color: var(--color-text-faint);
 }
 
+/* 日付・日時の入力(フォーム用)。iOS Safari は中身を中央寄せにし、独自の最小幅で枠が親からはみ出すため、
+   左寄せ・幅を親に合わせる(要望: アポ登録の日時が中央表示で、スマホだと右側がはみ出る)。 */
+input.date-input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 34px;
+  text-align: left;
+}
+input.date-input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
 /* プルダウンは共通してネイティブの矢印を消し、控えめなシェブロンに差し替える(要望: 全プルダウンの意匠統一)。 */
 select {
   appearance: none;

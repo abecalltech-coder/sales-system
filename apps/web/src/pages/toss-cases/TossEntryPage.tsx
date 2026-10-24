@@ -197,6 +197,8 @@ export function FieldInput({
     return wrap(
       <input
         type={f.fieldType === 'DATE' ? 'date' : 'datetime-local'}
+        // スマホ(iOS)で日時が中央寄せになり、枠が右へはみ出すのを防ぐ(要望)
+        className="date-input"
         value={(value as string) ?? ''}
         onChange={(e) => onText(e.target.value)}
         style={inputStyle}
