@@ -56,6 +56,8 @@ const APO_TARGET_KEYS: { id: string; label: string }[] = [
   { id: 'proposal', label: '提案(「その他」は自由入力)' },
   { id: 'smsTo', label: 'SMS送付番号' },
   { id: 'storeHp', label: '店舗HP' },
+  { id: 'nearestStation', label: '最寄り駅(訪問のときだけ表示・必須)' },
+  { id: 'walkMinutes', label: '徒歩分数(訪問のときだけ表示・必須)' },
   { id: 'industry', label: '業種' },
   { id: 'apStaffName', label: 'AP' },
   { id: 'preConfirmStaffName', label: '前確者' },

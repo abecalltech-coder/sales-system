@@ -19,6 +19,7 @@ import {
   closerSurname,
   fillApoFormLines,
   formatJaDateTimeWithWeekday,
+  isOnlineHook,
   markHomeProposal,
   renderTemplate,
 } from './toss-appointment-automation.util';
@@ -317,12 +318,14 @@ export class AppointmentsService {
       proposal?: string;
       smsTo?: string;
       storeHp?: string;
+      nearestStation?: string;
+      walkMinutes?: string;
     },
     actorUserId: string,
   ) {
     const hook = input.hook ?? '';
     // フックは自由入力のため、全角・小文字・空白の違いがあっても HPZOOM ならオンライン扱いにする
-    const isOnline = hook.normalize('NFKC').replace(/\s/g, '').toUpperCase() === 'HPZOOM';
+    const isOnline = isOnlineHook(hook);
     const [meetingStatusId, progressStatusId, actor, apUser, departmentStatus, preConfirmStatus, closerStatus, zoomTemplate, visitTemplate] =
       await Promise.all([
         this.statusResolver.resolveId('APPOINTMENT', 'APO_CONFIRMED'),

@@ -341,6 +341,8 @@ const TEMPLATE_FIELDS: { key: string; label: string; source: string; group: stri
   { key: 'proposal', label: '提案', source: 'アポ登録の「提案」', group: 'アポ登録の入力' },
   { key: 'smsTo', label: 'SMS送付番号', source: 'アポ登録の「SMS送付番号」', group: 'アポ登録の入力' },
   { key: 'storeHp', label: '店舗HP', source: 'アポ登録の「店舗HPのURL」', group: 'アポ登録の入力' },
+  { key: 'nearestStation', label: '最寄り駅', source: 'アポ登録の「最寄り駅」(訪問のみ)', group: 'アポ登録の入力' },
+  { key: 'walkMinutes', label: '徒歩分数', source: 'アポ登録の「徒歩分数」(訪問のみ)', group: 'アポ登録の入力' },
   { key: 'meetingUrl', label: 'GoogleMeetURL', source: 'Google Meet 連携で自動発行されたURL(HPZOOMのみ。発行後に自動で入ります)', group: '自動' },
 ];
 const FIELD_BY_KEY = new Map(TEMPLATE_FIELDS.map((f) => [f.key, f]));

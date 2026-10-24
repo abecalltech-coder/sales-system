@@ -94,7 +94,14 @@ export const TEMPLATE_FIELD_ALIASES: Record<string, string> = {
   提案: 'proposal',
   SMS送付番号: 'smsTo',
   店舗HP: 'storeHp',
+  最寄り駅: 'nearestStation',
+  徒歩分数: 'walkMinutes',
 };
+
+/** フックが HPZOOM(オンライン)か。自由入力のため全角・小文字・空白の違いは無視する */
+export function isOnlineHook(hook: string | null | undefined): boolean {
+  return (hook ?? '').normalize('NFKC').replace(/\s/g, '').toUpperCase() === 'HPZOOM';
+}
 
 /** テンプレート文字列中の{{項目}}をtokensの値に置換する。{{店舗名}}のような日本語名と{{storeName}}の両方に対応(未指定は空文字) */
 export function renderTemplate(template: string, tokens: Record<string, string>): string {
@@ -120,6 +127,8 @@ export interface ApoFormMemoInput {
   proposal?: string;
   smsTo?: string;
   storeHp?: string;
+  nearestStation?: string;
+  walkMinutes?: string;
 }
 
 /** アポ登録フォームの入力を {{携帯番号}} などの差し込み項目にする */
@@ -138,6 +147,8 @@ export function apoFormTokens(i: ApoFormMemoInput): Record<string, string> {
     proposal: i.proposal ?? '',
     smsTo: i.smsTo ?? '',
     storeHp: i.storeHp ?? '',
+    nearestStation: i.nearestStation ?? '',
+    walkMinutes: i.walkMinutes ?? '',
   };
 }
 
@@ -158,6 +169,15 @@ export function fillApoFormLines(text: string, i: ApoFormMemoInput): string {
     [/^提案$/, () => i.proposal || null],
     [/^SMS送付番号/, () => i.smsTo || null],
     [/^店舗HP/, () => i.storeHp || null],
+    [
+      /^最寄り?駅$/,
+      () => {
+        if (!i.nearestStation && !i.walkMinutes) return null;
+        const station = (i.nearestStation ?? '').replace(/駅$/, '');
+        const min = (i.walkMinutes ?? '').replace(/分$/, '');
+        return `${station}駅　徒歩${min}分`;
+      },
+    ],
     [/^地点数$/, () => (i.pointsJuryo || i.pointsDoryoku ? `従量（${i.pointsJuryo ?? ''}地点）/動力（${i.pointsDoryoku ?? ''}地点）` : null)],
     [
       /^担当者名$/,

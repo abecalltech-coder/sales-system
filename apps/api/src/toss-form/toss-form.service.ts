@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TossCasesService } from '../toss-cases/toss-cases.service';
 import { AppointmentsService } from '../appointments/appointments.service';
+import { isOnlineHook } from '../appointments/toss-appointment-automation.util';
 import { CreateTossFormFieldDto, SubmitTossFormDto, UpdateTossFormFieldDto } from './dto/toss-form.dto';
 
 // フォーム項目のマッピング先として許可するキー
@@ -54,7 +55,12 @@ const APO_TARGET_KEYS = [
   'proposal',
   'smsTo',
   'storeHp',
+  'nearestStation',
+  'walkMinutes',
 ] as const;
+
+/** 訪問(フックが HPZOOM 以外)のときだけ必須にする項目(要望) */
+const VISIT_REQUIRED_KEYS = ['nearestStation', 'walkMinutes'];
 
 /** TOSS=トス登録 / APPOINTMENT=アポ登録 */
 export type FormKind = 'TOSS' | 'APPOINTMENT';
@@ -187,6 +193,14 @@ export class TossFormService {
   /** アポ登録フォームから送信 → アポ詳細を単品で作る */
   async submitAppointment(dto: SubmitTossFormDto, actorUserId: string) {
     const val = await this.readAnswers('APPOINTMENT', dto.answers ?? {});
+    if (!isOnlineHook(val('hook'))) {
+      const visitFields = await this.prisma.tossFormField.findMany({
+        where: { form: 'APPOINTMENT', active: true, targetKey: { in: VISIT_REQUIRED_KEYS } },
+        orderBy: { order: 'asc' },
+      });
+      const missing = visitFields.find((f) => !val(f.targetKey));
+      if (missing) throw new BadRequestException(`訪問のときは「${missing.label}」は必須です`);
+    }
     const date = (key: string) => {
       const v = val(key);
       if (!v) return undefined;
@@ -225,6 +239,8 @@ export class TossFormService {
         proposal: val('proposal'),
         smsTo: val('smsTo'),
         storeHp: val('storeHp'),
+        nearestStation: val('nearestStation'),
+        walkMinutes: val('walkMinutes'),
       },
       actorUserId,
     );

@@ -10,6 +10,11 @@ import { FieldInput } from '../toss-cases/TossEntryPage';
 
 type AnswerValue = string | string[];
 
+/** 訪問(フックが HPZOOM 以外)のときだけ出して必須にする項目(要望)。サーバー側 VISIT_REQUIRED_KEYS と揃える */
+const VISIT_ONLY_KEYS = ['nearestStation', 'walkMinutes'];
+const isOnlineHook = (hook: AnswerValue | undefined) =>
+  typeof hook === 'string' && hook.normalize('NFKC').replace(/\s/g, '').toUpperCase() === 'HPZOOM';
+
 interface ApoFormItem {
   id: string;
   caseNumber: string;
@@ -58,6 +63,8 @@ export function ApoEntryPage() {
     mutationFn: () => {
       // 日時は端末の時刻として送る(サーバーの時差で商談日時がずれないように)
       const body: Record<string, AnswerValue> = { ...answers };
+      // オンライン(HPZOOM)では最寄り駅・徒歩分数を使わない
+      if (isOnlineHook(body.hook)) for (const k of VISIT_ONLY_KEYS) delete body[k];
       for (const f of fields ?? []) {
         const v = body[f.targetKey];
         if (f.fieldType === 'DATETIME' && typeof v === 'string' && v) body[f.targetKey] = new Date(v).toISOString();
@@ -150,10 +157,12 @@ export function ApoEntryPage() {
               overflow: 'hidden',
             }}
           >
-            {(fields ?? []).map((f) => (
+            {(fields ?? [])
+              .filter((f) => !(VISIT_ONLY_KEYS.includes(f.targetKey) && isOnlineHook(answers.hook)))
+              .map((f) => (
               <FieldInput
                 key={f.id}
-                field={f}
+                field={VISIT_ONLY_KEYS.includes(f.targetKey) ? { ...f, required: true } : f}
                 value={answers[f.targetKey]}
                 onText={(v) => set(f.targetKey, v)}
                 onToggle={(opt) => toggleMulti(f.targetKey, opt)}
