@@ -1,21 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { IMPORTANCE, fmtDue, useTaskAlerts } from '../lib/tasks';
 
 /**
  * タスクの通知(アプリ内)。要望: 消えないようにし、対応完了・編集・5分後再通知 のいずれかを押すまで出し続ける。
  * (端末の通知とは別。アプリを開いていればこちらが必ず出る)
+ * 要望: 期日超えの通知はどの画面でも出すのではなく、タスクタブを開いている時だけ出す。
  */
 export function TaskAlerts() {
-  const { data: alerts } = useTaskAlerts();
+  const { pathname } = useLocation();
+  const onTasksTab = pathname === '/tasks' || pathname.startsWith('/tasks/');
+  const { data: alerts } = useTaskAlerts(onTasksTab);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const act = useMutation({
     mutationFn: (v: { id: string; action: 'complete' | 'snooze' }) => api.post(`/tasks/${v.id}/${v.action}`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   });
-  if (!alerts || alerts.length === 0) return null;
+  if (!onTasksTab || !alerts || alerts.length === 0) return null;
 
   return (
     <div
