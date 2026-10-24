@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getSocket } from './useRealtimeSync';
 import { colorFor } from '../components/Avatar';
+import { clearRemotePointers, removeRemotePointer, setRemotePointer, RemotePointer } from './remotePointers';
 
 export interface PresenceViewer {
   socketId: string;
@@ -36,6 +37,9 @@ export function usePresence(entityType: string, currentUserId: string | undefine
   const [cursorVersion, setCursorVersion] = useState(0);
 
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 他の人が同じ画面を開いているときだけマウスカーソルを送る(一人のときは通信しない)
+  const othersRef = useRef(false);
+  othersRef.current = viewers.some((v) => v.userId !== currentUserId);
 
   useEffect(() => {
     const socket = getSocket();
@@ -80,12 +84,74 @@ export function usePresence(entityType: string, currentUserId: string | undefine
       setCursorVersion((v) => v + 1);
     };
 
+    // 画面に戻ったときも参加し直す(切れていた間の閲覧者・カーソルを取り直す)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && socket.connected) join();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    // マウスカーソルの共有(要望)。一覧のセル上ならセル(行ID・列)と中の位置、それ以外は画面本体に対する位置で送る
+    const onPointerUpdated = (p: Omit<RemotePointer, 'at'> & { room: string }) => {
+      if (p.room !== entityType) return;
+      setRemotePointer(p);
+    };
+    const onPointerCleared = (p: { socketId: string }) => removeRemotePointer(p.socketId);
+    socket.on('pointer.updated', onPointerUpdated);
+    socket.on('pointer.cleared', onPointerCleared);
+    let lastSent = 0;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    let lastEvent: PointerEvent | null = null;
+    const send = () => {
+      pending = null;
+      lastSent = Date.now();
+      const e = lastEvent;
+      if (!e || !socket.connected) return;
+      const cell = (e.target as Element | null)?.closest?.('td[data-row-id][data-col-key]') as HTMLElement | null;
+      if (cell) {
+        const r = cell.getBoundingClientRect();
+        socket.emit('pointer.move', {
+          room: entityType,
+          rowId: cell.dataset.rowId,
+          columnKey: cell.dataset.colKey,
+          fx: (e.clientX - r.left) / Math.max(1, r.width),
+          fy: (e.clientY - r.top) / Math.max(1, r.height),
+        });
+        return;
+      }
+      const main = document.querySelector('main');
+      if (!main) return;
+      const r = main.getBoundingClientRect();
+      socket.emit('pointer.move', { room: entityType, x: (e.clientX - r.left) / Math.max(1, r.width), y: e.clientY - r.top });
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === 'touch' || !othersRef.current) return; // 携帯の指・一人のときは送らない
+      lastEvent = e;
+      if (pending) return;
+      pending = setTimeout(send, Math.max(0, 70 - (Date.now() - lastSent)));
+    };
+    const onPointerLeave = () => {
+      lastEvent = null;
+      if (socket.connected) socket.emit('pointer.clear', { room: entityType });
+    };
+    document.addEventListener('pointermove', onPointerMove);
+    document.documentElement.addEventListener('mouseleave', onPointerLeave);
+    window.addEventListener('blur', onPointerLeave);
+
     socket.on('presence.updated', onPresence);
     socket.on('cursor.updated', onCursorUpdated);
     socket.on('cursor.cleared', onCursorCleared);
     socket.on('cursor.snapshot', onCursorSnapshot);
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      document.removeEventListener('pointermove', onPointerMove);
+      document.documentElement.removeEventListener('mouseleave', onPointerLeave);
+      window.removeEventListener('blur', onPointerLeave);
+      if (pending) clearTimeout(pending);
+      socket.off('pointer.updated', onPointerUpdated);
+      socket.off('pointer.cleared', onPointerCleared);
+      clearRemotePointers();
+      if (socket.connected) socket.emit('pointer.clear', { room: entityType });
       socket.off('connect', join);
       socket.off('presence.updated', onPresence);
       socket.off('cursor.updated', onCursorUpdated);

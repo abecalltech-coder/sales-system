@@ -12,6 +12,7 @@ import { AccountBar } from './AccountBar';
 import { TaskAlerts } from './TaskAlerts';
 import { useChatUnread } from '../hooks/useChat';
 import { OnlineUsersWidget } from './OnlineUsersWidget';
+import { RemoteCursors } from './RemoteCursors';
 import { NavIcon, IconName } from './NavIcon';
 
 const MANAGER_ROLES = ['MANAGER', 'ADMIN', 'SUPER_ADMIN'];
@@ -432,6 +433,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
       <TaskAlerts />
+      <RemoteCursors />
     </div>
   );
 }

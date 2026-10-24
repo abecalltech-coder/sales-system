@@ -37,11 +37,29 @@ export function getSocket(): Socket {
       if (reason === "io server disconnect") void reconnectWithFreshLogin();
     });
     s.on("connect_error", () => void reconnectWithFreshLogin());
-    // 画面に戻ってきたときに切れていれば繋ぎ直す
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && !s.connected)
+    /**
+     * スリープ明け等で、接続済みに見えて実は切れている(応答が返らない)ことがあり、
+     * その間「ログイン中」や「このタブを開いている人」が古いままになっていた(要望)。
+     * 画面に戻ったときと1分ごとに応答を確かめ、返らなければ繋ぎ直す。
+     */
+    const checkAlive = () => {
+      if (!s.connected) {
         void reconnectWithFreshLogin();
+        return;
+      }
+      s.timeout(5000).emit("online.request", (err: unknown) => {
+        if (err && s.connected) {
+          s.disconnect();
+          s.connect();
+        }
+      });
+    };
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkAlive();
     });
+    window.setInterval(() => {
+      if (document.visibilityState === "visible") checkAlive();
+    }, 60_000);
   }
   return socket;
 }

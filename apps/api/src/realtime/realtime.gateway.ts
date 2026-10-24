@@ -1,6 +1,7 @@
 import {
   WebSocketGateway,
   WebSocketServer,
+  OnGatewayInit,
   OnGatewayConnection,
   OnGatewayDisconnect,
   SubscribeMessage,
@@ -59,7 +60,7 @@ interface CursorPayload {
 @WebSocketGateway({
   cors: { origin: process.env.SOCKET_CORS_ORIGIN ?? 'http://localhost:5173', credentials: true },
 })
-export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(RealtimeGateway.name);
 
   @WebSocketServer()
@@ -75,6 +76,20 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * 「ログイン中」「このタブを開いている人」は接続・切断の瞬間にしか配信していなかったため、
+   * 配信を取りこぼした画面は時間が経つと古いままになっていた(要望)。30秒ごとに最新を配り直す。
+   */
+  afterInit() {
+    setInterval(() => {
+      if (!this.server) return;
+      this.broadcastOnlineUsers();
+      for (const room of PRESENCE_ROOMS) {
+        if (this.server.sockets.adapter.rooms.get(`presence:${room}`)?.size) this.broadcastPresence(room);
+      }
+    }, 30_000).unref();
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -102,6 +117,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const online = this.onlineUsersSnapshot();
       client.emit('online.snapshot', online);
       this.broadcastOnlineUsers();
+      // 認証(非同期)が終わる前に presence.join が届いていた場合、名前の無い閲覧者になっていたので配り直す
+      for (const room of PRESENCE_ROOMS) {
+        if (client.rooms.has(`presence:${room}`)) this.broadcastPresence(room);
+      }
     } catch (err) {
       this.logger.warn(`Socket auth failed: ${err instanceof Error ? err.message : String(err)}`);
       client.disconnect(true);
@@ -114,6 +133,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     for (const room of PRESENCE_ROOMS) {
       this.cursorState.get(room)?.delete(client.id);
       client.to(`presence:${room}`).emit('cursor.cleared', { socketId: client.id });
+      client.to(`presence:${room}`).emit('pointer.cleared', { socketId: client.id });
       this.broadcastPresence(room);
     }
     // このクライアントがcompany:defaultから抜けた後の状態を配信する(自分の分は除外して届く)
@@ -142,7 +162,48 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     client.leave(`presence:${data.room}`);
     this.cursorState.get(data.room)?.delete(client.id);
     client.to(`presence:${data.room}`).emit('cursor.cleared', { socketId: client.id });
+    client.to(`presence:${data.room}`).emit('pointer.cleared', { socketId: client.id });
     this.broadcastPresence(data.room);
+  }
+
+  /** 画面を開いた時・画面に戻った時に、今のログイン中一覧を受け取る(返り値は接続確認の応答にも使う) */
+  @SubscribeMessage('online.request')
+  handleOnlineRequest(@ConnectedSocket() client: Socket) {
+    const online = this.onlineUsersSnapshot();
+    client.emit('online.snapshot', online);
+    return { ok: true };
+  }
+
+  /**
+   * マウスカーソルの位置(要望: 同じ画面を開いている人のカーソルを表示)。サーバーには保存せず中継だけする。
+   * 位置は一覧のセル(行ID・列キー・セル内の割合)か、画面本体に対する位置で送られてくる。
+   */
+  @SubscribeMessage('pointer.move')
+  handlePointerMove(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { room?: string; rowId?: string; columnKey?: string; fx?: number; fy?: number; x?: number; y?: number },
+  ) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room) || !client.data.userId) return;
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+    const str = (v: unknown) => (typeof v === 'string' && v.length <= 200 ? v : undefined);
+    client.to(`presence:${data.room}`).emit('pointer.updated', {
+      room: data.room,
+      socketId: client.id,
+      userId: client.data.userId,
+      userName: client.data.userName,
+      rowId: str(data.rowId),
+      columnKey: str(data.columnKey),
+      fx: num(data.fx),
+      fy: num(data.fy),
+      x: num(data.x),
+      y: num(data.y),
+    });
+  }
+
+  @SubscribeMessage('pointer.clear')
+  handlePointerClear(@ConnectedSocket() client: Socket, @MessageBody() data: { room?: string }) {
+    if (!data?.room || !PRESENCE_ROOMS.includes(data.room)) return;
+    client.to(`presence:${data.room}`).emit('pointer.cleared', { socketId: client.id });
   }
 
   /** セルにフォーカスした時に呼ぶ。同じ一覧を見ている他ユーザーへカーソル位置を配信する。 */
@@ -193,7 +254,8 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const viewers = [...socketIds]
       .map((id) => {
         const s = this.server.sockets.sockets.get(id);
-        return s ? { socketId: id, userId: s.data.userId as string, userName: s.data.userName as string } : null;
+        // 認証が終わっていない接続はまだ出さない(終わった時点で配り直す)
+        return s?.data.userId ? { socketId: id, userId: s.data.userId as string, userName: s.data.userName as string } : null;
       })
       .filter((v): v is { socketId: string; userId: string; userName: string } => v !== null);
     this.server.to(room).emit('presence.updated', { entityType, viewers });

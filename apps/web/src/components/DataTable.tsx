@@ -281,6 +281,9 @@ function RowInner<T>({
               key={col.key}
               data-row={i}
               data-col={colIdx}
+              // 他の人のマウスカーソルをセル基準で表示するため(RemoteCursors)
+              data-row-id={rowId}
+              data-col-key={col.key}
               title={cursor ? `${cursor.userName}さんが選択中` : undefined}
               onFocusCapture={() => onCellFocus(rowId, col.key)}
               onBlurCapture={() => onCellBlur(rowId, col.key)}
