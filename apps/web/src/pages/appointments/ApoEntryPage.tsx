@@ -74,6 +74,23 @@ export function ApoEntryPage() {
     onError: (e) => setError(e instanceof ApiError ? e.message : '登録に失敗しました'),
   });
 
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/apo-form/mine/${id}`),
+    onSuccess: (_r, id) => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['apo-form-mine'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      setEditing((cur) => (cur?.id === id ? null : cur));
+      flash('アポ詳細を削除しました');
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : '削除に失敗しました'),
+  });
+  const remove = (item: ApoFormItem) => {
+    // アポ実績・CLカレンダーからも消えるため確認する
+    if (!window.confirm(`「${item.customer?.corporateName || '(店舗名未設定)'}」のアポ詳細を削除しますか？\nアポ実績・CLカレンダーからも消えます。`)) return;
+    removeMutation.mutate(item.id);
+  };
+
   const copy = async (item: ApoFormItem) => {
     try {
       await navigator.clipboard.writeText(item.memo ?? '');
@@ -158,6 +175,14 @@ export function ApoEntryPage() {
               </button>
               <button type="button" onClick={() => copy(item)} disabled={!item.memo} style={{ fontSize: 11, padding: '2px 8px' }}>
                 コピー
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(item)}
+                disabled={removeMutation.isPending}
+                style={{ fontSize: 11, padding: '2px 8px', color: 'var(--color-danger)' }}
+              >
+                削除
               </button>
             </div>
           ))}

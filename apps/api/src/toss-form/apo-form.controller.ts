@@ -46,18 +46,25 @@ export class ApoFormController {
     return this.service.submitAppointment(dto, user.id);
   }
 
-  /** 登録したアポ詳細(管理者は全員分) */
+  /** 登録したアポ詳細(要望: ユーザー間で共有しない。管理者も自分が作った分だけ) */
   @Get('mine')
   mine(@CurrentUser() user: AuthenticatedUser) {
     assertCanUse(user);
-    return this.appointments.listFromApoForm(user.id, isAdmin(user));
+    return this.appointments.listFromApoForm(user.id);
   }
 
   /** 登録したアポ詳細の本文を直す */
   @Patch('mine/:id')
   updateMine(@Param('id') id: string, @Body() dto: UpdateApoMemoDto, @CurrentUser() user: AuthenticatedUser) {
     assertCanUse(user);
-    return this.appointments.updateApoFormMemo(id, dto.memo, user.id, isAdmin(user));
+    return this.appointments.updateApoFormMemo(id, dto.memo, user.id);
+  }
+
+  /** 登録したアポ詳細を削除する */
+  @Delete('mine/:id')
+  removeMine(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    assertCanUse(user);
+    return this.appointments.removeApoForm(id, user.id);
   }
 
   // --- 管理(アポフォーム設定) ---

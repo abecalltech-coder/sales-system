@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 
@@ -8,6 +9,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -15,6 +17,8 @@ export function LoginPage() {
     setLoading(true);
     try {
       await api.post('/auth/login', { email, password });
+      // 同じ端末で別のユーザーがログインしたとき、前の人のメモ・アポ詳細などが画面に残らないようにする
+      queryClient.clear();
       navigate('/toss-cases');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '通信エラーが発生しました');

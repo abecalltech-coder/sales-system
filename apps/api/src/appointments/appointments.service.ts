@@ -434,9 +434,9 @@ export class AppointmentsService {
   }
 
   /** アポ登録フォームで作ったアポ詳細(管理者は全員分、それ以外は自分が登録したもの) */
-  listFromApoForm(actorUserId: string, all: boolean) {
+  listFromApoForm(actorUserId: string) {
     return this.prisma.appointment.findMany({
-      where: { deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, ...(all ? {} : { createdBy: actorUserId }) },
+      where: { deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, createdBy: actorUserId },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -454,12 +454,18 @@ export class AppointmentsService {
     });
   }
 
-  /** アポ登録フォームで作ったアポ詳細の本文(備考)を直す。本人(管理者は全員分)のものだけ */
-  async updateApoFormMemo(id: string, memo: string, actorUserId: string, all: boolean) {
+  /** アポ登録フォームで作ったアポ詳細のうち本人が作ったもの(要望: 他のユーザーと共有しない。管理者も自分の分だけ) */
+  private async ownApoForm(id: string, actorUserId: string) {
     const existing = await this.prisma.appointment.findFirst({
-      where: { id, deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, ...(all ? {} : { createdBy: actorUserId }) },
+      where: { id, deletedAt: null, idempotencyKey: { startsWith: 'apo-form:' }, createdBy: actorUserId },
     });
     if (!existing) throw new NotFoundException('アポ詳細が見つかりません');
+    return existing;
+  }
+
+  /** アポ登録フォームで作ったアポ詳細の本文(備考)を直す。本人のものだけ */
+  async updateApoFormMemo(id: string, memo: string, actorUserId: string) {
+    const existing = await this.ownApoForm(id, actorUserId);
     const updated = await this.prisma.appointment.update({
       where: { id },
       data: { memo, updatedBy: actorUserId, version: { increment: 1 } },
@@ -477,6 +483,21 @@ export class AppointmentsService {
       { entityType: 'APPOINTMENT', id, version: updated.version, updatedAt: updated.updatedAt.toISOString(), updatedBy: actorUserId, action: 'updated' },
     );
     return { id, memo: updated.memo, version: updated.version };
+  }
+
+  /** アポ登録フォームで作ったアポ詳細を削除する(要望)。本人のものだけ。一覧の削除と同じく論理削除 */
+  async removeApoForm(id: string, actorUserId: string) {
+    await this.ownApoForm(id, actorUserId);
+    // 操作ログは DELETE リクエストとして監査インターセプターが記録する
+    const deleted = await this.prisma.appointment.update({
+      where: { id },
+      data: { deletedAt: new Date(), updatedBy: actorUserId, version: { increment: 1 } },
+    });
+    this.realtime.emitCaseUpdated(
+      ['company:default', ...(deleted.snapshotDepartmentId ? [`department:${deleted.snapshotDepartmentId}`] : []), `appointment:${id}`],
+      { entityType: 'APPOINTMENT', id, version: deleted.version, updatedAt: deleted.updatedAt.toISOString(), updatedBy: actorUserId, action: 'deleted' },
+    );
+    return { ok: true };
   }
 
   private emitCreated(appointment: { id: string; snapshotDepartmentId: string | null; version: number; updatedAt: Date }, actorUserId: string) {
