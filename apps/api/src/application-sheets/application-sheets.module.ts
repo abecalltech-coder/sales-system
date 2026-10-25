@@ -1,4 +1,20 @@
-import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  CanActivate,
+  Controller,
+  Delete,
+  ExecutionContext,
+  ForbiddenException,
+  Get,
+  Injectable,
+  Module,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -123,6 +139,25 @@ class ApplicationSheetsService {
 }
 
 /** 権限デコレータ無し = ログインユーザーなら利用可(表示はタブ表示設定で制御) */
+/** 申込情報/明細のタブ(ユーザー管理の「役職ごとのタブ表示」で役職ごとに出し入れする) */
+const SHEETS_TAB = '/application-sheets';
+
+/**
+ * 申込情報/明細を見られるか(要望: 役職ごとに見える権限を設定)。タブ制限なし(null)の役職と管理者は見られる。
+ * 画面のタブを隠すだけでなく、API でも同じ判定をする。
+ */
+@Injectable()
+class SheetsTabGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext) {
+    const user = ctx.switchToHttp().getRequest<{ user?: AuthenticatedUser }>().user;
+    if (!user) return false;
+    const isAdmin = user.roles.includes('SUPER_ADMIN') || user.roles.includes('ADMIN');
+    if (isAdmin || !user.visibleTabs || user.visibleTabs.includes(SHEETS_TAB)) return true;
+    throw new ForbiddenException('申込情報/明細を見る権限がありません(ユーザー管理の役職ごとのタブ表示で設定します)');
+  }
+}
+
+@UseGuards(SheetsTabGuard)
 @Controller('application-sheets')
 class ApplicationSheetsController {
   constructor(private readonly service: ApplicationSheetsService) {}
