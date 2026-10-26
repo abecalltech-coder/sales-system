@@ -43,6 +43,7 @@ import { DepartmentSummaryModule } from './department-summary/department-summary
 import { TasksModule } from './tasks/tasks.module';
 import { MemosModule } from './memos/memos.module';
 import { WorkRulesModule } from './work-rules/work-rules.module';
+import { CloseReportsModule } from './close-reports/close-reports.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { WorkRulesModule } from './work-rules/work-rules.module';
     TasksModule,
     MemosModule,
     WorkRulesModule,
+    CloseReportsModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

@@ -4,6 +4,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { useProducts, useSources, useSystemSettings, useMasterOrder, useDealFields, DealFieldItem, useMasterShare } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { MASTER_TAB_GROUPS, orderedCategories } from '../../lib/masterTabs';
+import { CloseReportConfigEditor } from './CloseReportConfigEditor';
 import { applySavedOrder } from '../../lib/rowColors';
 
 // 内部コードに意味を持たせず単純な選択肢名の管理として使うカテゴリでは、追加フォームで
@@ -37,7 +38,7 @@ const FIXED_SHARED_REASON: Record<string, string> = {
 
 const DEALS_TAB = '案件管理';
 // カテゴリ一覧以外の特殊タブ(案件管理のプルダウン、商材・流入元の閲覧、自動作成テンプレートの編集)
-const EXTRA_TAB_TITLES = [DEALS_TAB, '商材・流入元', 'アポ詳細FMT'];
+const EXTRA_TAB_TITLES = [DEALS_TAB, '商材・流入元', 'アポ詳細FMT', 'クローズ報告'];
 
 /** マスタ管理での項目(カード)の並び順を保存する(=一覧の行の色の優先順) */
 function useSaveCardOrder() {
@@ -153,6 +154,7 @@ export function MastersAdminPage() {
         {currentTitle === DEALS_TAB && <DealsMasterTab />}
         {currentTitle === '商材・流入元' && <ProductsAndSources />}
         {currentTitle === 'アポ詳細FMT' && <TemplateEditors />}
+        {currentTitle === 'クローズ報告' && <CloseReportConfigEditor />}
       </div>
     </AppLayout>
   );

@@ -150,6 +150,10 @@ export function useRealtimeSync() {
     const handleWorkRules = () =>
       queryClient.invalidateQueries({ queryKey: ["work-rules"] });
     s.on("work-rules.updated", handleWorkRules);
+    // クローズ報告の項目設定(マスタ管理)
+    const handleCloseConfig = () =>
+      queryClient.invalidateQueries({ queryKey: ["close-report-config"] });
+    s.on("close-report-config.updated", handleCloseConfig);
     s.on("chat.updated", handleChat);
     s.on("users.updated", handleUsers);
     return () => {
@@ -160,6 +164,7 @@ export function useRealtimeSync() {
       s.off("department-summary.updated", handleSummary);
       s.off("tasks.updated", handleTasks);
       s.off("work-rules.updated", handleWorkRules);
+      s.off("close-report-config.updated", handleCloseConfig);
       s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };

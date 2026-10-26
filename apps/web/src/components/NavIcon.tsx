@@ -22,7 +22,8 @@ export type IconName =
   | 'chat'
   | 'task'
   | 'memo'
-  | 'book';
+  | 'book'
+  | 'flag';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -122,6 +123,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <rect x="4" y="4" width="16" height="16" rx="3" />
       <path d="M8.5 12l2.5 2.5 4.5-5" />
+    </>
+  ),
+  // クローズ報告
+  flag: (
+    <>
+      <path d="M5 21V4" />
+      <path d="M5 4h11l-2 4 2 4H5" />
     </>
   ),
   // 稼働ルール

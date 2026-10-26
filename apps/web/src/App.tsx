@@ -21,6 +21,7 @@ import { ApplicationSheetsPage } from './pages/application/ApplicationSheetsPage
 import { TasksPage } from './pages/tasks/TasksPage';
 import { MemosPage } from './pages/memos/MemosPage';
 import { WorkRulesPage } from './pages/work-rules/WorkRulesPage';
+import { CloseReportPage } from './pages/close-reports/CloseReportPage';
 import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
 import { RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
@@ -57,6 +58,7 @@ export function App() {
         <Route path="/tasks" element={protect(<TasksPage />)} />
         <Route path="/memos" element={protect(<MemosPage />)} />
         <Route path="/work-rules" element={protect(<WorkRulesPage />)} />
+        <Route path="/close-reports" element={protect(<CloseReportPage />)} />
         <Route path="/chat/:roomId" element={protect(<ChatPage />)} />
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />

@@ -56,6 +56,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/deals', label: '案件管理', icon: 'folder' },
       { to: '/cl-calendar', label: 'CLカレンダー', icon: 'calendar' },
       { to: '/final-report', label: '最終報告', icon: 'clipboard' },
+      { to: '/close-reports', label: 'クローズ報告', icon: 'flag' },
       { to: '/application-sheets', label: '申込情報/明細', icon: 'form' },
     ],
   },

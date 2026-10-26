@@ -1221,3 +1221,18 @@ model WorkRule {
 
   @@index([groupId])
 }
+
+// クローズ報告(要望: 商談後のクローズ結果を報告し、決まった書式の文章をコピーする)。
+// 入力項目・選択肢はマスタ管理(system-settings closeReportConfig)で変更する。本人の報告だけ見られる
+model CloseReport {
+  id        String    @id @default(uuid())
+  userId    String
+  storeName String    @default("")
+  values    Json
+  text      String    @default("")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([userId, createdAt])
+}
