@@ -22,6 +22,7 @@
 - 色・影・ボタン・モーダルは `apps/web/src/styles/global.css` のトークン/クラスを使う(`--color-*`、`.btn-primary`、`.modal-backdrop` + `.modal`、`.popover`)。色の直書きはしない。
 - サイドバーのアイコンは `components/NavIcon.tsx` の SVG。
 - 新しいタブは `apps/web/src/lib/navTabs.ts`(役職ごとのタブ表示設定の唯一の正)と `components/AppLayout.tsx` の両方に追加する。
+  さらに、タブを絞っている役職(`Role.visibleTabs` が配列)には新しいタブが出ないため、既存の配列へタブを足すマイグレーションも追加する(例: `20261027090000_close_reports_tab`)。
 
 ## 用語・仕様
 - **アポ詳細** = `Appointment` レコード(UI・会話ではこの呼び方で統一)。本文 = `Appointment.memo`。
