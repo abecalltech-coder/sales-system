@@ -68,10 +68,6 @@ export const MASTER_TAB_GROUPS: { title: string; categories: CategoryDef[] }[] =
     ],
   },
   {
-    title: '申込情報/明細',
-    categories: [{ value: 'APPLICATION_PLAN', label: '申し込みプラン(従量・動力のプルダウン)' }],
-  },
-  {
     title: 'その他',
     categories: [
       {
@@ -83,7 +79,7 @@ export const MASTER_TAB_GROUPS: { title: string; categories: CategoryDef[] }[] =
 ];
 
 /** 部署の色はCLカレンダーの予定の色なので、一覧の行の色には使わない */
-const NOT_ROW_COLOR = new Set(['DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP', 'VISIT', 'APPLICATION_PLAN']);
+const NOT_ROW_COLOR = new Set(['DEPARTMENT_BRANCH', 'TOSS_HOOK_LABEL_MAP', 'VISIT']);
 
 /** タブの項目を、マスタ管理で並び替えた順(=行の色の優先順)で返す */
 export function orderedCategories(tabTitle: string, saved: Record<string, string[]> | undefined): CategoryDef[] {

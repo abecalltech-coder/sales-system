@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
-import { useStatuses } from '../../hooks/useApi';
+import { useCloseReportConfig } from '../close-reports/CloseReportPage';
 import { api, ApiError } from '../../lib/api';
 import { logCopy } from '../../lib/copyLog';
 import { recognizeBill, extractBillFields } from '../../lib/ocr';
@@ -376,13 +376,16 @@ function Fields({ fields, values, onChange }: { fields: FieldDef[]; values: Sect
   );
 }
 
-/** マスタの選択肢のプルダウン(申し込みプラン)。選択肢に無い保存済みの値(手入力時代の値)も消さずに出す */
-function MasterSelect({ category, value, onChange }: { category: string; value: string; onChange: (v: string) => void }) {
-  const { data } = useStatuses(category);
-  const names = (data ?? []).map((s) => s.displayName);
+/**
+ * 申し込みプランのプルダウン。選択肢はクローズ報告の「獲得プラン」と同じ(要望。マスタ管理「クローズ報告」で編集)。
+ * 選択肢に無い保存済みの値(手入力時代の値)も消さずに出す
+ */
+function PlanSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { data: config } = useCloseReportConfig();
+  const names = config?.fields.plan?.options ?? [];
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 13, minWidth: 0, width: '100%' }}>
-      <option value="">{data && names.length === 0 ? '選択肢なし(マスタ管理で追加)' : '選択'}</option>
+      <option value="">選択</option>
       {value && !names.includes(value) && <option value={value}>{value}</option>}
       {names.map((n) => (
         <option key={n} value={n}>
@@ -408,7 +411,7 @@ function FieldInput({ f, values, onChange }: { f: FieldDef; values: Section; onC
       </select>
     );
   }
-  if (f.kind === 'masterSelect' && f.masterCategory) return <MasterSelect category={f.masterCategory} value={v} onChange={set} />;
+  if (f.kind === 'planSelect') return <PlanSelect value={v} onChange={set} />;
   if (f.kind === 'zipAddress') return <ZipAddress zip={values[`${f.key}Zip`] ?? ''} address={v} onChange={(zip, address) => onChange({ [`${f.key}Zip`]: zip, [f.key]: address })} />;
   const unit = f.kind === 'yen' ? '円' : f.kind === 'kwh' ? 'kwh' : f.kind === 'percent' ? '%' : null;
   // 生年月日・明細月は「/」、料金は「,」を自動で入れる(要望)

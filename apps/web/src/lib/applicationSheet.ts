@@ -3,7 +3,7 @@
  * テキストの並び・見出し・記号はいただいた書式どおり(「/」のある項目はプルダウン)。
  */
 
-export type FieldKind = 'text' | 'select' | 'masterSelect' | 'zipAddress' | 'yen' | 'kwh' | 'percent';
+export type FieldKind = 'text' | 'select' | 'planSelect' | 'zipAddress' | 'yen' | 'kwh' | 'percent';
 
 export interface FieldDef {
   key: string;
@@ -19,14 +19,9 @@ export interface FieldDef {
   format?: 'date' | 'month';
   /** 決まった桁数(違うときは赤字で知らせる) */
   digits?: number;
-  /** kind=masterSelect の選択肢(マスタ管理のカテゴリ) */
-  masterCategory?: string;
   /** 画面の並び(要望): wide=1行ぶち抜き(住所)、solo=この項目だけで1行 */
   layout?: 'wide' | 'solo';
 }
-
-/** 申し込みプランの選択肢(マスタ管理「申込情報/明細」で編集) */
-export const APPLICATION_PLAN_CATEGORY = 'APPLICATION_PLAN';
 
 export const INPUT_CODES = ['CT', 'CH'];
 
@@ -52,7 +47,7 @@ const ELECTRIC_COMMON: FieldDef[] = [
   { key: 'capacity', label: '契約容量', layout: 'solo' },
   { key: 'holder', label: '電気契約名義' },
   { key: 'holderKana', label: '電気契約名義(フリガナ)' },
-  { key: 'plan', label: '申し込みプラン', kind: 'masterSelect', masterCategory: APPLICATION_PLAN_CATEGORY },
+  { key: 'plan', label: '申し込みプラン', kind: 'planSelect' },
   { key: 'mgmtFee', label: '供給管理費' },
 ];
 
