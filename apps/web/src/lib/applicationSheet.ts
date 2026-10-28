@@ -3,7 +3,7 @@
  * テキストの並び・見出し・記号はいただいた書式どおり(「/」のある項目はプルダウン)。
  */
 
-export type FieldKind = 'text' | 'select' | 'zipAddress' | 'yen' | 'kwh' | 'percent';
+export type FieldKind = 'text' | 'select' | 'masterSelect' | 'zipAddress' | 'yen' | 'kwh' | 'percent';
 
 export interface FieldDef {
   key: string;
@@ -19,14 +19,21 @@ export interface FieldDef {
   format?: 'date' | 'month';
   /** 決まった桁数(違うときは赤字で知らせる) */
   digits?: number;
+  /** kind=masterSelect の選択肢(マスタ管理のカテゴリ) */
+  masterCategory?: string;
+  /** 画面の並び(要望): wide=1行ぶち抜き(住所)、solo=この項目だけで1行 */
+  layout?: 'wide' | 'solo';
 }
+
+/** 申し込みプランの選択肢(マスタ管理「申込情報/明細」で編集) */
+export const APPLICATION_PLAN_CATEGORY = 'APPLICATION_PLAN';
 
 export const INPUT_CODES = ['CT', 'CH'];
 
 export const APPLICATION_FIELDS: FieldDef[] = [
   { key: 'name', label: '申し込み名義', bullet: true },
   { key: 'nameKana', label: '申し込み名義(フリガナ)', bullet: true },
-  { key: 'address', label: '申し込み住所', kind: 'zipAddress', bullet: true },
+  { key: 'address', label: '申し込み住所', kind: 'zipAddress', bullet: true, layout: 'wide' },
   { key: 'repName', label: '代表者名', bullet: true },
   { key: 'repNameKana', label: '代表者名(フリガナ)', bullet: true },
   { key: 'repBirth', label: '代表生年月日', bullet: true, format: 'date', placeholder: '例: 1980/01/23' },
@@ -38,14 +45,14 @@ export const APPLICATION_FIELDS: FieldDef[] = [
 ];
 
 const ELECTRIC_COMMON: FieldDef[] = [
-  { key: 'company', label: '契約電力会社' },
+  { key: 'company', label: '契約電力会社', layout: 'solo' },
   { key: 'spid', label: '供給地点特定番号', placeholder: '22桁', digits: 22 },
   { key: 'customerNo', label: 'お客様番号' },
-  { key: 'address', label: 'でんきの使用住所', kind: 'zipAddress' },
-  { key: 'capacity', label: '契約容量' },
+  { key: 'address', label: 'でんきの使用住所', kind: 'zipAddress', layout: 'wide' },
+  { key: 'capacity', label: '契約容量', layout: 'solo' },
   { key: 'holder', label: '電気契約名義' },
   { key: 'holderKana', label: '電気契約名義(フリガナ)' },
-  { key: 'plan', label: '申し込みプラン' },
+  { key: 'plan', label: '申し込みプラン', kind: 'masterSelect', masterCategory: APPLICATION_PLAN_CATEGORY },
   { key: 'mgmtFee', label: '供給管理費' },
 ];
 
@@ -66,6 +73,19 @@ export const DORYOKU_FIELDS: FieldDef[] = [
   { key: 'period', label: '使用期間' },
   { key: 'powerFactor', label: '力率', kind: 'percent' },
 ];
+
+/**
+ * 入力画面での並び(要望: お客様番号と供給地点特定番号を横並び、お客様番号を左)。
+ * 全体コピーの書式は変えないため、並べ替えは画面だけ。
+ */
+export function viewOrder(fields: FieldDef[]): FieldDef[] {
+  const i = fields.findIndex((f) => f.key === 'spid');
+  const j = fields.findIndex((f) => f.key === 'customerNo');
+  if (i < 0 || j < 0 || j < i) return fields;
+  const out = [...fields];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
+}
 
 export type Section = Record<string, string>;
 

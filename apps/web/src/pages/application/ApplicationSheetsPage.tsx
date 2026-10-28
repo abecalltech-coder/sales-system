@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { useStatuses } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { logCopy } from '../../lib/copyLog';
 import { recognizeBill, extractBillFields } from '../../lib/ocr';
@@ -22,6 +23,7 @@ import {
   formatSlashDate,
   normalizeSlashDate,
   sheetText,
+  viewOrder,
 } from '../../lib/applicationSheet';
 
 interface SheetRow {
@@ -290,7 +292,7 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
                       ensureSaved={ensureSaved}
                       onResult={(patch) => setContract(t, i, patch)}
                     />
-                    <Fields fields={t === 'juryo' ? JURYO_FIELDS : DORYOKU_FIELDS} values={c} onChange={(p) => setContract(t, i, p)} />
+                    <Fields fields={viewOrder(t === 'juryo' ? JURYO_FIELDS : DORYOKU_FIELDS)} values={c} onChange={(p) => setContract(t, i, p)} />
                   </SectionBox>
                 ))}
                 {/* 複数契約(要望: 幾つでも追加) */}
@@ -344,16 +346,50 @@ function SectionBox({ title, actions, children }: { title: string; actions?: Rea
   );
 }
 
+/**
+ * 2列(狭い画面は1列)で並べる。住所は1行ぶち抜き、電力会社・契約容量はその項目だけで1行(要望)。
+ * solo の右側は空きセルで埋めて、次の項目を必ず次の行の左から始める。
+ */
 function Fields({ fields, values, onChange }: { fields: FieldDef[]; values: Section; onChange: (patch: Section) => void }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', columnGap: 14 }}>
       {fields.map((f) => (
-        <label key={f.key} style={{ display: 'grid', gridTemplateColumns: '128px minmax(0, 1fr)', alignItems: 'center', gap: 6, padding: '3px 0', fontWeight: 700 }}>
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{f.label}</span>
-          <FieldInput f={f} values={values} onChange={onChange} />
-        </label>
+        <Fragment key={f.key}>
+          <label
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '128px minmax(0, 1fr)',
+              alignItems: 'center',
+              gap: 6,
+              padding: '3px 0',
+              fontWeight: 700,
+              gridColumn: f.layout === 'wide' ? '1 / -1' : undefined,
+            }}
+          >
+            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{f.label}</span>
+            <FieldInput f={f} values={values} onChange={onChange} />
+          </label>
+          {f.layout === 'solo' && <span aria-hidden />}
+        </Fragment>
       ))}
     </div>
+  );
+}
+
+/** マスタの選択肢のプルダウン(申し込みプラン)。選択肢に無い保存済みの値(手入力時代の値)も消さずに出す */
+function MasterSelect({ category, value, onChange }: { category: string; value: string; onChange: (v: string) => void }) {
+  const { data } = useStatuses(category);
+  const names = (data ?? []).map((s) => s.displayName);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 13, minWidth: 0, width: '100%' }}>
+      <option value="">{data && names.length === 0 ? '選択肢なし(マスタ管理で追加)' : '選択'}</option>
+      {value && !names.includes(value) && <option value={value}>{value}</option>}
+      {names.map((n) => (
+        <option key={n} value={n}>
+          {n}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -372,6 +408,7 @@ function FieldInput({ f, values, onChange }: { f: FieldDef; values: Section; onC
       </select>
     );
   }
+  if (f.kind === 'masterSelect' && f.masterCategory) return <MasterSelect category={f.masterCategory} value={v} onChange={set} />;
   if (f.kind === 'zipAddress') return <ZipAddress zip={values[`${f.key}Zip`] ?? ''} address={v} onChange={(zip, address) => onChange({ [`${f.key}Zip`]: zip, [f.key]: address })} />;
   const unit = f.kind === 'yen' ? '円' : f.kind === 'kwh' ? 'kwh' : f.kind === 'percent' ? '%' : null;
   // 生年月日・明細月は「/」、料金は「,」を自動で入れる(要望)
@@ -425,6 +462,12 @@ function AutoText({
     el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
   };
   useLayoutEffect(fit, [value]);
+  useEffect(() => {
+    // フォントの読み込みやモーダルの表示直後で折り返しが変わることがあるため、少し後にも測り直す
+    const raf = requestAnimationFrame(fit);
+    void document.fonts?.ready.then(fit);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
