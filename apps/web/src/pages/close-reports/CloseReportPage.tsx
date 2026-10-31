@@ -18,7 +18,6 @@ import {
   feeOptions,
   isVisible,
   mergeConfig,
-  missingFields,
 } from '../../lib/closeReport';
 
 interface SavedReport {
@@ -62,7 +61,6 @@ export function CloseReportPage() {
   const [values, setValues] = useState<CloseValues>(() => ({ ...emptyValues(), visitDate: today() }));
   const [savedId, setSavedId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [missing, setMissing] = useState<string[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -132,12 +130,8 @@ export function CloseReportPage() {
     }
   };
 
-  const openSheet = () => {
-    if (!config) return;
-    const m = missingFields(config, values);
-    setMissing(m);
-    if (m.length === 0) setSheetOpen(true);
-  };
+  // 必須項目は設けない(要望: 未入力があってもそのまま作成・コピーできる)
+  const openSheet = () => setSheetOpen(true);
 
   const copyAndSave = async () => {
     if (await copyText(text, str(values.storeName))) flash('コピーしました');
@@ -151,7 +145,6 @@ export function CloseReportPage() {
     if (!window.confirm('入力内容を消して新しい報告を始めますか？')) return;
     setValues({ ...emptyValues(), visitDate: today(), ...(me ? { closer: me.name } : {}) });
     setSavedId(null);
-    setMissing([]);
     setSheetOpen(false);
     window.scrollTo({ top: 0 });
   };
@@ -257,11 +250,10 @@ export function CloseReportPage() {
               <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: 'var(--shadow-sm)', padding: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <b style={{ flex: 1, fontSize: 13 }}>報告テキスト</b>
-                  <button className="btn-primary" disabled={save.isPending} onClick={() => (missingFields(config, values).length ? openSheet() : copyAndSave())}>
+                  <button className="btn-primary" disabled={save.isPending} onClick={() => void copyAndSave()}>
                     コピーして保存
                   </button>
                 </div>
-                <MissingNote missing={missing} />
                 <pre style={preStyle(false)}>{text}</pre>
               </div>
             </div>
@@ -283,7 +275,6 @@ export function CloseReportPage() {
             padding: '10px 16px',
           }}
         >
-          <MissingNote missing={missing} />
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={startNew} style={{ flex: 1, padding: '11px 0', fontSize: 13 }}>
               新しく始める
@@ -338,7 +329,6 @@ export function CloseReportPage() {
             if (!window.confirm('今の入力内容をこの報告に置き換えて直しますか？')) return;
             setValues(r.values?.results ? r.values : { ...emptyValues(), ...r.values });
             setSavedId(r.id);
-            setMissing([]);
             setHistoryOpen(false);
             window.scrollTo({ top: 0 });
           }}
@@ -383,16 +373,6 @@ const preStyle = (isPhone: boolean): React.CSSProperties => ({
   padding: isPhone ? '14px 16px' : '12px 14px',
 });
 
-function MissingNote({ missing }: { missing: string[] }) {
-  if (missing.length === 0) return null;
-  return (
-    <div style={{ fontSize: 12, color: 'var(--color-danger)', background: 'var(--color-danger-soft)', borderRadius: 8, padding: '7px 10px', marginBottom: 8, lineHeight: 1.6 }}>
-      未入力: {missing.slice(0, 8).join('・')}
-      {missing.length > 8 ? ` ほか${missing.length - 8}件` : ''}
-    </div>
-  );
-}
-
 function Card({ title, isPhone, children }: { title: string; isPhone: boolean; children: React.ReactNode }) {
   return (
     <div
@@ -417,7 +397,7 @@ interface FieldCtx {
   userNames: string[];
 }
 
-/** 1項目(必須の印・入力欄) */
+/** 1項目(項目名・入力欄) */
 function Field({ ctx, def, scope, onChange }: { ctx: FieldCtx; def: FieldDef; scope: Record<string, unknown>; onChange: (key: string, v: string) => void }) {
   const { config, isPhone } = ctx;
   const conf = config.fields[def.key];
@@ -512,7 +492,6 @@ function Field({ ctx, def, scope, onChange }: { ctx: FieldCtx; def: FieldDef; sc
     <div style={{ marginBottom: isPhone ? 16 : 12 }}>
       <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>
         {label}
-        {conf.required && <span style={{ color: 'var(--color-danger)', fontSize: 10.5, marginLeft: 4 }}>必須</span>}
       </label>
       {control}
     </div>

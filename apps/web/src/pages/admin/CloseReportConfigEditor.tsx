@@ -10,7 +10,7 @@ const HAS_OPTIONS = new Set(['choice', 'sites']);
 
 /**
  * マスタ管理「クローズ報告」(要望: 全ての項目をマスタで変更できる)。
- * 見出し・項目名・必須・選択肢・契約内容を入力する結果・管理費の範囲を変えられる。変更は「保存」でフォームと報告テキストに反映。
+ * 見出し・項目名・選択肢・契約内容を入力する結果・管理費の範囲を変えられる。変更は「保存」でフォームと報告テキストに反映。
  */
 export function CloseReportConfigEditor() {
   const isPhone = useIsPhone();
@@ -132,10 +132,6 @@ export function CloseReportConfigEditor() {
               <div key={def.key} style={{ borderTop: '1px solid var(--color-sunken)', padding: isPhone ? '14px 0' : '10px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input value={f.label} onChange={(e) => setField(def.key, { label: e.target.value })} style={{ ...input, flex: 1, minWidth: 0, fontWeight: 700 }} />
-                  <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={f.required} onChange={(e) => setField(def.key, { required: e.target.checked })} />
-                    必須
-                  </label>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 4 }}>{kindNote(def.kind, def.key)}</div>
                 {HAS_OPTIONS.has(def.kind) && <OptionsEditor options={f.options} onChange={(options) => setField(def.key, { options })} isPhone={isPhone} input={input} />}

@@ -1,6 +1,6 @@
 /**
  * クローズ報告(要望: 商談後のクローズ結果を報告し、決まった書式の文章をコピーする)。
- * 項目の並び・種類はここで決め、項目名・必須・選択肢などはマスタ管理「クローズ報告」で変更できる
+ * 項目の並び・種類はここで決め、項目名・選択肢などはマスタ管理「クローズ報告」で変更できる
  * (保存値は system-settings closeReportConfig。未設定の項目はここの既定値)。
  */
 
@@ -22,7 +22,6 @@ export interface FieldDef {
   section: SectionKey;
   kind: FieldKind;
   label: string;
-  required: boolean;
   options?: string[];
   /** ET・成約など「契約内容を入力する結果」のときだけ出す項目(クローズ結果の中) */
   contract?: boolean;
@@ -35,66 +34,64 @@ export const SECTION_ORDER: SectionKey[] = ['basic', 'result', 'indoor', 'anshin
 const RESULTS = ['ET', '成約', '保留A', '保留B', '失注', '月内失注', '取次不可'];
 
 export const FIELD_DEFS: FieldDef[] = [
-  { key: 'storeName', section: 'basic', kind: 'text', label: '店舗名', required: true },
-  { key: 'visitDate', section: 'basic', kind: 'date', label: '訪問日', required: true },
-  { key: 'visitCount', section: 'basic', kind: 'choice', label: '訪問回数', required: true, options: ['1回目', '2回目', '3回目', '4回目', '5回目'] },
-  { key: 'apStaff', section: 'basic', kind: 'user', label: 'アポインター', required: true },
-  { key: 'preConfirm', section: 'basic', kind: 'user', label: '前確担当', required: true },
-  { key: 'closer', section: 'basic', kind: 'user', label: 'クローザー', required: true },
+  { key: 'storeName', section: 'basic', kind: 'text', label: '店舗名' },
+  { key: 'visitDate', section: 'basic', kind: 'date', label: '訪問日' },
+  { key: 'visitCount', section: 'basic', kind: 'choice', label: '訪問回数', options: ['1回目', '2回目', '3回目', '4回目', '5回目'] },
+  { key: 'apStaff', section: 'basic', kind: 'user', label: 'アポインター' },
+  { key: 'preConfirm', section: 'basic', kind: 'user', label: '前確担当' },
+  { key: 'closer', section: 'basic', kind: 'user', label: 'クローザー' },
 
-  { key: 'result', section: 'result', kind: 'choice', label: 'クローズ結果', required: true, options: RESULTS },
+  { key: 'result', section: 'result', kind: 'choice', label: 'クローズ結果', options: RESULTS },
   {
     key: 'plan',
     section: 'result',
     kind: 'choice',
     label: '獲得プラン',
-    required: true,
     contract: true,
     options: ['マーケットリンクGL（TMS）', 'マーケットリンクGH（TMS）', 'マーケットリンクGLSP', 'マーケットリンクGD', 'プレミアム（TMS）', 'プレミアム', '動力プレミアム', 'ガス'],
   },
-  { key: 'campaign', section: 'result', kind: 'choice', label: 'キャンペーン', required: true, contract: true, options: ['ウェルカム割', 'スタート12', 'なし'] },
-  { key: 'fee', section: 'result', kind: 'fee', label: '相対/供給管理費', required: true, contract: true },
-  { key: 'maxUsage', section: 'result', kind: 'text', label: 'MAX使用量', required: true, contract: true },
-  { key: 'payment', section: 'result', kind: 'choice', label: '支払い方法', required: true, contract: true, options: ['クレカ', '口座', 'コンビニ'] },
-  { key: 'cb', section: 'result', kind: 'choice', label: '他社解約金補填・CB', required: true, contract: true, options: ['なし', '振込'] },
-  { key: 'cbAmount', section: 'result', kind: 'text', label: '振込金額', required: true, contract: true, showWhen: { key: 'cb', index: 1 } },
-  { key: 'enepal', section: 'result', kind: 'choice', label: 'エネパル解約金補填', required: true, contract: true, options: ['あり', 'なし'] },
-  { key: 'agreement', section: 'result', kind: 'choice', label: '解約金補填同意書', required: true, contract: true, options: ['回収済み', '回収不要', '未回収'] },
-  { key: 'paperBill', section: 'result', kind: 'choice', label: '紙明細', required: true, contract: true, options: ['あり', 'なし'] },
+  { key: 'campaign', section: 'result', kind: 'choice', label: 'キャンペーン', contract: true, options: ['ウェルカム割', 'スタート12', 'なし'] },
+  { key: 'fee', section: 'result', kind: 'fee', label: '相対/供給管理費', contract: true },
+  { key: 'maxUsage', section: 'result', kind: 'text', label: 'MAX使用量', contract: true },
+  { key: 'payment', section: 'result', kind: 'choice', label: '支払い方法', contract: true, options: ['クレカ', '口座', 'コンビニ'] },
+  { key: 'cb', section: 'result', kind: 'choice', label: '他社解約金補填・CB', contract: true, options: ['なし', '振込'] },
+  { key: 'cbAmount', section: 'result', kind: 'text', label: '振込金額', contract: true, showWhen: { key: 'cb', index: 1 } },
+  { key: 'enepal', section: 'result', kind: 'choice', label: 'エネパル解約金補填', contract: true, options: ['あり', 'なし'] },
+  { key: 'agreement', section: 'result', kind: 'choice', label: '解約金補填同意書', contract: true, options: ['回収済み', '回収不要', '未回収'] },
+  { key: 'paperBill', section: 'result', kind: 'choice', label: '紙明細', contract: true, options: ['あり', 'なし'] },
 
-  { key: 'indoorView', section: 'indoor', kind: 'choice', label: 'Googleインドアビュー', required: true, options: ['撮影不要', '撮影済み', '予約'] },
-  { key: 'photoAgreement', section: 'indoor', kind: 'choice', label: '撮影同意書', required: true, options: ['不要', '回収済み', '未回収'] },
+  { key: 'indoorView', section: 'indoor', kind: 'choice', label: 'Googleインドアビュー', options: ['撮影不要', '撮影済み', '予約'] },
+  { key: 'photoAgreement', section: 'indoor', kind: 'choice', label: '撮影同意書', options: ['不要', '回収済み', '未回収'] },
 
-  { key: 'anshinProposal', section: 'anshin', kind: 'choice', label: '提案', required: true, options: ['提案済み', '未提案'] },
-  { key: 'anshinResult', section: 'anshin', kind: 'choice', label: '結果', required: true, options: ['獲得', '保留', '失注', '対象外'], showWhen: { key: 'anshinProposal', index: 0 } },
+  { key: 'anshinProposal', section: 'anshin', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
+  { key: 'anshinResult', section: 'anshin', kind: 'choice', label: '結果', options: ['獲得', '保留', '失注', '対象外'], showWhen: { key: 'anshinProposal', index: 0 } },
   {
     key: 'anshinLostReason',
     section: 'anshin',
     kind: 'choice',
     label: '失注理由',
-    required: true,
     options: ['課金オプションネックNG', 'オプションの重複付帯NG', '面倒NG', '電気失注NG', 'コンビニ払い希望'],
     showWhen: { key: 'anshinResult', index: 2 },
   },
 
-  { key: 'mobileProposal', section: 'mobile', kind: 'choice', label: '提案', required: true, options: ['提案済み', '未提案'] },
-  { key: 'mobileResult', section: 'mobile', kind: 'choice', label: '結果', required: true, options: ['トスアップ'], showWhen: { key: 'mobileProposal', index: 0 } },
+  { key: 'mobileProposal', section: 'mobile', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
+  { key: 'mobileResult', section: 'mobile', kind: 'choice', label: '結果', options: ['トスアップ'], showWhen: { key: 'mobileProposal', index: 0 } },
 
-  { key: 'funfoProposal', section: 'funfo', kind: 'choice', label: '提案', required: true, options: ['提案済み', '未提案'] },
-  { key: 'funfoReason', section: 'funfo', kind: 'text', label: '未提案理由', required: false },
+  { key: 'funfoProposal', section: 'funfo', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
+  { key: 'funfoReason', section: 'funfo', kind: 'text', label: '未提案理由' },
 
-  { key: 'storeSites', section: 'detail', kind: 'sites', label: '店舗', required: true, options: RESULTS },
-  { key: 'officeSites', section: 'detail', kind: 'sites', label: '事務所', required: true, options: RESULTS },
-  { key: 'maxSites', section: 'detail', kind: 'number', label: '最大獲得拠点数', required: true },
-  { key: 'referral', section: 'detail', kind: 'choice', label: '紹介', required: true, options: ['有', '無'] },
-  { key: 'settleDate', section: 'detail', kind: 'settleDate', label: '決着予定日', required: false },
-  { key: 'method', section: 'detail', kind: 'choice', label: '対応手段', required: false, options: ['-', '訪問', '電話'] },
-  { key: 'storeSupport', section: 'detail', kind: 'choice', label: '店サポ解約誘導', required: true, options: ['有', '無'] },
-  { key: 'logSubmit', section: 'detail', kind: 'choice', label: 'ログ提出', required: true, options: ['済', '未'] },
-  { key: 'salesNumber', section: 'detail', kind: 'choice', label: '営業担当番号', required: false, options: [] },
-  { key: 'chNumber', section: 'detail', kind: 'choice', label: 'ＣＨ代表番号', required: false, options: [] },
-  { key: 'incompleteReason', section: 'detail', kind: 'text', label: '未完了理由', required: false },
-  { key: 'memo', section: 'detail', kind: 'textarea', label: '備考', required: false },
+  { key: 'storeSites', section: 'detail', kind: 'sites', label: '店舗', options: RESULTS },
+  { key: 'officeSites', section: 'detail', kind: 'sites', label: '事務所', options: RESULTS },
+  { key: 'maxSites', section: 'detail', kind: 'number', label: '最大獲得拠点数' },
+  { key: 'referral', section: 'detail', kind: 'choice', label: '紹介', options: ['有', '無'] },
+  { key: 'settleDate', section: 'detail', kind: 'settleDate', label: '決着予定日' },
+  { key: 'method', section: 'detail', kind: 'choice', label: '対応手段', options: ['-', '訪問', '電話'] },
+  { key: 'storeSupport', section: 'detail', kind: 'choice', label: '店サポ解約誘導', options: ['有', '無'] },
+  { key: 'logSubmit', section: 'detail', kind: 'choice', label: 'ログ提出', options: ['済', '未'] },
+  { key: 'salesNumber', section: 'detail', kind: 'choice', label: '営業担当番号', options: [] },
+  { key: 'chNumber', section: 'detail', kind: 'choice', label: 'ＣＨ代表番号', options: [] },
+  { key: 'incompleteReason', section: 'detail', kind: 'text', label: '未完了理由' },
+  { key: 'memo', section: 'detail', kind: 'textarea', label: '備考' },
 ];
 
 export interface FeeRule {
@@ -110,7 +107,7 @@ export interface CloseReportConfig {
   title: string;
   maxResults: number;
   sections: Record<SectionKey, string>;
-  fields: Record<string, { label: string; required: boolean; options: string[] }>;
+  fields: Record<string, { label: string; options: string[] }>;
   /** 契約内容(獲得プラン〜紙明細)を入力するクローズ結果 */
   contractResults: string[];
   feeRules: FeeRule[];
@@ -120,7 +117,7 @@ export const DEFAULT_CONFIG: CloseReportConfig = {
   title: 'クローズ結果報告',
   maxResults: 5,
   sections: { basic: '基本情報', result: 'クローズ結果', indoor: 'インドアビュー', anshin: 'あんしんBiz', mobile: '法人モバイル', funfo: 'funfo', detail: '詳細' },
-  fields: Object.fromEntries(FIELD_DEFS.map((f) => [f.key, { label: f.label, required: f.required, options: f.options ?? [] }])),
+  fields: Object.fromEntries(FIELD_DEFS.map((f) => [f.key, { label: f.label, options: f.options ?? [] }])),
   contractResults: ['ET', '成約'],
   feeRules: [
     { match: 'マーケットリンク', min: 6, max: 12, step: 0.5, unit: '円' },
@@ -181,38 +178,6 @@ export function isVisible(config: CloseReportConfig, def: FieldDef, scope: Recor
   }
   if (def.kind === 'fee' && !feeOptions(config, str(scope.plan))) return false;
   return true;
-}
-
-/** 必須なのに未入力の項目名 */
-export function missingFields(config: CloseReportConfig, values: CloseValues): string[] {
-  const out: string[] = [];
-  const check = (def: FieldDef, scope: Record<string, unknown>, prefix = '') => {
-    const conf = config.fields[def.key];
-    if (!conf?.required || !isVisible(config, def, scope)) return;
-    // 選択肢が1つも無い項目は入力のしようが無いので必須にしない
-    if (def.kind === 'choice' && conf.options.length === 0) return;
-    if (def.kind === 'sites') {
-      const count = Number(str(scope[`${def.key}Count`]) || '0');
-      if (str(scope[`${def.key}Count`]) === '') out.push(prefix + conf.label);
-      else if (count > 0 && !str(scope[`${def.key}Result`])) out.push(`${prefix}${conf.label}の結果`);
-      return;
-    }
-    if (def.kind === 'settleDate') {
-      if (!str(scope.settleDate) && !str(scope.settleNone)) out.push(prefix + conf.label);
-      return;
-    }
-    if (!str(scope[def.key]).trim()) out.push(prefix + conf.label);
-  };
-  for (const def of FIELD_DEFS) {
-    if (def.section === 'result') continue;
-    // 「提案」「結果」は商材ごとにあるため、どの商材か分かるよう見出しを付ける
-    const prefix = ['indoor', 'anshin', 'mobile', 'funfo'].includes(def.section) ? `${config.sections[def.section]}の` : '';
-    check(def, values, prefix);
-  }
-  values.results.forEach((r, i) => {
-    for (const def of FIELD_DEFS.filter((d) => d.section === 'result')) check(def, r, `${circled(i)}`);
-  });
-  return out;
 }
 
 export const circled = (i: number) => '①②③④⑤⑥⑦⑧⑨⑩'[i] ?? `(${i + 1})`;
