@@ -21,7 +21,12 @@ export interface FieldDef {
   digits?: number;
   /** 画面の並び(要望): wide=1行ぶち抜き(住所)、solo=この項目だけで1行 */
   layout?: 'wide' | 'solo';
+  /** 全体コピーに単独の行として出さない(キャンペーンはプランの後ろに付けるため) */
+  noCopyLine?: boolean;
 }
+
+/** 申し込みプランの選択肢に、クローズ報告の獲得プランへ足して出すもの(要望) */
+export const EXTRA_PLANS = ['セレクト'];
 
 export const INPUT_CODES = ['CT', 'CH'];
 
@@ -47,7 +52,8 @@ const ELECTRIC_COMMON: FieldDef[] = [
   { key: 'capacity', label: '契約容量', layout: 'solo' },
   { key: 'holder', label: '電気契約名義' },
   { key: 'holderKana', label: '電気契約名義(フリガナ)' },
-  { key: 'plan', label: '申し込みプラン', kind: 'planSelect' },
+  { key: 'plan', label: '申し込みプラン', kind: 'planSelect', layout: 'solo' },
+  { key: 'campaign', label: 'キャンペーン', kind: 'select', options: ['なし', 'ウェルカム割', 'スタート12'], noCopyLine: true },
   { key: 'mgmtFee', label: '供給管理費' },
 ];
 
@@ -176,6 +182,11 @@ function valueText(f: FieldDef, s: Section): string {
       return `${v}kwh`;
     case 'percent':
       return `${v}%`;
+    case 'planSelect': {
+      // キャンペーンはプランの後ろに「+キャンペーン名」で出す。「なし」は出さない(要望)
+      const campaign = (s.campaign ?? '').trim();
+      return campaign && campaign !== 'なし' ? `${v}+${campaign}` : v;
+    }
     default:
       return v;
   }
@@ -184,6 +195,7 @@ function valueText(f: FieldDef, s: Section): string {
 function sectionText(title: string, fields: FieldDef[], s: Section): string {
   const lines = [`【${title}】`];
   for (const f of fields) {
+    if (f.noCopyLine) continue;
     if (f.gapBefore) lines.push('');
     lines.push(`${f.bullet ? '・' : ''}${f.label}：${valueText(f, s)}`);
   }

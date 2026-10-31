@@ -24,6 +24,7 @@ import {
   normalizeSlashDate,
   sheetText,
   viewOrder,
+  EXTRA_PLANS,
 } from '../../lib/applicationSheet';
 
 interface SheetRow {
@@ -377,12 +378,13 @@ function Fields({ fields, values, onChange }: { fields: FieldDef[]; values: Sect
 }
 
 /**
- * 申し込みプランのプルダウン。選択肢はクローズ報告の「獲得プラン」と同じ(要望。マスタ管理「クローズ報告」で編集)。
+ * 申し込みプランのプルダウン。選択肢はクローズ報告の「獲得プラン」と同じ(要望。マスタ管理「クローズ報告」で編集)に「セレクト」を足したもの。
  * 選択肢に無い保存済みの値(手入力時代の値)も消さずに出す
  */
 function PlanSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { data: config } = useCloseReportConfig();
-  const names = config?.fields.plan?.options ?? [];
+  const base = config?.fields.plan?.options ?? [];
+  const names = [...base, ...EXTRA_PLANS.filter((p) => !base.includes(p))];
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} style={{ fontSize: 13, minWidth: 0, width: '100%' }}>
       <option value="">選択</option>
