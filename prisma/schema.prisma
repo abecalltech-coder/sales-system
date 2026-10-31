@@ -368,6 +368,7 @@ model TossCase {
   industry             String? // 業種
   hook                 String? // フック
   existingContract     String? // 既契約
+  region               String? // 地域(一括投入で取り込んだ値。住所から都道府県が取れないときに表示する)
   preConfirmStatusId   String? // 前確担当者(StatusMaster category=TOSS_PRE_CONFIRM)
   progressStatusId     String? // 進捗(StatusMaster category=TOSS_PROGRESS)
   ngReasonStatusId     String? // NG理由(StatusMaster category=TOSS_NG_REASON)

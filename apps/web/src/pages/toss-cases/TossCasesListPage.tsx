@@ -7,7 +7,7 @@ import { InlineText, InlineSelect, InlineFlexDate, InlineFlexTime } from '../../
 import { PresenceBar } from '../../components/PresenceBar';
 import { useTossCases, useStatuses, useMe, TossCaseListItem, useAppointmentCategory } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
-import { formatDate, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
+import { formatMonthDay, formatTime, isoToDateInput, isoToTimeInput, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { usePresence } from '../../lib/usePresence';
 import { useBatchedRowSave } from '../../lib/useBatchedRowSave';
 import { useMasterRowColors } from '../../hooks/useMasterRowColors';
@@ -164,7 +164,7 @@ export function TossCasesListPage() {
   };
 
   const filterValueFns: Record<string, FilterValueFn> = {
-    tossDate: (r) => formatDate(r.receivedAt),
+    tossDate: (r) => formatMonthDay(r.receivedAt),
     tossTime: (r) => formatTime(r.receivedAt),
     nextActionDate: (r) => isoToDateInput(r.nextActionAt),
     nextActionTime: (r) => isoToTimeInput(r.nextActionAt),
@@ -230,10 +230,11 @@ export function TossCasesListPage() {
     {
       key: 'tossDate',
       label: 'トス日',
-      render: (r) => formatDate(r.receivedAt),
-      width: 86,
+      // 年は出さず「10/1」表記(要望)
+      render: (r) => formatMonthDay(r.receivedAt),
+      width: 56,
       renderHeader: filterHeader('tossDate', 'トス日'),
-      copyValue: (r) => formatDate(r.receivedAt),
+      copyValue: (r) => formatMonthDay(r.receivedAt),
     },
     {
       key: 'tossTime',

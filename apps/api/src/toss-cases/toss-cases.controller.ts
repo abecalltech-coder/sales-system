@@ -86,7 +86,7 @@ export class TossCasesController {
           memo: row.memo ?? '',
           contactName: row.customer?.contactName ?? '',
           phone: row.customer?.phone ?? '',
-          prefecture: extractPrefecture(row.customer?.address) ?? '',
+          prefecture: extractPrefecture(row.customer?.address) ?? row.region ?? '',
           address: row.customer?.address ?? '',
           proposal: row.proposal ?? '',
           progressStatusId: statusLabel(row.progressStatusId),

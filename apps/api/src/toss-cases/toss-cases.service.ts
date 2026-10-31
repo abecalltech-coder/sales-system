@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto } from './dto/toss-case.dto';
+import { CreateTossCaseDto, UpdateTossCaseDto, BulkUpdateTossCaseDto, BulkCreateTossCaseRowDto } from './dto/toss-case.dto';
 import { SequenceService } from '../common/services/sequence.service';
 import { StatusResolverService } from '../common/services/status-resolver.service';
 import { CaseHistoryService } from '../common/services/case-history.service';
@@ -9,7 +9,11 @@ import { AppointmentsService } from '../appointments/appointments.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { extractPrefecture } from '../common/utils/prefecture.util';
 import { toDateOrUndefined } from '../common/utils/date.util';
-import { previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
+import { periodMonthRange, previousPeriodMonth, toPeriodMonth } from '../common/utils/period.util';
+
+/** 地域は住所の都道府県を優先し、取れないときは一括投入で取り込んだ地域を出す(要望) */
+const prefectureOf = (t: { region?: string | null; customer?: { address?: string | null } | null }) =>
+  extractPrefecture(t.customer?.address) ?? (t.region || null);
 
 @Injectable()
 export class TossCasesService {
@@ -44,15 +48,22 @@ export class TossCasesService {
         ? { OR: [{ tossUserId: params.userId }, { salesUserId: params.userId }, { fieldSalesUserId: params.userId }] }
         : {}),
       ...(params.periodMonth
-        ? params.includePrevMonth
-          ? {
-              // 当月分 + 前月の未完了(まだアポ詳細が作られていない)分を合流表示する(繰越)
-              OR: [
-                { periodMonth: params.periodMonth },
-                { periodMonth: previousPeriodMonth(params.periodMonth), appointment: { is: null } },
-              ],
-            }
-          : { periodMonth: params.periodMonth }
+        ? {
+            // 当月分に加え、次回対応日が当月のもの(前月以前のトス)も出す(要望: 9月のトスでも対応日が10月なら9月と10月の両方に出す)。
+            // 「前月分も表示」なら前月の未完了(まだアポ詳細が作られていない)分も合流表示する(繰越)。
+            // キーワード・担当者の OR と混ざらないよう AND で包む
+            AND: [
+              {
+                OR: [
+                  { periodMonth: params.periodMonth },
+                  { nextActionAt: { gte: periodMonthRange(params.periodMonth).start, lt: periodMonthRange(params.periodMonth).end } },
+                  ...(params.includePrevMonth
+                    ? [{ periodMonth: previousPeriodMonth(params.periodMonth), appointment: { is: null } }]
+                    : []),
+                ],
+              },
+            ],
+          }
         : {}),
       ...(params.dateFrom || params.dateTo
         ? {
@@ -86,7 +97,7 @@ export class TossCasesService {
       this.prisma.tossCase.count({ where }),
     ]);
     return {
-      items: items.map((item) => ({ ...item, prefecture: extractPrefecture(item.customer?.address) })),
+      items: items.map((item) => ({ ...item, prefecture: prefectureOf(item) })),
       total,
       page: params.page,
       pageSize: params.pageSize,
@@ -99,17 +110,18 @@ export class TossCasesService {
       include: { customer: true, appointment: true },
     });
     if (!tossCase) throw new NotFoundException('トス案件が見つかりません');
-    return { ...tossCase, prefecture: extractPrefecture(tossCase.customer?.address) };
+    return { ...tossCase, prefecture: prefectureOf(tossCase) };
   }
 
   /** 手動登録(セクション9)。顧客が未指定なら簡易情報からその場で作成する。 */
-  async create(dto: CreateTossCaseDto, actorUserId: string) {
+  async create(dto: CreateTossCaseDto, actorUserId: string, opts: { allowAnyAddress?: boolean } = {}) {
     const statusId = dto.statusId ?? (await this.statusResolver.resolveId('TOSS', 'TOSS_NEW'));
     // トスの状況管理は進捗に一本化。未指定なら「新規」を既定値にする。
     const progressStatusId =
       dto.progressStatusId ?? (await this.statusResolver.resolveId('TOSS_PROGRESS', 'PROGRESS_NEW').catch(() => undefined));
 
-    if (dto.address && !extractPrefecture(dto.address)) {
+    // 一括投入は元の表の住所をそのまま入れる(要望)。「〒」付きなどで止まらないようチェックしない
+    if (dto.address && !opts.allowAnyAddress && !extractPrefecture(dto.address)) {
       throw new BadRequestException('住所は都道府県から入力してください');
     }
 
@@ -152,6 +164,7 @@ export class TossCasesService {
         tags: dto.tags ?? [],
         apStaffName: dto.apStaffName,
         department: dto.department,
+        region: dto.region,
         proposal: dto.proposal,
         listName: dto.listName,
         callDirection: dto.callDirection,
@@ -197,13 +210,24 @@ export class TossCasesService {
    * create()は顧客作成・採番・ステータス既定値解決など副作用が多く$transactionにまとめづらいため、
    * 1件ずつ順にcreate()を呼ぶ(bulk-deleteやbulk-updateのような単純な更新一括APIとは異なる)。
    */
-  async bulkCreate(rows: CreateTossCaseDto[], actorUserId: string) {
+  async bulkCreate(rows: BulkCreateTossCaseRowDto[], actorUserId: string) {
     let count = 0;
-    for (const row of rows) {
-      await this.create(row, actorUserId);
+    let appointmentCount = 0;
+    for (const { appointmentMemo, ...row } of rows) {
+      const tossCase = await this.create(row, actorUserId, { allowAnyAddress: true });
       count += 1;
+      // 進捗が前確OKの行はアポ詳細も作る(要望)。本文は「アポFMT」列、無ければ通常どおりアポ詳細FMTから作る。
+      // 過去分の取り込みなので、対象月はトスの月にそろえ、Meet の自動発行はしない
+      if (row.progressStatusId && (await this.statusResolver.isTossConversionProgress(row.progressStatusId))) {
+        await this.appointments.createFromTossAutomation(tossCase.id, actorUserId, undefined, {
+          memo: appointmentMemo?.trim() || undefined,
+          periodMonth: tossCase.periodMonth ?? undefined,
+          skipMeet: true,
+        });
+        appointmentCount += 1;
+      }
     }
-    return { ok: true, count };
+    return { ok: true, count, appointmentCount };
   }
 
   async update(id: string, dto: UpdateTossCaseDto, userId: string) {

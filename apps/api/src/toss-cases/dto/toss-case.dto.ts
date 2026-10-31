@@ -30,6 +30,7 @@ export class CreateTossCaseDto {
   @IsOptional() @IsString() industry?: string;
   @IsOptional() @IsString() hook?: string;
   @IsOptional() @IsString() existingContract?: string;
+  @IsOptional() @IsString() region?: string; // 地域(一括投入)
   @IsOptional() @IsString() preConfirmStatusId?: string;
   @IsOptional() @IsString() progressStatusId?: string;
   @IsOptional() @IsString() ngReasonStatusId?: string;
@@ -39,12 +40,17 @@ export class CreateTossCaseDto {
   @IsOptional() @IsBoolean() isCallingInProgress?: boolean;
 }
 
+/** 一括投入の1行。進捗が前確OKの行はアポ詳細も作り、本文に「アポFMT」列の文章を使う(要望) */
+export class BulkCreateTossCaseRowDto extends CreateTossCaseDto {
+  @IsOptional() @IsString() appointmentMemo?: string;
+}
+
 /** 一括投入(要望): 外部シートを貼り付けてまとめてトス案件を作成する */
 export class BulkCreateTossCasesDto {
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateTossCaseDto)
-  rows!: CreateTossCaseDto[];
+  @Type(() => BulkCreateTossCaseRowDto)
+  rows!: BulkCreateTossCaseRowDto[];
 }
 
 export class UpdateTossCaseDto {

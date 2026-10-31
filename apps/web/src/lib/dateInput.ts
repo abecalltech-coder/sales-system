@@ -4,6 +4,10 @@ const TIME_OPTS: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Tokyo', hour: '2
 export function formatDate(iso: string | null) {
   return iso ? new Date(iso).toLocaleDateString('ja-JP', DATE_OPTS) : '-';
 }
+/** 年なしの「10/1」表記(要望: トス日は年いらない) */
+export function formatMonthDay(iso: string | null) {
+  return iso ? new Date(iso).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }) : '-';
+}
 export function formatTime(iso: string | null) {
   return iso ? new Date(iso).toLocaleTimeString('ja-JP', TIME_OPTS) : '-';
 }

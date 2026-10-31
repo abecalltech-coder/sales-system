@@ -4,8 +4,11 @@ import { api, ApiError } from '../../lib/api';
 import { isoToDateKey, parseDateText, parseTimeText } from '../../lib/dateInput';
 import { parseTsv } from '../../lib/tsv';
 
-const CALLING_TRUE = /^(済|✓|1|true|yes|○|◯)$/i;
+// 対応中フラグ=トス実績の「架電中」ボタン(要望)。シートでは「対応中」と入っている
+const CALLING_TRUE = /^(対応中|架電中|済|✓|1|true|yes|○|◯)$/i;
 const CALL_DIRECTIONS = ['架電', '入電'];
+// アポ詳細を作る進捗(一覧の isConversionProgress と同じ判定)
+const CONVERSION_CODES = ['PROGRESS_PRE_CONFIRM_OK', 'PROGRESS_APPOINTMENT'];
 
 // 外部シートの見出し(要望で指定された列名)。「住所」は表記ゆれ(括弧の注記付き等)を
 // 許容するため startsWith で判定する。
@@ -22,6 +25,7 @@ const HEADER_LABELS = {
   memo: '備考',
   contactName: '担当者名',
   phone: '店舗連絡先',
+  region: '地域',
   proposal: '提案',
   progress: '進捗',
   ngReason: 'NG理由',
@@ -30,7 +34,19 @@ const HEADER_LABELS = {
   industry: '業種',
   hook: 'フック',
   existingContract: '既契約',
+  appointmentMemo: 'アポFMT',
 } as const;
+
+/** 確認画面に出す1行(前確・進捗・NG理由はマスタの id に直す前の表示名のまま持つ) */
+interface Draft {
+  tossDate: string; // 10/1(表示用)
+  tossTime: string;
+  values: Record<string, unknown>;
+  preConfirm: string;
+  progress: string;
+  ngReason: string;
+  makesAppointment: boolean;
+}
 
 /** 一覧APIはpageSizeの上限が100のため、重複判定用に全件をページングして取得する */
 async function fetchAllTossCases(): Promise<TossCaseListItem[]> {
@@ -45,10 +61,17 @@ async function fetchAllTossCases(): Promise<TossCaseListItem[]> {
   return all;
 }
 
+/** "2026-10-01" → "10/1"(要望: トス日は年なしで表示) */
+const monthDay = (key: string) => {
+  const [, m, d] = key.split('-');
+  return `${Number(m)}/${Number(d)}`;
+};
+
 /**
  * トス実績の一括投入(要望)。案件管理と同じ「表をそのまま貼り付け→見出し行の列名で
- * 対応する項目に取り込む」方式。「地域」は住所から自動判定される項目のため取り込み対象外、
- * 「アポ実績入力」「転送」「アポFMT」はトス案件に対応する項目が無いため取り込まない。
+ * 対応する項目に取り込む」方式。貼り付け後に確認画面を挟み、内容を見てから取り込む。
+ * 店舗連絡先・住所は表の値をそのまま入れる(要望)。進捗が前確OKの行はアポ詳細も作り、本文に「アポFMT」列を使う。
+ * 「アポ実績入力」「転送」はトス案件に対応する項目が無いため取り込まない。
  */
 export function BulkImportTossCasesModal({
   preConfirmOptions,
@@ -64,65 +87,117 @@ export function BulkImportTossCasesModal({
   onImported: () => void;
 }) {
   const [text, setText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [summary, setSummary] = useState<{ created: number; skipped: number; duplicates: number; addedOptions: number } | null>(null);
+  const [check, setCheck] = useState<{ drafts: Draft[]; skipped: number; duplicates: number } | null>(null);
+  const [summary, setSummary] = useState<{ created: number; appointments: number; addedOptions: number } | null>(null);
 
   // トス日(日単位)+店舗名が一致する行は重複として取り込まない(要望)
   const dedupKey = (dateIso: string, store: string) => `${isoToDateKey(dateIso)}|${store.trim().toLowerCase()}`;
+  const isConversion = (label: string) =>
+    label === '前確OK' || progressOptions.some((o) => o.displayName === label && CONVERSION_CODES.includes(o.internalCode));
 
-  const submit = async () => {
+  /** 貼り付けた表を読み、確認画面用の行を作る */
+  const readTable = async () => {
     setError(null);
-    setSummary(null);
     const table = parseTsv(text);
     if (table.length < 2) {
       setError('見出し行を含む表を貼り付けてください(1行目が項目名、2行目以降がデータ)');
       return;
     }
-    const header = table[0];
-    const dataLines = table.slice(1);
-    const idx = (label: string) => header.findIndex((h) => h.trim() === label);
-    const col = {
-      tossDate: idx(HEADER_LABELS.tossDate),
-      tossTime: idx(HEADER_LABELS.tossTime),
-      nextActionDate: idx(HEADER_LABELS.nextActionDate),
-      nextActionTime: idx(HEADER_LABELS.nextActionTime),
-      ap: idx(HEADER_LABELS.ap),
-      preConfirm: idx(HEADER_LABELS.preConfirm),
-      department: idx(HEADER_LABELS.department),
-      calling: idx(HEADER_LABELS.calling),
-      corporateName: idx(HEADER_LABELS.corporateName),
-      memo: idx(HEADER_LABELS.memo),
-      contactName: idx(HEADER_LABELS.contactName),
-      phone: idx(HEADER_LABELS.phone),
-      address: header.findIndex((h) => h.trim().startsWith('住所')),
-      proposal: idx(HEADER_LABELS.proposal),
-      progress: idx(HEADER_LABELS.progress),
-      ngReason: idx(HEADER_LABELS.ngReason),
-      listName: idx(HEADER_LABELS.listName),
-      callDirection: idx(HEADER_LABELS.callDirection),
-      industry: idx(HEADER_LABELS.industry),
-      hook: idx(HEADER_LABELS.hook),
-      existingContract: idx(HEADER_LABELS.existingContract),
-    };
-    if (Object.values(col).every((i) => i < 0)) {
+    const header = table[0].map((h) => h.trim());
+    const idx = (label: string) => header.findIndex((h) => h === label);
+    const col = Object.fromEntries(Object.entries(HEADER_LABELS).map(([k, label]) => [k, idx(label)])) as Record<keyof typeof HEADER_LABELS, number>;
+    const addressCol = header.findIndex((h) => h.startsWith('住所'));
+    if (Object.values(col).every((i) => i < 0) && addressCol < 0) {
       setError('見出し行に対象の列が見つかりません');
       return;
     }
 
-    setSubmitting(true);
-    let skipped = 0;
-    let duplicates = 0;
-    let addedOptions = 0;
-    const rows: Record<string, unknown>[] = [];
+    setBusy(true);
     try {
-      // 重複判定のため既存のトス案件を全件取得しておく(トス日+店舗名が一致するものは取り込まない)
       const existing = await fetchAllTossCases();
       const existingKeys = new Set(
         existing.filter((it) => it.receivedAt && it.customer?.corporateName).map((it) => dedupKey(it.receivedAt, it.customer!.corporateName!)),
       );
       const batchKeys = new Set<string>();
+      const drafts: Draft[] = [];
+      let skipped = 0;
+      let duplicates = 0;
 
+      for (const line of table.slice(1)) {
+        const get = (i: number) => (i >= 0 ? (line[i] ?? '').trim() : '');
+        const values: Record<string, unknown> = {};
+        const set = (key: string, v: string) => {
+          if (v) values[key] = v;
+        };
+
+        let tossDate = '';
+        const tossTime = parseTimeText(get(col.tossTime)) || '';
+        const dateKey = parseDateText(get(col.tossDate));
+        if (dateKey) {
+          values.receivedAt = new Date(`${dateKey}T${tossTime || '00:00'}`).toISOString();
+          tossDate = monthDay(dateKey);
+        }
+        const nextKey = parseDateText(get(col.nextActionDate));
+        if (nextKey) values.nextActionAt = new Date(`${nextKey}T${parseTimeText(get(col.nextActionTime)) || '00:00'}`).toISOString();
+        set('apStaffName', get(col.ap));
+        set('department', get(col.department));
+        if (CALLING_TRUE.test(get(col.calling))) values.isCallingInProgress = true;
+        set('corporateName', get(col.corporateName));
+        set('memo', get(col.memo));
+        set('contactName', get(col.contactName));
+        set('phone', get(col.phone));
+        set('region', get(col.region));
+        set('address', get(addressCol));
+        set('proposal', get(col.proposal));
+        set('listName', get(col.listName));
+        if (CALL_DIRECTIONS.includes(get(col.callDirection))) values.callDirection = get(col.callDirection);
+        set('industry', get(col.industry));
+        set('hook', get(col.hook));
+        set('existingContract', get(col.existingContract));
+        const preConfirm = get(col.preConfirm);
+        const progress = get(col.progress);
+        const ngReason = get(col.ngReason);
+        const makesAppointment = !!progress && isConversion(progress);
+        if (makesAppointment) set('appointmentMemo', get(col.appointmentMemo));
+
+        if (Object.keys(values).length === 0 && !preConfirm && !progress && !ngReason) {
+          skipped += 1;
+          continue;
+        }
+        if (typeof values.receivedAt === 'string' && typeof values.corporateName === 'string') {
+          const key = dedupKey(values.receivedAt, values.corporateName);
+          if (existingKeys.has(key) || batchKeys.has(key)) {
+            duplicates += 1;
+            continue;
+          }
+          batchKeys.add(key);
+        }
+        drafts.push({ tossDate, tossTime, values, preConfirm, progress, ngReason, makesAppointment });
+      }
+      if (drafts.length === 0) {
+        setError(
+          skipped > 0 || duplicates > 0
+            ? `取り込めるデータがありませんでした(空行${skipped}件・重複${duplicates}件を除外)`
+            : '取り込めるデータ行がありませんでした',
+        );
+        return;
+      }
+      setCheck({ drafts, skipped, duplicates });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '読み込みに失敗しました');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!check) return;
+    setError(null);
+    setBusy(true);
+    let addedOptions = 0;
+    try {
       // 前確・進捗・NG理由は既存の選択肢に無い値(例: マスタ未登録のスタッフ名)でも
       // データを失わずに取り込めるよう、一致しなければ新しい選択肢として自動追加する
       // (要望: 一括投入で情報が正しく入らない不具合の調査・改善。案件管理の一括投入と同じ考え方)。
@@ -131,8 +206,7 @@ export function BulkImportTossCasesModal({
         ['TOSS_PROGRESS', [...progressOptions]],
         ['TOSS_NG_REASON', [...ngReasonOptions]],
       ]);
-      const resolveStatusId = async (category: string, rawLabel: string): Promise<string | undefined> => {
-        const label = rawLabel.trim();
+      const resolveStatusId = async (category: string, label: string): Promise<string | undefined> => {
         if (!label) return undefined;
         const opts = optionsCache.get(category) ?? [];
         const exact = opts.find((o) => o.displayName === label);
@@ -147,126 +221,50 @@ export function BulkImportTossCasesModal({
         return created.id;
       };
 
-      for (const line of dataLines) {
-        const get = (i: number) => (i >= 0 ? (line[i] ?? '').trim() : '');
-        const values: Record<string, unknown> = {};
-
-        const tossDate = get(col.tossDate);
-        if (tossDate) {
-          const p = parseDateText(tossDate);
-          if (p) values.receivedAt = new Date(`${p}T${parseTimeText(get(col.tossTime)) || '00:00'}`).toISOString();
-        }
-        const nextActionDate = get(col.nextActionDate);
-        if (nextActionDate) {
-          const p = parseDateText(nextActionDate);
-          if (p) values.nextActionAt = new Date(`${p}T${parseTimeText(get(col.nextActionTime)) || '00:00'}`).toISOString();
-        }
-        const ap = get(col.ap);
-        if (ap) values.apStaffName = ap;
-        const preConfirm = get(col.preConfirm);
-        if (preConfirm) {
-          const id = await resolveStatusId('TOSS_PRE_CONFIRM', preConfirm);
-          if (id) values.preConfirmStatusId = id;
-        }
-        const department = get(col.department);
-        if (department) values.department = department;
-        const calling = get(col.calling);
-        if (calling) values.isCallingInProgress = CALLING_TRUE.test(calling);
-        const corporateName = get(col.corporateName);
-        if (corporateName) values.corporateName = corporateName;
-        const memo = get(col.memo);
-        if (memo) values.memo = memo;
-        const contactName = get(col.contactName);
-        if (contactName) values.contactName = contactName;
-        const phone = get(col.phone);
-        if (phone) values.phone = phone;
-        const address = get(col.address);
-        if (address) values.address = address;
-        const proposal = get(col.proposal);
-        if (proposal) values.proposal = proposal;
-        const progress = get(col.progress);
-        if (progress) {
-          const id = await resolveStatusId('TOSS_PROGRESS', progress);
-          if (id) values.progressStatusId = id;
-        }
-        const ngReason = get(col.ngReason);
-        if (ngReason) {
-          const id = await resolveStatusId('TOSS_NG_REASON', ngReason);
-          if (id) values.ngReasonStatusId = id;
-        }
-        const listName = get(col.listName);
-        if (listName) values.listName = listName;
-        const callDirection = get(col.callDirection);
-        if (CALL_DIRECTIONS.includes(callDirection)) values.callDirection = callDirection;
-        const industry = get(col.industry);
-        if (industry) values.industry = industry;
-        const hook = get(col.hook);
-        if (hook) values.hook = hook;
-        const existingContract = get(col.existingContract);
-        if (existingContract) values.existingContract = existingContract;
-
-        if (Object.keys(values).length === 0) {
-          skipped += 1;
-          continue;
-        }
-        if (typeof values.receivedAt === 'string' && typeof values.corporateName === 'string') {
-          const key = dedupKey(values.receivedAt, values.corporateName);
-          if (existingKeys.has(key) || batchKeys.has(key)) {
-            duplicates += 1;
-            continue;
-          }
-          batchKeys.add(key);
-        }
-        rows.push(values);
+      const rows: Record<string, unknown>[] = [];
+      for (const d of check.drafts) {
+        const row = { ...d.values };
+        const pre = await resolveStatusId('TOSS_PRE_CONFIRM', d.preConfirm);
+        if (pre) row.preConfirmStatusId = pre;
+        const prog = await resolveStatusId('TOSS_PROGRESS', d.progress);
+        if (prog) row.progressStatusId = prog;
+        const ng = await resolveStatusId('TOSS_NG_REASON', d.ngReason);
+        if (ng) row.ngReasonStatusId = ng;
+        rows.push(row);
       }
-      if (rows.length === 0) {
-        setError(
-          skipped > 0 || duplicates > 0
-            ? `取り込めるデータがありませんでした(空行${skipped}件・重複${duplicates}件を除外)`
-            : '取り込めるデータ行がありませんでした',
-        );
-        setSubmitting(false);
-        return;
-      }
-      const res = await api.post<{ count: number }>('/toss-cases/bulk-create', { rows });
-      setSummary({ created: res.count, skipped, duplicates, addedOptions });
+      const res = await api.post<{ count: number; appointmentCount?: number }>('/toss-cases/bulk-create', { rows });
+      setSummary({ created: res.count, appointments: res.appointmentCount ?? 0, addedOptions });
+      setCheck(null);
       onImported();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '取り込みに失敗しました');
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   };
 
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const cell: React.CSSProperties = { padding: '3px 6px', borderBottom: '1px solid var(--color-sunken)', whiteSpace: 'nowrap', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' };
+  const head: React.CSSProperties = { ...cell, position: 'sticky', top: 0, background: 'var(--color-subtle)', color: 'var(--color-text-muted)', fontSize: 11, textAlign: 'left' };
+  const stat = (label: string, n: number, color: string) => (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: '4px 10px', minWidth: 90 }}>
+      <b style={{ display: 'block', fontSize: 16, color }}>{n}</b>
+      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{label}</span>
+    </div>
+  );
+
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()} style={{ width: 640, maxWidth: '95vw' }}>
+      <div className="modal" onMouseDown={(e) => e.stopPropagation()} style={{ width: check ? 1100 : 640, maxWidth: '95vw' }}>
         <div className="modal-head">
-          <div className="modal-title">トス案件を一括投入</div>
+          <div className="modal-title">トス案件を一括投入{check ? '(内容の確認)' : ''}</div>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
-          </p>
-          <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>
-            {Object.values(HEADER_LABELS).join(' / ')} / 住所
-          </div>
           {error && <p style={{ color: 'var(--color-danger)', fontSize: 12 }}>{error}</p>}
           {summary && (
             <p style={{ color: 'var(--color-success)', fontSize: 12 }}>
               {summary.created}件のトス案件を作成しました。
-              {summary.duplicates > 0 && (
-                <>
-                  <br />
-                  トス日・店舗名が一致する重複{summary.duplicates}件は除外しました。
-                </>
-              )}
-              {summary.skipped > 0 && (
-                <>
-                  <br />
-                  取り込める項目が無かった{summary.skipped}件は除外しました。
-                </>
-              )}
+              {summary.appointments > 0 && <>前確OKの{summary.appointments}件はアポ詳細も作成しました。</>}
               {summary.addedOptions > 0 && (
                 <>
                   <br />
@@ -275,21 +273,101 @@ export function BulkImportTossCasesModal({
               )}
             </p>
           )}
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="見出し行を含む表をここに貼り付け"
-            rows={12}
-            style={{ padding: 8, fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }}
-          />
+
+          {check ? (
+            <>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {stat('取り込む行', check.drafts.length, 'var(--color-success)')}
+                {stat('アポ詳細も作る(前確OK)', check.drafts.filter((d) => d.makesAppointment).length, 'var(--color-primary)')}
+                {stat('重複(トス日+店舗名)', check.duplicates, 'var(--color-text-faint)')}
+                {stat('空行', check.skipped, 'var(--color-text-faint)')}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0, lineHeight: 1.6 }}>
+                店舗連絡先・住所は表の値をそのまま入れます。対応中フラグが「対応中」の行は架電中にします。
+                前確OKの行はアポ詳細も作り、本文に「アポFMT」列を使います(空ならアポ詳細FMTから作成)。
+                次回対応日が別の月の行は、トス日の月と次回対応日の月の両方の一覧に出ます。
+                「アポ実績入力」「転送」の列は取り込みません。
+              </p>
+              <div style={{ maxHeight: '50vh', overflow: 'auto', border: '1px solid var(--color-border)', borderRadius: 8 }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                  <thead>
+                    <tr>
+                      {['トス日', 'トス時間', 'AP', '前確', '部署', '架電中', '店舗名', '担当者名', '店舗連絡先', '地域', '住所', '提案', '進捗', 'NG理由', 'リスト', '架電or入電', '業種', 'フック', '既契約', 'アポ詳細'].map((h) => (
+                        <th key={h} style={head}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {check.drafts.map((d, i) => (
+                      <tr key={i}>
+                        <td style={cell}>{d.tossDate}</td>
+                        <td style={cell}>{d.tossTime}</td>
+                        <td style={cell}>{str(d.values.apStaffName)}</td>
+                        <td style={cell}>{d.preConfirm}</td>
+                        <td style={cell}>{str(d.values.department)}</td>
+                        <td style={{ ...cell, color: 'var(--color-danger)' }}>{d.values.isCallingInProgress ? '架電中' : ''}</td>
+                        <td style={cell} title={str(d.values.corporateName)}>
+                          {str(d.values.corporateName)}
+                        </td>
+                        <td style={cell}>{str(d.values.contactName)}</td>
+                        <td style={cell}>{str(d.values.phone)}</td>
+                        <td style={cell}>{str(d.values.region)}</td>
+                        <td style={cell} title={str(d.values.address)}>
+                          {str(d.values.address)}
+                        </td>
+                        <td style={cell}>{str(d.values.proposal)}</td>
+                        <td style={cell}>{d.progress}</td>
+                        <td style={cell}>{d.ngReason}</td>
+                        <td style={cell} title={str(d.values.listName)}>
+                          {str(d.values.listName)}
+                        </td>
+                        <td style={cell}>{str(d.values.callDirection)}</td>
+                        <td style={cell}>{str(d.values.industry)}</td>
+                        <td style={cell}>{str(d.values.hook)}</td>
+                        <td style={cell}>{str(d.values.existingContract)}</td>
+                        <td style={{ ...cell, color: 'var(--color-primary)' }}>{d.makesAppointment ? '作成' : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                見出し行を含む表をそのまま貼り付けてください。以下の列だけを取り込みます(他の列は無視されます)。
+              </p>
+              <div style={{ fontSize: 11, color: 'var(--color-text-faint)', lineHeight: 1.6 }}>{Object.values(HEADER_LABELS).join(' / ')} / 住所</div>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="見出し行を含む表をここに貼り付け"
+                rows={12}
+                style={{ padding: 8, fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }}
+              />
+            </>
+          )}
         </div>
         <div className="modal-foot">
-          <button onClick={onClose} disabled={submitting}>
+          {check && (
+            <button onClick={() => setCheck(null)} disabled={busy}>
+              戻って貼り直す
+            </button>
+          )}
+          <button onClick={onClose} disabled={busy}>
             閉じる
           </button>
-          <button className="btn-primary" onClick={submit} disabled={submitting || !text.trim()}>
-            {submitting ? '取り込み中...' : '取り込む'}
-          </button>
+          {check ? (
+            <button className="btn-primary" onClick={submit} disabled={busy}>
+              {busy ? '取り込み中...' : `${check.drafts.length}件を取り込む`}
+            </button>
+          ) : (
+            <button className="btn-primary" onClick={readTable} disabled={busy || !text.trim()}>
+              {busy ? '読み込み中...' : '内容を確認'}
+            </button>
+          )}
         </div>
       </div>
     </div>

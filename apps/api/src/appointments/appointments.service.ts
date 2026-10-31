@@ -133,7 +133,13 @@ export class AppointmentsService {
    * Googleカレンダー/Meet連携はPhase5でWorkerジョブとして実装するため、
    * ここではcalendarSyncStatus=NOT_SYNCEDのまま作成する。
    */
-  async createFromTossAutomation(tossCaseId: string, actorUserId?: string, preContactAt?: Date) {
+  async createFromTossAutomation(
+    tossCaseId: string,
+    actorUserId?: string,
+    preContactAt?: Date,
+    // トス一括投入(過去分)用: 本文の指定・対象月の指定・Meet 自動発行をしない
+    opts: { memo?: string; periodMonth?: string; skipMeet?: boolean } = {},
+  ) {
     const existing = await this.prisma.appointment.findUnique({ where: { tossCaseId } });
     if (existing) return existing; // 冪等: 既に作成済みなら何もしない
 
@@ -179,8 +185,8 @@ export class AppointmentsService {
     // 詳細フォーマット(備考の雛形)はフックから自動選択: HPZOOM=オンライン用、それ以外=訪問用(要望)
     const memoTemplate = isOnline ? zoomTemplate : visitTemplate;
 
-    const memo =
-      typeof memoTemplate === 'string'
+    const memo = opts.memo
+      ?? (typeof memoTemplate === 'string'
         ? renderTemplate(memoTemplate, {
             acquisitionAngle: hook,
             nextActionAt: formatJaDateTimeWithWeekday(tossCase.nextActionAt),
@@ -197,7 +203,7 @@ export class AppointmentsService {
             hook: tossCase.hook ?? '',
             meetingUrl: '',
           })
-        : undefined;
+        : undefined);
 
     try {
       const appointment = await this.prisma.appointment.create({
@@ -221,7 +227,7 @@ export class AppointmentsService {
           idempotencyKey: tossCaseId,
           preContactAt,
           // 対象月は前連日時 → 商談日時 → 現在 の順で確定
-          periodMonth: toPeriodMonth(preContactAt ?? tossCase.confirmedStartAt ?? new Date()),
+          periodMonth: opts.periodMonth ?? toPeriodMonth(preContactAt ?? tossCase.confirmedStartAt ?? new Date()),
           calendarTitle,
           memo,
           // トスとアポで項目名・意味が共通の欄はそのまま引き継ぐ(要望)。
@@ -266,7 +272,7 @@ export class AppointmentsService {
 
       // HPZOOM(=Google Meet)なら、Googleカレンダー連携済みのときだけMeetのURLを自動発行し
       // meetingUrl・備考へ反映する(未連携なら何もしない)。
-      if (isOnline) {
+      if (isOnline && !opts.skipMeet) {
         await this.googleCalendar.tryAutoCreateMeet(appointment.id, calendarTitle || 'オンライン商談');
       }
 
