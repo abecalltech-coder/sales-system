@@ -11,7 +11,7 @@ import { UsersAdminPage } from './pages/admin/UsersAdminPage';
 import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
 import { SummarySheetsPage } from './pages/SummarySheetsPage';
-import { ShiftPage } from './pages/ShiftPage';
+import { PersonalStatsPage } from './pages/personal-stats/PersonalStatsPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { TossFormAdminPage } from './pages/admin/TossFormAdminPage';
@@ -51,7 +51,7 @@ export function App() {
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
         <Route path="/deals" element={protect(<DealsListPage />)} />
         <Route path="/summary" element={protect(<SummarySheetsPage />)} />
-        <Route path="/shift" element={protect(<ShiftPage />)} />
+        <Route path="/personal-stats" element={protect(<PersonalStatsPage />)} />
         <Route path="/final-report" element={protect(<FinalReportPage />)} />
         <Route path="/chat" element={protect(<ChatPage />)} />
         <Route path="/application-sheets" element={protect(<ApplicationSheetsPage />)} />

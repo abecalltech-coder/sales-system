@@ -2,7 +2,6 @@ import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } fr
 import { Observable, tap } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { SUMMARY_COLUMNS } from '../monthly-summary/aggregation.constants';
-import { SHIFT_ATTRIBUTE_DEFS } from '../monthly-shift/monthly-shift.service';
 import { FIELD_LABELS, OP_LABELS } from './audit-labels';
 
 /**
@@ -31,7 +30,6 @@ const SINGLE_TARGETS: { pattern: RegExp; model: string; include?: Rec }[] = [
   { pattern: /^\/deals\/field-options\/[^/]+$/, model: 'dealFieldOption' },
   { pattern: /^\/deals\/[^/]+$/, model: 'deal' },
   { pattern: /^\/monthly-summary\/rows\/[^/]+$/, model: 'monthlySummaryRow' },
-  { pattern: /^\/monthly-shift\/rows\/[^/]+$/, model: 'monthlyShiftRow' },
   { pattern: /^\/users\/[^/]+(\/reset-password|\/set-password)?$/, model: 'user' },
   { pattern: /^\/roles\/[^/]+$/, model: 'role' },
   { pattern: /^\/organizations\/departments\/[^/]+$/, model: 'department' },
@@ -54,7 +52,6 @@ const BULK_MODELS: Record<string, { model: string; include?: Rec }> = {
   contracts: { model: 'contract', include: { appointment: { include: { customer: true } } } },
   deals: { model: 'deal' },
   'monthly-summary': { model: 'monthlySummaryRow' },
-  'monthly-shift': { model: 'monthlyShiftRow' },
 };
 
 /** ログを残さないルート(ログイン系は認証処理側で記録済み、個人設定や集計プレビューは操作ではないため) */
@@ -348,10 +345,6 @@ export class AuditTrailInterceptor implements NestInterceptor {
 
   private subLabel(resource: string, key: string, sub: string, r: Resolver): string {
     if (resource === 'monthly-summary') return SUMMARY_COLUMNS.find((c) => c.code === sub)?.label ?? sub;
-    if (resource === 'monthly-shift') {
-      if (key === 'days') return `${sub.replace(/^\d{4}-/, '').replace('-', '/')} 稼働時間`;
-      return SHIFT_ATTRIBUTE_DEFS.find((d) => d.code === sub)?.label ?? sub;
-    }
     if (resource === 'deals') return r.dealFieldLabel(sub) ?? sub;
     return FIELD_LABELS[sub] ?? sub;
   }

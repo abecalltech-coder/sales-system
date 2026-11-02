@@ -61,8 +61,9 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const SHIFT_NAV_GROUP: NavGroup = {
-  items: [{ to: '/shift', label: 'シフト', icon: 'calendar' }],
+// 個人別数値(要望: シフトを置き換え)
+const PERSONAL_STATS_NAV_GROUP: NavGroup = {
+  items: [{ to: '/personal-stats', label: '個人別数値', icon: 'grid' }],
 };
 
 const WORK_RULES_NAV: NavItem = { to: '/work-rules', label: '稼働ルール', icon: 'book' };
@@ -292,8 +293,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const isAdmin = me ? me.roles.some((r) => ADMIN_ROLES.includes(r)) : false;
   // 管理者以外も「管理(スマホは設定)」の中に稼働ルールだけ出す
   const allGroups = isAdmin
-    ? [...NAV_GROUPS, SHIFT_NAV_GROUP, ADMIN_NAV_GROUP]
-    : [...NAV_GROUPS, SHIFT_NAV_GROUP, { title: ADMIN_NAV_GROUP.title, items: [WORK_RULES_NAV] }];
+    ? [...NAV_GROUPS, PERSONAL_STATS_NAV_GROUP, ADMIN_NAV_GROUP]
+    : [...NAV_GROUPS, PERSONAL_STATS_NAV_GROUP, { title: ADMIN_NAV_GROUP.title, items: [WORK_RULES_NAV] }];
 
   // 役職ごとのタブ表示設定(ユーザー管理)。visibleTabsがnullなら制限なし(全表示)。
   const visibleTabs = me?.visibleTabs ?? null;

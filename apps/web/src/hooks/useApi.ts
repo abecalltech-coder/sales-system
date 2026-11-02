@@ -521,7 +521,45 @@ export function useMonthlySummary(period: string, departmentId: string | undefin
 }
 
 // ============================================================
-// 月次シフト表
+// 個人別数値(シフトの置き換え)
+// ============================================================
+export type PersonalMetricKey = 'TOSS_UP' | 'APPOINTMENT' | 'MEETING' | 'JUSETSU_OK' | 'ET';
+
+export interface PersonalStatTarget {
+  weeklyStory: number | null;
+  monthlyGoal: number | null;
+  version: number;
+}
+
+export interface PersonalStatsSheet {
+  user: { id: string; name: string };
+  month: string;
+  days: string[];
+  metrics: { key: PersonalMetricKey; label: string }[];
+  /** 手入力した値(日付→項目) */
+  values: Record<string, Partial<Record<PersonalMetricKey, { value: number; version: number }>>>;
+  /** システム上の実績から出した値(手入力が無い日に使う) */
+  auto: Record<string, Partial<Record<PersonalMetricKey, number>>>;
+  targets: Partial<Record<PersonalMetricKey, PersonalStatTarget>>;
+  canEditTargets: boolean;
+}
+
+export function usePersonalStatsUsers() {
+  return useQuery({
+    queryKey: ['personal-stats', 'users'],
+    queryFn: () => api.get<{ id: string; name: string }[]>('/personal-stats/users'),
+    staleTime: 60_000,
+  });
+}
+
+export function usePersonalStats(userId: string | undefined, month: string) {
+  return useQuery({
+    queryKey: ['personal-stats', 'sheet', userId, month],
+    queryFn: () => api.get<PersonalStatsSheet>(`/personal-stats?userId=${userId}&month=${month}`),
+    enabled: !!userId,
+  });
+}
+
 // ============================================================
 export interface ShiftAttributeDef {
   code: string;

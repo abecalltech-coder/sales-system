@@ -34,6 +34,10 @@
   --color-danger-soft: #fdecec;
   --color-warning: #c77a12;
   --color-warning-soft: #fbf1e0;
+  /* 個人別数値: 達成率の見出し(紫)・自動計算の列(黄) */
+  --color-accent: #7a3fc4;
+  --color-accent-soft: #f3ecfc;
+  --color-highlight-soft: #fff7d1;
 
   --radius-sm: 6px;
   --radius-md: 9px;

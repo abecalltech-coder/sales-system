@@ -31,7 +31,7 @@ import { GoogleCalendarModule } from './integrations/google-calendar/google-cale
 import { PreferencesModule } from './preferences/preferences.module';
 import { TossFormModule } from './toss-form/toss-form.module';
 import { MonthlySummaryModule } from './monthly-summary/monthly-summary.module';
-import { MonthlyShiftModule } from './monthly-shift/monthly-shift.module';
+import { PersonalStatsModule } from './personal-stats/personal-stats.module';
 import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.module';
 import { FinalReportsModule } from './final-reports/final-reports.module';
 import { DealsModule } from './deals/deals.module';
@@ -76,7 +76,7 @@ import { CloseReportsModule } from './close-reports/close-reports.module';
     AutomationRulesModule,
     SummarySheetsModule,
     MonthlySummaryModule,
-    MonthlyShiftModule,
+    PersonalStatsModule,
     MonthlyRolloverModule,
     FinalReportsModule,
     DealsModule,

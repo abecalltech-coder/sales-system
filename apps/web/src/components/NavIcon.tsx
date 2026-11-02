@@ -23,7 +23,8 @@ export type IconName =
   | 'task'
   | 'memo'
   | 'book'
-  | 'flag';
+  | 'flag'
+  | 'grid';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -130,6 +131,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <path d="M5 21V4" />
       <path d="M5 4h11l-2 4 2 4H5" />
+    </>
+  ),
+  // 個人別数値(表)
+  grid: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M3 15h18M9 4v16" />
     </>
   ),
   // 稼働ルール

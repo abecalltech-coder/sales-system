@@ -1,0 +1,330 @@
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  ForbiddenException,
+  Get,
+  Injectable,
+  Module,
+  NotFoundException,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/types';
+import { periodMonthDays, periodMonthRange } from '../common/utils/period.util';
+
+/**
+ * 個人別数値(要望: シフトに代わり、人員ごとのシートで日別の実績を入力・集計する。スプレッドシートの週次表の再現)。
+ * - 日別の値は手入力したものだけ PersonalDailyStat に持つ。入力が無い日はシステム上の実績(トス・アポ・商談)から自動で出す
+ * - 週目標(ストーリー)・あるべき姿(月間目標)はユーザー×月で PersonalStatTarget に持ち、管理者だけ編集できる
+ * - 見られる範囲は既存の権限(トス/アポの編集範囲)に合わせる: 自分のみ / チーム / 部署 / 全員
+ */
+
+export const METRICS = [
+  { key: 'TOSS_UP', label: 'トスアップ数' },
+  { key: 'APPOINTMENT', label: 'アポイント数' },
+  { key: 'MEETING', label: '商談実施数' },
+  { key: 'JUSETSU_OK', label: '重説OK数' },
+  { key: 'ET', label: 'ET数' },
+] as const;
+const METRIC_KEYS = METRICS.map((m) => m.key) as string[];
+
+const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
+/** 人員シートのタブに並べる営業系の役職 */
+const SALES_ROLES = ['AP', 'AP_LEADER', 'CL', 'INSIDE_SALES', 'FIELD_SALES', 'LEADER'];
+const SCOPE_RANK: Record<string, number> = { OWN: 0, TEAM: 1, DEPT: 2, ALL: 3 };
+
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/** 名前の照合用: 全角/半角・空白の違いを吸収する(サマリーと同じ) */
+const norm = (s: string | null | undefined) => (s ?? '').normalize('NFKC').replace(/\s+/g, '').trim();
+const matches = (opt: { internalCode: string; displayName: string } | undefined, codes: string[], names: string[]) =>
+  !!opt && (codes.includes(opt.internalCode) || names.includes(opt.displayName.trim()));
+const jstDateKey = (d: Date) => new Date(d.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+
+const isAdmin = (user: AuthenticatedUser) => user.roles.some((r) => ADMIN_ROLES.includes(r));
+
+/** 見られる範囲。管理者は全員、それ以外はトス/アポの「編集」権限の範囲(一般ユーザーは自分だけ) */
+function scopeOf(user: AuthenticatedUser): 'OWN' | 'TEAM' | 'DEPT' | 'ALL' {
+  if (isAdmin(user)) return 'ALL';
+  let best = 'OWN';
+  for (const p of user.permissions) {
+    if (p.action !== 'edit' || !['toss_case', 'appointment'].includes(p.resource)) continue;
+    if ((SCOPE_RANK[p.scope] ?? 0) > SCOPE_RANK[best]) best = p.scope;
+  }
+  return best as 'OWN' | 'TEAM' | 'DEPT' | 'ALL';
+}
+
+class GetSheetQuery {
+  @IsString() userId!: string;
+  @Matches(PERIOD_RE) month!: string;
+}
+
+class SaveDailyDto {
+  @IsString() userId!: string;
+  @Matches(DATE_RE) date!: string;
+  @IsIn(METRIC_KEYS) metricKey!: string;
+  /** null で手入力を消す(システム実績の自動値に戻る) */
+  @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) value!: number | null;
+  /** 読んだときの version。まだ行が無ければ null */
+  @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
+}
+
+class SaveTargetDto {
+  @IsString() userId!: string;
+  @Matches(PERIOD_RE) month!: string;
+  @IsIn(METRIC_KEYS) metricKey!: string;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) weeklyStory?: number | null;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) monthlyGoal?: number | null;
+  @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
+}
+
+const CONFLICT_MESSAGE = '他のユーザーが先に更新しました。最新の値を表示します';
+
+@Injectable()
+class PersonalStatsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
+
+  /** 人員シートのタブ: 有効なユーザーのうち営業系の役職の人(見られる範囲だけ) */
+  async users(viewer: AuthenticatedUser) {
+    const scope = scopeOf(viewer);
+    const where: Prisma.UserWhereInput = {
+      status: 'ACTIVE',
+      deletedAt: null,
+      roles: { some: { role: { code: { in: SALES_ROLES } } } },
+    };
+    if (scope === 'OWN') where.id = viewer.id;
+    else if (scope === 'TEAM') where.OR = [{ id: viewer.id }, ...(viewer.teamId ? [{ teamId: viewer.teamId }] : [])];
+    else if (scope === 'DEPT') where.OR = [{ id: viewer.id }, ...(viewer.departmentId ? [{ departmentId: viewer.departmentId }] : [])];
+    return this.prisma.user.findMany({
+      where,
+      orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true },
+    });
+  }
+
+  /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
+  private async assertAccess(viewer: AuthenticatedUser, userId: string) {
+    const target = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+      select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true } } } } },
+    });
+    if (!target) throw new NotFoundException('ユーザーが見つかりません');
+    const scope = scopeOf(viewer);
+    const ok =
+      target.id === viewer.id ||
+      scope === 'ALL' ||
+      (scope === 'DEPT' && !!viewer.departmentId && target.departmentId === viewer.departmentId) ||
+      (scope === 'TEAM' && !!viewer.teamId && target.teamId === viewer.teamId);
+    if (!ok) throw new ForbiddenException('このユーザーのシートを見る権限がありません');
+    return target;
+  }
+
+  async sheet(viewer: AuthenticatedUser, userId: string, month: string) {
+    const target = await this.assertAccess(viewer, userId);
+    const days = periodMonthDays(month);
+    const [rows, targets, auto] = await Promise.all([
+      this.prisma.personalDailyStat.findMany({ where: { userId, date: { gte: days[0], lte: days[days.length - 1] } } }),
+      this.prisma.personalStatTarget.findMany({ where: { userId, month } }),
+      this.autoValues(target, month),
+    ]);
+
+    const values: Record<string, Record<string, { value: number; version: number }>> = {};
+    for (const r of rows) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
+
+    return {
+      user: { id: target.id, name: target.name },
+      month,
+      days,
+      metrics: METRICS,
+      values,
+      auto,
+      targets: Object.fromEntries(
+        targets.map((t) => [t.metricKey, { weeklyStory: t.weeklyStory, monthlyGoal: t.monthlyGoal, version: t.version }]),
+      ),
+      canEditTargets: isAdmin(viewer),
+    };
+  }
+
+  /**
+   * システム上の実績から日別の値を出す(手入力が無い日の初期値。サマリーと同じ照合の仕方)。
+   * - トスアップ数: トス実績の「AP」が本人(またはトス担当者)のトス件数(トス日)
+   * - アポイント数: そのうち進捗が「前確OK」のもの(トス日)+アポ登録で作った本人のアポ詳細(作成日)
+   * - 商談実施数・重説OK数・ET数: アポ詳細の「AP」が本人(役職がCLの人は「CL」が本人)のもの
+   *   (商談日・重説OK日・ET日)
+   */
+  private async autoValues(
+    target: { id: string; name: string; roles: { role: { code: string } }[] },
+    month: string,
+  ): Promise<Record<string, Record<string, number>>> {
+    const { start, end } = periodMonthRange(month);
+    const inRange = { gte: start, lt: end };
+    const name = norm(target.name);
+    const isCl = target.roles.some((r) => r.role.code === 'CL');
+
+    const [statuses, tosses, appointments] = await Promise.all([
+      this.prisma.statusMaster.findMany({ select: { id: true, internalCode: true, displayName: true } }),
+      this.prisma.tossCase.findMany({
+        where: { deletedAt: null, receivedAt: inRange },
+        select: { receivedAt: true, apStaffName: true, tossUserId: true, progressStatusId: true },
+      }),
+      this.prisma.appointment.findMany({
+        where: {
+          deletedAt: null,
+          OR: [
+            { meetingStartAt: inRange },
+            { importantMattersOkAt: inRange },
+            { electronicContractAt: inRange },
+            { createdAt: inRange, idempotencyKey: { startsWith: 'apo-form:' } },
+          ],
+        },
+        select: {
+          idempotencyKey: true,
+          createdAt: true,
+          apStaffName: true,
+          closerStatusId: true,
+          meetingStatusId: true,
+          meetingStartAt: true,
+          importantMattersOkAt: true,
+          electronicContractAt: true,
+        },
+      }),
+    ]);
+    const statusById = new Map(statuses.map((s) => [s.id, s]));
+    const st = (id: string | null) => (id ? statusById.get(id) : undefined);
+    const isPreOk = (id: string | null) => matches(st(id), ['PROGRESS_PRE_CONFIRM_OK'], ['前確OK']);
+    const isMeetingDone = (id: string | null) =>
+      matches(
+        st(id),
+        ['APO_MEETING_DONE', 'APO_RESCHEDULE', 'APO_REVISIT', 'APO_CONTRACTED', 'APO_ON_HOLD', 'APO_LOST'],
+        ['商談完了', '再商談', '再訪問', '成約', '保留', '失注'],
+      );
+
+    const out: Record<string, Record<string, number>> = {};
+    const add = (d: Date | null, key: string) => {
+      if (!d || d < start || d >= end) return;
+      const day = (out[jstDateKey(d)] ??= {});
+      day[key] = (day[key] ?? 0) + 1;
+    };
+
+    if (name) {
+      for (const t of tosses) {
+        if (t.tossUserId !== target.id && norm(t.apStaffName) !== name) continue;
+        add(t.receivedAt, 'TOSS_UP');
+        if (isPreOk(t.progressStatusId)) add(t.receivedAt, 'APPOINTMENT');
+      }
+      for (const a of appointments) {
+        const mine = isCl ? norm(st(a.closerStatusId)?.displayName) === name : norm(a.apStaffName) === name;
+        if (!mine) continue;
+        if (a.idempotencyKey?.startsWith('apo-form:') && norm(a.apStaffName) === name) add(a.createdAt, 'APPOINTMENT');
+        if (isMeetingDone(a.meetingStatusId)) add(a.meetingStartAt, 'MEETING');
+        add(a.importantMattersOkAt, 'JUSETSU_OK');
+        add(a.electronicContractAt, 'ET');
+      }
+    }
+    return out;
+  }
+
+  /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
+  async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
+    await this.assertAccess(viewer, dto.userId);
+    const key = { userId: dto.userId, date: dto.date, metricKey: dto.metricKey };
+    let row: { value: number; version: number } | null = null;
+
+    if (dto.version == null) {
+      if (dto.value != null) {
+        try {
+          row = await this.prisma.personalDailyStat.create({ data: { ...key, value: dto.value, updatedBy: viewer.id } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(CONFLICT_MESSAGE);
+          throw e;
+        }
+      }
+    } else if (dto.value == null) {
+      const r = await this.prisma.personalDailyStat.deleteMany({ where: { ...key, version: dto.version } });
+      if (r.count === 0) throw new ConflictException(CONFLICT_MESSAGE);
+    } else {
+      const r = await this.prisma.personalDailyStat.updateMany({
+        where: { ...key, version: dto.version },
+        data: { value: dto.value, updatedBy: viewer.id, version: { increment: 1 } },
+      });
+      if (r.count === 0) throw new ConflictException(CONFLICT_MESSAGE);
+      row = await this.prisma.personalDailyStat.findUnique({ where: { userId_date_metricKey: key } });
+    }
+
+    this.realtime.emitToAll('personal-stats.updated', { userId: dto.userId });
+    return row ? { value: row.value, version: row.version } : null;
+  }
+
+  /** 週目標・あるべき姿の保存(管理者のみ) */
+  async saveTarget(viewer: AuthenticatedUser, dto: SaveTargetDto) {
+    if (!isAdmin(viewer)) throw new ForbiddenException('週目標・あるべき姿は管理者だけが編集できます');
+    await this.assertAccess(viewer, dto.userId);
+    const key = { userId: dto.userId, month: dto.month, metricKey: dto.metricKey };
+    const data: { weeklyStory?: number | null; monthlyGoal?: number | null } = {};
+    if (dto.weeklyStory !== undefined) data.weeklyStory = dto.weeklyStory;
+    if (dto.monthlyGoal !== undefined) data.monthlyGoal = dto.monthlyGoal;
+    if (Object.keys(data).length === 0) throw new BadRequestException('変更する値がありません');
+
+    if (dto.version == null) {
+      try {
+        await this.prisma.personalStatTarget.create({ data: { ...key, ...data, updatedBy: viewer.id } });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(CONFLICT_MESSAGE);
+        throw e;
+      }
+    } else {
+      const r = await this.prisma.personalStatTarget.updateMany({
+        where: { ...key, version: dto.version },
+        data: { ...data, updatedBy: viewer.id, version: { increment: 1 } },
+      });
+      if (r.count === 0) throw new ConflictException(CONFLICT_MESSAGE);
+    }
+
+    this.realtime.emitToAll('personal-stats.updated', { userId: dto.userId });
+    const t = await this.prisma.personalStatTarget.findUniqueOrThrow({ where: { userId_month_metricKey: key } });
+    return { weeklyStory: t.weeklyStory, monthlyGoal: t.monthlyGoal, version: t.version };
+  }
+}
+
+@Controller('personal-stats')
+class PersonalStatsController {
+  constructor(private readonly service: PersonalStatsService) {}
+
+  @Get('users')
+  users(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.users(user);
+  }
+
+  @Get()
+  sheet(@Query() q: GetSheetQuery, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.sheet(user, q.userId, q.month);
+  }
+
+  @Put('daily')
+  saveDaily(@Body() dto: SaveDailyDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveDaily(user, dto);
+  }
+
+  @Put('targets')
+  saveTarget(@Body() dto: SaveTargetDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveTarget(user, dto);
+  }
+}
+
+@Module({
+  controllers: [PersonalStatsController],
+  providers: [PersonalStatsService],
+})
+export class PersonalStatsModule {}

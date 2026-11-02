@@ -1237,3 +1237,40 @@ model CloseReport {
 
   @@index([userId, createdAt])
 }
+
+// ============================================================
+// 個人別数値(要望: シフトに代わり、人員ごとの週次表で日別の実績を入力・集計する)
+// ============================================================
+
+// 日別の実績(手入力した値だけ持つ。無い日はシステム上の実績から自動で出す)
+model PersonalDailyStat {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String   // "YYYY-MM-DD"(JST)
+  metricKey String   // TOSS_UP | APPOINTMENT | MEETING | JUSETSU_OK | ET
+  value     Int
+  version   Int      @default(1)
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, date, metricKey])
+  @@index([date])
+}
+
+// ユーザー×月の目標(ストーリー週目標・あるべき姿=月間目標)。管理者のみ編集
+model PersonalStatTarget {
+  id           String   @id @default(uuid())
+  userId       String
+  month        String   // "YYYY-MM"
+  metricKey    String
+  weeklyStory  Int?
+  monthlyGoal  Int?     // 未設定なら 週目標×5週
+  version      Int      @default(1)
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, month, metricKey])
+  @@index([month])
+}

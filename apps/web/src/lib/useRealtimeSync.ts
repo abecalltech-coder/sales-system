@@ -154,6 +154,10 @@ export function useRealtimeSync() {
     const handleCloseConfig = () =>
       queryClient.invalidateQueries({ queryKey: ["close-report-config"] });
     s.on("close-report-config.updated", handleCloseConfig);
+    // 個人別数値(責任者と本人が同じシートを見ることがある)
+    const handlePersonalStats = () =>
+      queryClient.invalidateQueries({ queryKey: ["personal-stats"] });
+    s.on("personal-stats.updated", handlePersonalStats);
     s.on("chat.updated", handleChat);
     s.on("users.updated", handleUsers);
     return () => {
@@ -165,6 +169,7 @@ export function useRealtimeSync() {
       s.off("tasks.updated", handleTasks);
       s.off("work-rules.updated", handleWorkRules);
       s.off("close-report-config.updated", handleCloseConfig);
+      s.off("personal-stats.updated", handlePersonalStats);
       s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);
     };
