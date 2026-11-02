@@ -101,12 +101,38 @@ export function PersonalStatsPage() {
   const { data: users = [], isLoading: usersLoading } = usePersonalStatsUsers();
   const [params, setParams] = useSearchParams();
   const requested = params.get('user');
+
+  // 部署ごとに切り替えて見る(要望)。下のタブはその部署の人だけにする
+  const deptKey = (u: { departmentId: string | null }) => u.departmentId ?? 'none';
+  const departments = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const u of users) if (!seen.has(deptKey(u))) seen.set(deptKey(u), u.departmentName ?? '部署なし');
+    return [...seen].map(([key, name]) => ({ key, name }));
+  }, [users]);
+  const requestedDept = params.get('dept');
+  const userDept = (id: string | null | undefined) => {
+    const u = users.find((x) => x.id === id);
+    return u ? deptKey(u) : undefined;
+  };
+  const selectedDept =
+    (requestedDept && departments.some((d) => d.key === requestedDept) ? requestedDept : undefined) ??
+    userDept(requested) ??
+    userDept(me?.id) ??
+    departments[0]?.key;
+  const deptUsers = users.filter((u) => deptKey(u) === selectedDept);
   const selectedId =
-    (requested && users.some((u) => u.id === requested) ? requested : undefined) ??
-    (me && users.some((u) => u.id === me.id) ? me.id : users[0]?.id);
+    (requested && deptUsers.some((u) => u.id === requested) ? requested : undefined) ??
+    (me && deptUsers.some((u) => u.id === me.id) ? me.id : deptUsers[0]?.id);
   const selectUser = (id: string) => {
     const next = new URLSearchParams(params);
     next.set('user', id);
+    if (selectedDept) next.set('dept', selectedDept);
+    setParams(next, { replace: true });
+  };
+  const selectDept = (key: string) => {
+    const next = new URLSearchParams(params);
+    next.set('dept', key);
+    next.delete('user');
     setParams(next, { replace: true });
   };
 
@@ -259,6 +285,20 @@ export function PersonalStatsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 className="page-title">個人別数値</h1>
             <MonthSwitcher />
+            {departments.length > 1 && (
+              <select
+                value={selectedDept}
+                onChange={(e) => selectDept(e.target.value)}
+                aria-label="部署"
+                style={{ height: 26, fontSize: 12, padding: '0 6px' }}
+              >
+                {departments.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
             {sheet && <span style={{ fontSize: 13, fontWeight: 700 }}>{sheet.user.name}</span>}
           </div>
           <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
@@ -390,7 +430,7 @@ export function PersonalStatsPage() {
         </div>
 
         {/* 人員シートのタブ(スプレッドシート風) */}
-        {users.length > 0 && (
+        {deptUsers.length > 0 && (
           <div
             style={{
               position: 'sticky',
@@ -405,7 +445,7 @@ export function PersonalStatsPage() {
               zIndex: 5,
             }}
           >
-            {users.map((u) => {
+            {deptUsers.map((u) => {
               const active = u.id === selectedId;
               return (
                 <button

@@ -547,7 +547,7 @@ export interface PersonalStatsSheet {
 export function usePersonalStatsUsers() {
   return useQuery({
     queryKey: ['personal-stats', 'users'],
-    queryFn: () => api.get<{ id: string; name: string }[]>('/personal-stats/users'),
+    queryFn: () => api.get<{ id: string; name: string; departmentId: string | null; departmentName: string | null }[]>('/personal-stats/users'),
     staleTime: 60_000,
   });
 }

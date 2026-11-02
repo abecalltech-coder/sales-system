@@ -107,11 +107,15 @@ class PersonalStatsService {
     if (scope === 'OWN') where.id = viewer.id;
     else if (scope === 'TEAM') where.OR = [{ id: viewer.id }, ...(viewer.teamId ? [{ teamId: viewer.teamId }] : [])];
     else if (scope === 'DEPT') where.OR = [{ id: viewer.id }, ...(viewer.departmentId ? [{ departmentId: viewer.departmentId }] : [])];
-    return this.prisma.user.findMany({
+    // 部署ごとに切り替えて見るため、部署(組織管理の並び順)も返す
+    const users = await this.prisma.user.findMany({
       where,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true },
+      select: { id: true, name: true, department: { select: { id: true, name: true, order: true } } },
     });
+    return users
+      .sort((a, b) => (a.department?.order ?? Number.MAX_SAFE_INTEGER) - (b.department?.order ?? Number.MAX_SAFE_INTEGER))
+      .map((u) => ({ id: u.id, name: u.name, departmentId: u.department?.id ?? null, departmentName: u.department?.name ?? null }));
   }
 
   /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
