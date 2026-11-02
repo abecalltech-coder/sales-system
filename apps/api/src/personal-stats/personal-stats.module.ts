@@ -40,12 +40,12 @@ const METRIC_KEYS = METRICS.map((m) => m.key) as string[];
  */
 const PLAN_KEYS = ['TOSS_UP_BUDGET', 'TOSS_UP_REVISED', 'APPOINTMENT_BUDGET', 'APPOINTMENT_REVISED', 'WORK_MINUTES'];
 const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
+/** 人員シートのタブに並べる役職(要望: AP と APリーダーだけ。CL は不要) */
+const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
-const APPOINTER_ROLES = ['AP', 'AP_LEADER', 'INSIDE_SALES'];
+const APPOINTER_ROLES = SALES_ROLES;
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
-/** 人員シートのタブに並べる営業系の役職 */
-const SALES_ROLES = ['AP', 'AP_LEADER', 'CL', 'INSIDE_SALES', 'FIELD_SALES', 'LEADER'];
 const SCOPE_RANK: Record<string, number> = { OWN: 0, TEAM: 1, DEPT: 2, ALL: 3 };
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -76,6 +76,11 @@ class GetSheetQuery {
   @Matches(PERIOD_RE) month!: string;
 }
 
+class GetDepartmentQuery {
+  @IsString() departmentId!: string;
+  @Matches(PERIOD_RE) month!: string;
+}
+
 class SaveDailyDto {
   @IsString() userId!: string;
   @Matches(DATE_RE) date!: string;
@@ -94,6 +99,9 @@ class SaveTargetDto {
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) monthlyGoal?: number | null;
   @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
 }
+
+type AutoTarget = { id: string; name: string; roles: { role: { code: string } }[] };
+type AutoSource = Awaited<ReturnType<PersonalStatsService['loadAutoSource']>>;
 
 const CONFLICT_MESSAGE = '他のユーザーが先に更新しました。最新の値を表示します';
 
@@ -135,6 +143,31 @@ class PersonalStatsService {
         departmentName: u.department?.name ?? null,
         isAppointer: u.roles.some((r) => APPOINTER_ROLES.includes(r.role.code)),
       }));
+  }
+
+  /**
+   * 部署サマリー(要望): 部署のアポインター全員分の日別の値をまとめて返す。集計は画面側(シートの累計と同じ計算)。
+   * 見られる範囲の人だけ。departmentId='none' は部署なしの人
+   */
+  async department(viewer: AuthenticatedUser, departmentId: string, month: string) {
+    const members = (await this.users(viewer)).filter((u) => (u.departmentId ?? 'none') === departmentId);
+    const days = periodMonthDays(month);
+    const ids = members.map((m) => m.id);
+    const [rows, roles, src] = await Promise.all([
+      this.prisma.personalDailyStat.findMany({ where: { userId: { in: ids }, date: { gte: days[0], lte: days[days.length - 1] } } }),
+      this.prisma.userRole.findMany({ where: { userId: { in: ids } }, select: { userId: true, role: { select: { code: true } } } }),
+      this.loadAutoSource(month),
+    ]);
+    return {
+      month,
+      days,
+      members: members.map((m) => {
+        const values: Record<string, Record<string, { value: number; version: number }>> = {};
+        for (const r of rows) if (r.userId === m.id) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
+        const target = { id: m.id, name: m.name, roles: roles.filter((r) => r.userId === m.id).map((r) => ({ role: r.role })) };
+        return { user: { id: m.id, name: m.name }, values, auto: this.computeAuto(target, src) };
+      }),
+    };
   }
 
   /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
@@ -188,15 +221,14 @@ class PersonalStatsService {
    * - 商談実施数・重説OK数・ET数: アポ詳細の「AP」が本人(役職がCLの人は「CL」が本人)のもの
    *   (商談日・重説OK日・ET日)
    */
-  private async autoValues(
-    target: { id: string; name: string; roles: { role: { code: string } }[] },
-    month: string,
-  ): Promise<Record<string, Record<string, number>>> {
+  private async autoValues(target: AutoTarget, month: string) {
+    return this.computeAuto(target, await this.loadAutoSource(month));
+  }
+
+  /** 月のトス・アポをまとめて読む(部署サマリーでは全員分を1回で済ませる) */
+  private async loadAutoSource(month: string) {
     const { start, end } = periodMonthRange(month);
     const inRange = { gte: start, lt: end };
-    const name = norm(target.name);
-    const isCl = target.roles.some((r) => r.role.code === 'CL');
-
     const [statuses, tosses, appointments] = await Promise.all([
       this.prisma.statusMaster.findMany({ select: { id: true, internalCode: true, displayName: true } }),
       this.prisma.tossCase.findMany({
@@ -225,6 +257,13 @@ class PersonalStatsService {
         },
       }),
     ]);
+    return { start, end, statuses, tosses, appointments };
+  }
+
+  private computeAuto(target: AutoTarget, src: AutoSource): Record<string, Record<string, number>> {
+    const { start, end, statuses, tosses, appointments } = src;
+    const name = norm(target.name);
+    const isCl = target.roles.some((r) => r.role.code === 'CL');
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const st = (id: string | null) => (id ? statusById.get(id) : undefined);
     const isPreOk = (id: string | null) => matches(st(id), ['PROGRESS_PRE_CONFIRM_OK'], ['前確OK']);
@@ -337,6 +376,11 @@ class PersonalStatsController {
   @Get()
   sheet(@Query() q: GetSheetQuery, @CurrentUser() user: AuthenticatedUser) {
     return this.service.sheet(user, q.userId, q.month);
+  }
+
+  @Get('department')
+  department(@Query() q: GetDepartmentQuery, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.department(user, q.departmentId, q.month);
   }
 
   @Put('daily')

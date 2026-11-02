@@ -557,6 +557,20 @@ export function usePersonalStatsUsers() {
   });
 }
 
+export interface PersonalStatsDepartment {
+  month: string;
+  days: string[];
+  members: Pick<PersonalStatsSheet, 'user' | 'values' | 'auto'>[];
+}
+
+/** 部署サマリー(部署のAP全員分の日別の値) */
+export function usePersonalStatsDepartment(departmentId: string, month: string) {
+  return useQuery({
+    queryKey: ['personal-stats', 'department', departmentId, month],
+    queryFn: () => api.get<PersonalStatsDepartment>(`/personal-stats/department?departmentId=${departmentId}&month=${month}`),
+  });
+}
+
 export function usePersonalStats(userId: string | undefined, month: string) {
   return useQuery({
     queryKey: ['personal-stats', 'sheet', userId, month],

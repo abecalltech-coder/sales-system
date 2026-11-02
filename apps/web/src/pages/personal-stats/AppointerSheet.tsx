@@ -1,6 +1,7 @@
 import { Fragment } from 'react';
 import { PersonalDailyKey, PersonalStatsSheet } from '../../hooks/useApi';
-import { NumberCell, fmtRate, rateColor, rateOf } from './parts';
+import { NumberCell, fmtRate, rateColor } from './parts';
+import { PLAN_METRICS, SEAT_HOURS, computeApSummary, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
@@ -9,24 +10,10 @@ import { NumberCell, fmtRate, rateColor, rateOf } from './parts';
  */
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-const SEAT_HOURS = 176;
 const WORK_OPTIONS = Array.from({ length: (480 - 60) / 15 + 1 }, (_, i) => 60 + i * 15);
-const PLAN_METRICS = [
-  { key: 'TOSS_UP', label: 'トス', budget: 'TOSS_UP_BUDGET', revised: 'TOSS_UP_REVISED' },
-  { key: 'APPOINTMENT', label: 'アポ', budget: 'APPOINTMENT_BUDGET', revised: 'APPOINTMENT_REVISED' },
-] as const;
-
-const fmtMinutes = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
-const fmtSeats = (min: number, digits: number) => (min > 0 ? (min / 60 / SEAT_HOURS).toFixed(digits) : '');
-
-function todayKeyJst(): string {
-  const j = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return j.toISOString().slice(0, 10);
-}
 
 export function AppointerSheet({
   sheet,
-  month,
   drafts,
   valueOf,
   manualOf,
@@ -34,7 +21,6 @@ export function AppointerSheet({
   setDaily,
 }: {
   sheet: PersonalStatsSheet;
-  month: string;
   drafts: Record<string, string>;
   valueOf: (date: string | null, key: PersonalDailyKey) => number;
   manualOf: (date: string, key: PersonalDailyKey) => number | undefined;
@@ -43,7 +29,6 @@ export function AppointerSheet({
 }) {
   const days = sheet.days;
   const today = todayKeyJst();
-  const thisMonth = today.slice(0, 7);
 
   const textOf = (d: string, key: PersonalDailyKey) => {
     const draft = drafts[`${d}|${key}`];
@@ -51,35 +36,11 @@ export function AppointerSheet({
     const v = manualOf(d, key);
     return v == null ? '' : String(v);
   };
-  /** その日の予算(修正予算が入っていれば優先) */
-  const planOf = (d: string, m: (typeof PLAN_METRICS)[number]) => (textOf(d, m.revised) !== '' ? valueOf(d, m.revised) : valueOf(d, m.budget));
+  const getter = { value: (d: string, key: PersonalDailyKey) => valueOf(d, key), entered: (d: string, key: PersonalDailyKey) => textOf(d, key) !== '' };
   const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
 
   // ---- 月の累計 ----
-  const workMin = sum(days, (d) => valueOf(d, 'WORK_MINUTES'));
-  const workedDays = days.filter((d) => valueOf(d, 'WORK_MINUTES') > 0).length;
-  // 残日数: 今日以降で予算が入っている日(予算が1日も無ければ今日以降の日数)。過去の月は0
-  const remainingDays = month < thisMonth ? [] : days.filter((d) => month > thisMonth || d >= today);
-  const budgetedRemaining = remainingDays.filter((d) => PLAN_METRICS.some((m) => planOf(d, m) > 0));
-  const anyBudget = days.some((d) => PLAN_METRICS.some((m) => planOf(d, m) > 0));
-  const restDays = anyBudget ? budgetedRemaining.length : remainingDays.length;
-  // 進捗: 今日までの予算(=今日時点で100%の数)に対するアポ実績
-  const daysToDate = month > thisMonth ? [] : days.filter((d) => month < thisMonth || d <= today);
-
-  const stats = PLAN_METRICS.map((m) => {
-    const actual = sum(days, (d) => valueOf(d, m.key));
-    const plan = sum(days, (d) => planOf(d, m));
-    const rest = Math.max(0, plan - actual);
-    return {
-      ...m,
-      actual,
-      plan,
-      rest,
-      perDay: restDays > 0 ? rest / restDays : null,
-      avg: workedDays > 0 ? actual / workedDays : null,
-      progress: rateOf(actual, sum(daysToDate, (d) => planOf(d, m)) || null),
-    };
-  });
+  const { workMin, workedDays, restDays, stats } = computeApSummary(days, today, getter);
   const appo = stats[1];
 
   // ---- 表 ----
@@ -94,7 +55,8 @@ export function AppointerSheet({
   // 日曜(と月末)で週を区切って小計行を入れる
   const weekEnds = new Set(days.filter((d, i) => new Date(`${d}T00:00:00`).getDay() === 0 || i === days.length - 1));
   const totalsRow = (label: string, ds: string[], key: string) => {
-    const min = sum(ds, (d) => valueOf(d, 'WORK_MINUTES'));
+    // 稼働時間は今日までの日だけ数える(先の日は予定)
+    const min = sum(ds.filter((d) => isCounted(d, today)), (d) => valueOf(d, 'WORK_MINUTES'));
     return (
       <tr key={key}>
         <td colSpan={2} style={{ ...calc, fontSize: 11 }}>{label}</td>
@@ -140,7 +102,7 @@ export function AppointerSheet({
         }}
       >
         {item('名前', sheet.user.name)}
-        {item('稼働時間', workMin > 0 ? fmtMinutes(workMin) : '—', `${workedDays}日稼働`)}
+        {item('稼働時間', workMin > 0 ? fmtMinutes(workMin) : '—', `今日まで ${workedDays}日稼働`)}
         {item('席数', workMin > 0 ? fmtSeats(workMin, 2) : '—', `稼働時間 ÷ ${SEAT_HOURS}`)}
         {stats.map((s) =>
           item(`${s.label === 'トス' ? 'トス数' : 'アポイント数'}`, s.actual, `予算 ${s.plan}`),
@@ -150,7 +112,7 @@ export function AppointerSheet({
           stats.map((s) => `${s.label} ${s.avg == null ? '—' : s.avg.toFixed(1)}`).join(' / '),
           '実績 ÷ 稼働日数',
         )}
-        {item('残日数', `${restDays}日`)}
+        {item('残日数', `${restDays}日`, '今日以降の稼働予定日')}
         {stats.map((s) =>
           item(`残${s.label}`, `${s.rest}件`, s.perDay == null ? undefined : `1日 ${s.perDay.toFixed(1)}件必要`, s.rest > 0 ? 'var(--color-danger)' : 'var(--color-success)'),
         )}
@@ -195,7 +157,18 @@ export function AppointerSheet({
                       value={textOf(d, 'WORK_MINUTES')}
                       onChange={(e) => setDaily(d, 'WORK_MINUTES', e.target.value)}
                       aria-label="稼働時間"
-                      style={{ width: '100%', height: 22, border: 'none', background: 'transparent', boxShadow: 'none', fontSize: 12, padding: '0 2px', textAlign: 'center' }}
+                      title={isCounted(d, today) ? undefined : '予定(当日になったら稼働時間に数えます)'}
+                      style={{
+                        width: '100%',
+                        height: 22,
+                        border: 'none',
+                        background: 'transparent',
+                        boxShadow: 'none',
+                        fontSize: 12,
+                        padding: '0 2px',
+                        textAlign: 'center',
+                        color: isCounted(d, today) ? 'var(--color-text)' : 'var(--color-text-faint)',
+                      }}
                     >
                       <option value="" />
                       {WORK_OPTIONS.map((o) => (
@@ -203,7 +176,7 @@ export function AppointerSheet({
                       ))}
                     </select>
                   </td>
-                  <td style={{ ...calc, fontWeight: 400 }}>{fmtSeats(min, 3)}</td>
+                  <td style={{ ...calc, fontWeight: 400, color: isCounted(d, today) ? undefined : 'var(--color-text-faint)' }}>{fmtSeats(min, 3)}</td>
                   {PLAN_METRICS.map((m) => {
                     const autoV = autoOf(d, m.key);
                     return (
