@@ -5,6 +5,7 @@ import { AppLayout } from '../../components/AppLayout';
 import { AppointerSheet } from './AppointerSheet';
 import { DepartmentSummary } from './DepartmentSummary';
 import { RoleBadge } from './parts';
+import { useIsPhone } from '../../lib/useIsPhone';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth } from '../../lib/usePeriodMonth';
 import { api, ApiError } from '../../lib/api';
@@ -21,6 +22,7 @@ const SAVE_DELAY_MS = 500;
 const SUMMARY_TAB = 'summary';
 
 export function PersonalStatsPage() {
+  const isPhone = useIsPhone();
   const [month] = usePeriodMonth();
   const { data: me } = useMe();
   const { data: users = [], isLoading: usersLoading } = usePersonalStatsUsers();
@@ -207,7 +209,8 @@ export function PersonalStatsPage() {
           <div
             style={{
               position: 'sticky',
-              bottom: 0,
+              // 携帯は画面下のメニューの上に常に出す
+              bottom: isPhone ? 'calc(64px + env(safe-area-inset-bottom))' : 0,
               display: 'flex',
               gap: 2,
               overflowX: 'auto',

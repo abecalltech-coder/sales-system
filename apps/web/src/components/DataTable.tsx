@@ -70,6 +70,10 @@ interface DataTableProps<T> {
   footerRow?: ReactNode;
   /** 先頭列を横スクロール時に固定する(要望: 案件管理のみ) */
   freezeFirstColumn?: boolean;
+  /** 表の中ではスクロールせず、画面(ページ)のスクロールで最後の行・合計まで見えるようにする。全行を描画する(個人別数値) */
+  pageScroll?: boolean;
+  /** 左端の行番号の列を出さない(個人別数値の携帯) */
+  hideRowNumbers?: boolean;
   /** 右クリックメニューからセルごとの文字色・太字を設定できるようにする(全員共有・tableKey 必須) */
   cellTextColor?: boolean;
   /** 指定すると携帯では1件2行のコンパクト表示にする(要望)。「表で見る」で従来の表にも切り替えられる */
@@ -580,6 +584,8 @@ function DataTableGrid<T>({
   extraRowMenuItems,
   footerRow,
   freezeFirstColumn = false,
+  pageScroll = false,
+  hideRowNumbers = false,
   cellTextColor = false,
 }: DataTableProps<T>) {
   const cellStyles = useCellStyles(cellTextColor && tableKey ? tableKey : '');
@@ -713,9 +719,10 @@ function DataTableGrid<T>({
     });
   };
 
-  const rowWindowStart = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
+  // pageScroll のときは表の中をスクロールしないので、全行を描画する
+  const rowWindowStart = pageScroll ? 0 : Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
   const rowWindowCount = Math.ceil(viewportHeight / ROW_HEIGHT) + ROW_OVERSCAN * 2;
-  const rowWindowEnd = Math.min(rows2.length, rowWindowStart + rowWindowCount);
+  const rowWindowEnd = pageScroll ? rows2.length : Math.min(rows2.length, rowWindowStart + rowWindowCount);
 
   // 矢印キー/Tab等で選択セルが描画範囲の外へ移動したら、その行が見えるようスクロールを合わせる
   // (仮想化により範囲外の行はそもそもDOMに存在しないため、選択だけ移動して見えなくなるのを防ぐ)
@@ -1389,13 +1396,14 @@ function DataTableGrid<T>({
   return (
     <div
       onPaste={onContainerPaste}
+      className={hideRowNumbers ? 'dt-no-gutter' : undefined}
       style={{
         position: 'relative',
         background: 'var(--color-surface)',
         border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
         boxShadow: 'var(--shadow-sm)',
-        overflow: 'hidden',
+        overflow: pageScroll ? 'visible' : 'hidden',
       }}
     >
       {hiddenCount > 0 && (
@@ -1638,7 +1646,7 @@ function DataTableGrid<T>({
         tabIndex={0}
         onKeyDown={onGridKeyDown}
         onScroll={onGridScroll}
-        style={{ overflow: 'auto', maxHeight: 'calc(100vh - 230px)', outline: 'none' }}
+        style={pageScroll ? { overflow: 'visible', outline: 'none' } : { overflow: 'auto', maxHeight: 'calc(100vh - 230px)', outline: 'none' }}
       >
         <table className="data-table" style={{ fontSize, tableLayout: 'fixed', width: tableWidth }}>
           <colgroup>

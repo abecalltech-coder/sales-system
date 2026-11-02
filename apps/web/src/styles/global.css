@@ -581,3 +581,10 @@ main button {
 .data-table tbody td textarea:focus {
   color: var(--color-text);
 }
+
+/* 行番号の列を出さない表(個人別数値の携帯) */
+.dt-no-gutter .data-table > colgroup > col:first-child,
+.dt-no-gutter .data-table thead th:first-child,
+.dt-no-gutter .data-table tbody tr > td:first-child {
+  display: none;
+}

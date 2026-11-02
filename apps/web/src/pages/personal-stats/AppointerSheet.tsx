@@ -282,6 +282,8 @@ export function AppointerSheet({
       getRowId={(r) => r.id}
       rowStyle={rowStyle}
       fontSize={12}
+      pageScroll
+      hideRowNumbers={isPhone}
     />
   );
 
