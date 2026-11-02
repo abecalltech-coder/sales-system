@@ -524,6 +524,9 @@ export function useMonthlySummary(period: string, departmentId: string | undefin
 // 個人別数値(シフトの置き換え)
 // ============================================================
 export type PersonalMetricKey = 'TOSS_UP' | 'APPOINTMENT' | 'MEETING' | 'JUSETSU_OK' | 'ET';
+/** アポインターのシートの予算・稼働時間(分) */
+export type PersonalPlanKey = 'TOSS_UP_BUDGET' | 'TOSS_UP_REVISED' | 'APPOINTMENT_BUDGET' | 'APPOINTMENT_REVISED' | 'WORK_MINUTES';
+export type PersonalDailyKey = PersonalMetricKey | PersonalPlanKey;
 
 export interface PersonalStatTarget {
   weeklyStory: number | null;
@@ -537,17 +540,19 @@ export interface PersonalStatsSheet {
   days: string[];
   metrics: { key: PersonalMetricKey; label: string }[];
   /** 手入力した値(日付→項目) */
-  values: Record<string, Partial<Record<PersonalMetricKey, { value: number; version: number }>>>;
+  values: Record<string, Partial<Record<PersonalDailyKey, { value: number; version: number }>>>;
   /** システム上の実績から出した値(手入力が無い日に使う) */
   auto: Record<string, Partial<Record<PersonalMetricKey, number>>>;
   targets: Partial<Record<PersonalMetricKey, PersonalStatTarget>>;
   canEditTargets: boolean;
+  /** アポインター用の日別シート(予算・稼働時間)で表示する */
+  isAppointer: boolean;
 }
 
 export function usePersonalStatsUsers() {
   return useQuery({
     queryKey: ['personal-stats', 'users'],
-    queryFn: () => api.get<{ id: string; name: string; departmentId: string | null; departmentName: string | null }[]>('/personal-stats/users'),
+    queryFn: () => api.get<{ id: string; name: string; departmentId: string | null; departmentName: string | null; isAppointer: boolean }[]>('/personal-stats/users'),
     staleTime: 60_000,
   });
 }

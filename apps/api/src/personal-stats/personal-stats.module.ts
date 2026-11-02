@@ -34,6 +34,14 @@ export const METRICS = [
   { key: 'ET', label: 'ET数' },
 ] as const;
 const METRIC_KEYS = METRICS.map((m) => m.key) as string[];
+/**
+ * アポインターのシートだけで使う日別の値(要望): トス・アポの月初予算/修正予算、稼働時間(分。1〜8hを15分刻み)。
+ * 実績と同じ PersonalDailyStat に入れる。
+ */
+const PLAN_KEYS = ['TOSS_UP_BUDGET', 'TOSS_UP_REVISED', 'APPOINTMENT_BUDGET', 'APPOINTMENT_REVISED', 'WORK_MINUTES'];
+const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
+/** アポインター(トス・アポを予算管理する人)の役職 */
+const APPOINTER_ROLES = ['AP', 'AP_LEADER', 'INSIDE_SALES'];
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 /** 人員シートのタブに並べる営業系の役職 */
@@ -71,7 +79,7 @@ class GetSheetQuery {
 class SaveDailyDto {
   @IsString() userId!: string;
   @Matches(DATE_RE) date!: string;
-  @IsIn(METRIC_KEYS) metricKey!: string;
+  @IsIn(DAILY_KEYS) metricKey!: string;
   /** null で手入力を消す(システム実績の自動値に戻る) */
   @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) value!: number | null;
   /** 読んだときの version。まだ行が無ければ null */
@@ -111,11 +119,22 @@ class PersonalStatsService {
     const users = await this.prisma.user.findMany({
       where,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, department: { select: { id: true, name: true, order: true } } },
+      select: {
+        id: true,
+        name: true,
+        department: { select: { id: true, name: true, order: true } },
+        roles: { select: { role: { select: { code: true } } } },
+      },
     });
     return users
       .sort((a, b) => (a.department?.order ?? Number.MAX_SAFE_INTEGER) - (b.department?.order ?? Number.MAX_SAFE_INTEGER))
-      .map((u) => ({ id: u.id, name: u.name, departmentId: u.department?.id ?? null, departmentName: u.department?.name ?? null }));
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        departmentId: u.department?.id ?? null,
+        departmentName: u.department?.name ?? null,
+        isAppointer: u.roles.some((r) => APPOINTER_ROLES.includes(r.role.code)),
+      }));
   }
 
   /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
@@ -152,6 +171,7 @@ class PersonalStatsService {
       month,
       days,
       metrics: METRICS,
+      isAppointer: target.roles.some((r) => APPOINTER_ROLES.includes(r.role.code)),
       values,
       auto,
       targets: Object.fromEntries(
@@ -243,6 +263,9 @@ class PersonalStatsService {
   /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
     await this.assertAccess(viewer, dto.userId);
+    if (dto.metricKey === 'WORK_MINUTES' && dto.value != null && (dto.value < 60 || dto.value > 480 || dto.value % 15 !== 0)) {
+      throw new BadRequestException('稼働時間は1〜8時間を15分刻みで選んでください');
+    }
     const key = { userId: dto.userId, date: dto.date, metricKey: dto.metricKey };
     let row: { value: number; version: number } | null = null;
 

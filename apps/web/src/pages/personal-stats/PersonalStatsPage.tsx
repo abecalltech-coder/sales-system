@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
+import { AppointerSheet } from './AppointerSheet';
+import { NumberCell, fmtRate, rateColor, rateOf } from './parts';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth } from '../../lib/usePeriodMonth';
 import { api, ApiError } from '../../lib/api';
 import {
+  PersonalDailyKey,
   PersonalMetricKey,
   PersonalStatTarget,
   PersonalStatsSheet,
@@ -47,52 +50,6 @@ function weeksOf(month: string): (string | null)[][] {
     weeks.push(week);
   }
   return weeks;
-}
-
-const rateOf = (actual: number, goal: number | null) => (goal && goal > 0 ? actual / goal : null);
-const rateColor = (r: number | null) =>
-  r == null ? 'var(--color-text-faint)' : r >= 1 ? 'var(--color-success)' : r < 0.7 ? 'var(--color-danger)' : 'var(--color-text)';
-const fmtRate = (r: number | null) => (r == null ? '—' : `${Math.round(r * 100)}%`);
-
-/** 0以上の整数だけ受け付ける入力欄。空欄は「手入力なし」 */
-function NumberCell({
-  value,
-  placeholder,
-  onChange,
-  disabled,
-  title,
-  width = '100%',
-}: {
-  value: string;
-  placeholder?: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-  title?: string;
-  width?: number | string;
-}) {
-  return (
-    <input
-      inputMode="numeric"
-      value={value}
-      placeholder={placeholder}
-      disabled={disabled}
-      title={title}
-      onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, '').replace(/^0+(?=\d)/, '').slice(0, 6))}
-      onFocus={(e) => e.target.select()}
-      style={{
-        width,
-        height: 22,
-        border: 'none',
-        borderRadius: 0,
-        background: 'transparent',
-        boxShadow: 'none',
-        padding: '0 2px',
-        textAlign: 'center',
-        fontSize: 12,
-        color: 'var(--color-text)',
-      }}
-    />
-  );
 }
 
 export function PersonalStatsPage() {
@@ -172,7 +129,7 @@ export function PersonalStatsPage() {
     timers.current[key] = window.setTimeout(() => enqueue(key, run), SAVE_DELAY_MS);
   };
 
-  const setDaily = (date: string, metric: PersonalMetricKey, typed: string) => {
+  const setDaily = (date: string, metric: PersonalDailyKey, typed: string) => {
     const key = `${date}|${metric}`;
     setDrafts((d) => ({ ...d, [key]: typed }));
     const userId = selectedId!;
@@ -237,9 +194,9 @@ export function PersonalStatsPage() {
   const weeks = useMemo(() => weeksOf(month), [month]);
 
   // ---- 値の取り出し(入力中 > 手入力 > システム実績) ----
-  const manualOf = (date: string, m: PersonalMetricKey) => sheet?.values[date]?.[m]?.value;
-  const autoOf = (date: string, m: PersonalMetricKey) => sheet?.auto[date]?.[m];
-  const valueOf = (date: string | null, m: PersonalMetricKey): number => {
+  const manualOf = (date: string, m: PersonalDailyKey) => sheet?.values[date]?.[m]?.value;
+  const autoOf = (date: string, m: PersonalDailyKey) => sheet?.auto[date]?.[m as PersonalMetricKey];
+  const valueOf = (date: string | null, m: PersonalDailyKey): number => {
     if (!date) return 0;
     const d = drafts[`${date}|${m}`];
     if (d !== undefined) return d === '' ? autoOf(date, m) ?? 0 : Number(d);
@@ -311,6 +268,16 @@ export function PersonalStatsPage() {
             <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>読み込み中...</p>
           ) : !selectedId ? (
             <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>表示できる人員がいません(営業系の役職の有効なユーザーが対象です)</p>
+          ) : sheet?.isAppointer ? (
+            <AppointerSheet
+              sheet={sheet}
+              month={month}
+              drafts={drafts}
+              valueOf={valueOf}
+              manualOf={manualOf}
+              autoOf={autoOf}
+              setDaily={setDaily}
+            />
           ) : sheet ? (
             <>
               {/* 月間サマリー */}
