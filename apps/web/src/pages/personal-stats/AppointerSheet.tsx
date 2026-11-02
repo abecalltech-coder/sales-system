@@ -4,6 +4,7 @@ import { Column, DataTable } from '../../components/DataTable';
 import { InlineNumber } from '../../components/InlineEdit';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { fmtRate, rateColor } from './parts';
+import { CumulativeChart } from './charts';
 import { PLAN_METRICS, PlanMetric, computeApSummary, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
@@ -285,11 +286,13 @@ export function AppointerSheet({
   );
 
   const panel = <SummaryPanel summary={summary} compact={isPhone} />;
+  const chartOf = (m: PlanMetric) => <CumulativeChart key={m.key} days={days} today={today} getter={getter} metric={m} />;
 
   if (isPhone) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {panel}
+        {chartOf(PLAN_METRICS.find((m) => m.key === phoneMetric)!)}
         <div style={{ display: 'flex', gap: 4 }}>
           {PLAN_METRICS.map((m) => {
             const on = phoneMetric === m.key;
@@ -322,7 +325,10 @@ export function AppointerSheet({
   return (
     <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
       <div style={{ flex: '0 1 auto', minWidth: 0 }}>{table}</div>
-      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 8 }}>{panel}</div>
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {panel}
+        {PLAN_METRICS.map(chartOf)}
+      </div>
     </div>
   );
 }

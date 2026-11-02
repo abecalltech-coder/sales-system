@@ -1,6 +1,7 @@
 import { PersonalDailyKey, PersonalMetricKey, usePersonalStatsDepartment } from '../../hooks/useApi';
 import { useIsPhone } from '../../lib/useIsPhone';
-import { computeApSummary, fmtMinutes, fmtSeats, todayKeyJst } from './apStats';
+import { MemberBars } from './charts';
+import { PLAN_METRICS, computeApSummary, fmtMinutes, fmtSeats, todayKeyJst } from './apStats';
 import { RoleBadge, fmtRate, rateColor, rateOf } from './parts';
 
 /**
@@ -34,6 +35,14 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
       progress: rateOf(actual, planToDate || null),
     };
   });
+
+  const charts = (
+    <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(2, minmax(0, 420px))', gap: 8 }}>
+      {PLAN_METRICS.map((m, i) => (
+        <MemberBars key={m.key} metric={m} onOpen={onOpen} rows={rows.map((r) => ({ id: r.user.id, name: r.user.name, actual: r.stats[i].actual, plan: r.stats[i].plan }))} />
+      ))}
+    </div>
+  );
 
   const avg = (v: number | null) => (v == null ? '—' : v.toFixed(1));
   const restColor = (n: number) => (n > 0 ? 'var(--color-danger)' : 'var(--color-success)');
@@ -83,6 +92,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
           {totalCard(0)}
           {totalCard(1)}
         </div>
+        {charts}
         {rows.map((r) => {
           const [toss, appo] = r.stats;
           return (
@@ -131,6 +141,8 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
   const appoTd = (v: React.ReactNode, extra?: React.CSSProperties) => <td style={{ ...td, background: 'var(--color-appo-soft)', ...extra }}>{v}</td>;
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    {charts}
     <div style={{ overflowX: 'auto', border, borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', width: 'fit-content', maxWidth: '100%' }}>
       <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead>
@@ -195,6 +207,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
           </tr>
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
