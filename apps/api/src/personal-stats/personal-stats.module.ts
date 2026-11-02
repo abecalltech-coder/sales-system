@@ -44,6 +44,9 @@ const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
 const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
 const APPOINTER_ROLES = SALES_ROLES;
+/** 名前の横に出す役職名(APリーダーを優先) */
+const roleLabelOf = (roles: { role: { code: string; name: string } }[]) =>
+  (roles.find((r) => r.role.code === 'AP_LEADER') ?? roles.find((r) => r.role.code === 'AP'))?.role.name ?? '';
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 const SCOPE_RANK: Record<string, number> = { OWN: 0, TEAM: 1, DEPT: 2, ALL: 3 };
@@ -131,7 +134,7 @@ class PersonalStatsService {
         id: true,
         name: true,
         department: { select: { id: true, name: true, order: true } },
-        roles: { select: { role: { select: { code: true } } } },
+        roles: { select: { role: { select: { code: true, name: true } } } },
       },
     });
     return users
@@ -142,6 +145,7 @@ class PersonalStatsService {
         departmentId: u.department?.id ?? null,
         departmentName: u.department?.name ?? null,
         isAppointer: u.roles.some((r) => APPOINTER_ROLES.includes(r.role.code)),
+        roleLabel: roleLabelOf(u.roles),
       }));
   }
 
@@ -165,7 +169,7 @@ class PersonalStatsService {
         const values: Record<string, Record<string, { value: number; version: number }>> = {};
         for (const r of rows) if (r.userId === m.id) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
         const target = { id: m.id, name: m.name, roles: roles.filter((r) => r.userId === m.id).map((r) => ({ role: r.role })) };
-        return { user: { id: m.id, name: m.name }, values, auto: this.computeAuto(target, src) };
+        return { user: { id: m.id, name: m.name }, roleLabel: m.roleLabel, values, auto: this.computeAuto(target, src) };
       }),
     };
   }
@@ -174,7 +178,7 @@ class PersonalStatsService {
   private async assertAccess(viewer: AuthenticatedUser, userId: string) {
     const target = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
-      select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true } } } } },
+      select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true, name: true } } } } },
     });
     if (!target) throw new NotFoundException('ユーザーが見つかりません');
     const scope = scopeOf(viewer);
@@ -205,6 +209,7 @@ class PersonalStatsService {
       days,
       metrics: METRICS,
       isAppointer: target.roles.some((r) => APPOINTER_ROLES.includes(r.role.code)),
+      roleLabel: roleLabelOf(target.roles),
       values,
       auto,
       targets: Object.fromEntries(

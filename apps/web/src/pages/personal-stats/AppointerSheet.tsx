@@ -1,16 +1,60 @@
-import { Fragment } from 'react';
+import { useState } from 'react';
 import { PersonalDailyKey, PersonalStatsSheet } from '../../hooks/useApi';
-import { NumberCell, fmtRate, rateColor } from './parts';
-import { PLAN_METRICS, SEAT_HOURS, computeApSummary, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
+import { Column, DataTable } from '../../components/DataTable';
+import { InlineNumber } from '../../components/InlineEdit';
+import { useIsPhone } from '../../lib/useIsPhone';
+import { fmtRate, rateColor } from './parts';
+import { PLAN_METRICS, PlanMetric, computeApSummary, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
- * トス・アポの「月初予算 / 実績 / 修正予算」を並べる。上に月の累計(残日数・残件数・進捗)を出す。
- * 予算は日ごとに「修正予算が入っていればそちらを優先」して残件数・進捗を計算する。
+ * トス(青)・アポ(オレンジ)の「月初予算 / 実績 / 修正予算」を並べる。セル操作は案件管理と同じ DataTable
+ * (矢印・Tab・Enter、範囲選択、コピー・貼り付け)。PC は表の右に累計、携帯は上に累計を出してトス/アポを切り替える。
  */
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 const WORK_OPTIONS = Array.from({ length: (480 - 60) / 15 + 1 }, (_, i) => 60 + i * 15);
+
+type SheetRow = { id: string; kind: 'day' | 'week' | 'total'; label: string; date?: string; days: string[] };
+
+/** 稼働時間の貼り付け: "8:00" / "7:30" / "7.5" / "8" → 分(15分単位、1〜8h)。読めなければ undefined */
+function parseWorkMinutes(text: string): number | null | undefined {
+  const t = text.trim();
+  if (t === '') return null;
+  const hm = t.match(/^(\d{1,2}):(\d{2})$/);
+  const min = hm ? Number(hm[1]) * 60 + Number(hm[2]) : Number(t) * 60;
+  if (!Number.isFinite(min)) return undefined;
+  const r = Math.round(min / 15) * 15;
+  return r >= 60 && r <= 480 ? r : undefined;
+}
+
+/** 回数の貼り付け・入力: 0以上の整数だけ。空は手入力を消す。読めなければ undefined */
+function parseCount(text: string): number | null | undefined {
+  const t = text.trim().replace(/,/g, '');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined;
+}
+
+/**
+ * 入力欄を色付きの枠で包むと、DataTable の Enter(セルのクリックと同じ動き)が内側の入力欄まで届かないため、
+ * 枠自体へのクリックを中の入力欄へ渡す
+ */
+function ForwardClick({ style, children }: { style: React.CSSProperties; children: React.ReactNode }) {
+  return (
+    <div
+      style={style}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) (e.currentTarget.firstElementChild as HTMLElement | null)?.click();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const dowOf = (d: string) => new Date(`${d}T00:00:00`).getDay();
+const mdOf = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
 export function AppointerSheet({
   sheet,
@@ -27,6 +71,8 @@ export function AppointerSheet({
   autoOf: (date: string, key: PersonalDailyKey) => number | undefined;
   setDaily: (date: string, key: PersonalDailyKey, typed: string) => void;
 }) {
+  const isPhone = useIsPhone();
+  const [phoneMetric, setPhoneMetric] = useState<PlanMetric['key']>('TOSS_UP');
   const days = sheet.days;
   const today = todayKeyJst();
 
@@ -36,180 +82,319 @@ export function AppointerSheet({
     const v = manualOf(d, key);
     return v == null ? '' : String(v);
   };
+  const numOf = (d: string, key: PersonalDailyKey) => {
+    const t = textOf(d, key);
+    return t === '' ? null : Number(t);
+  };
   const getter = { value: (d: string, key: PersonalDailyKey) => valueOf(d, key), entered: (d: string, key: PersonalDailyKey) => textOf(d, key) !== '' };
   const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
+  const summary = computeApSummary(days, today, getter);
 
-  // ---- 月の累計 ----
-  const { workMin, workedDays, restDays, stats } = computeApSummary(days, today, getter);
-  const appo = stats[1];
-
-  // ---- 表 ----
-  const border = '1px solid var(--color-border)';
-  const th: React.CSSProperties = { fontSize: 10, fontWeight: 700, padding: '2px 4px', borderRight: border, borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', top: 0, zIndex: 1 };
-  const td: React.CSSProperties = { borderRight: border, borderBottom: border, padding: 0, height: 24, textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' };
-  const blue: React.CSSProperties = { ...th, background: 'var(--color-primary-soft)', color: 'var(--color-primary)' };
-  const green: React.CSSProperties = { ...th, background: 'var(--color-success-soft)', color: 'var(--color-success)' };
-  const plain: React.CSSProperties = { ...th, background: 'var(--color-subtle)' };
-  const calc: React.CSSProperties = { ...td, background: 'var(--color-highlight-soft)', fontWeight: 600 };
-
-  // 日曜(と月末)で週を区切って小計行を入れる
-  const weekEnds = new Set(days.filter((d, i) => new Date(`${d}T00:00:00`).getDay() === 0 || i === days.length - 1));
-  const totalsRow = (label: string, ds: string[], key: string) => {
-    // 稼働時間は今日までの日だけ数える(先の日は予定)
-    const min = sum(ds.filter((d) => isCounted(d, today)), (d) => valueOf(d, 'WORK_MINUTES'));
-    return (
-      <tr key={key}>
-        <td colSpan={2} style={{ ...calc, fontSize: 11 }}>{label}</td>
-        <td style={calc}>{min > 0 ? fmtMinutes(min) : ''}</td>
-        <td style={calc}>{fmtSeats(min, 2)}</td>
-        {PLAN_METRICS.map((m) => {
-          const revisedEntered = ds.some((d) => textOf(d, m.revised) !== '');
-          return (
-            <Fragment key={m.key}>
-              <td style={calc}>{sum(ds, (d) => valueOf(d, m.budget))}</td>
-              <td style={{ ...calc, color: 'var(--color-primary)' }}>{sum(ds, (d) => valueOf(d, m.key))}</td>
-              <td style={calc}>{revisedEntered ? sum(ds, (d) => valueOf(d, m.revised)) : ''}</td>
-            </Fragment>
-          );
-        })}
-      </tr>
-    );
+  const save = (d: string, key: PersonalDailyKey, v: number | null | undefined) => {
+    if (v === undefined) return; // 読めない値は無視
+    setDaily(d, key, v == null ? '' : String(v));
   };
 
-  const item = (label: string, value: React.ReactNode, sub?: React.ReactNode, color?: string) => (
-    <div style={{ minWidth: 72 }}>
-      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color }}>{value}</div>
-      {sub != null && <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{sub}</div>}
-    </div>
+  // ---- 行: 日ごと + 日曜(と月末)で週計 + 月合計 ----
+  const rows: SheetRow[] = [];
+  let weekStart = 0;
+  days.forEach((d, i) => {
+    rows.push({ id: d, kind: 'day', label: d, date: d, days: [d] });
+    if (dowOf(d) === 0 || i === days.length - 1) {
+      rows.push({ id: `w-${d}`, kind: 'week', label: '週計', days: days.slice(weekStart, i + 1) });
+      weekStart = i + 1;
+    }
+  });
+  rows.push({ id: 'total', kind: 'total', label: '月合計', days });
+
+  // 稼働時間は今日までの日だけ数える(先の日は予定)
+  const workSum = (r: SheetRow) => sum(r.days.filter((d) => isCounted(d, today)), (d) => valueOf(d, 'WORK_MINUTES'));
+  const faint = (d: string) => (isCounted(d, today) ? undefined : 'var(--color-text-faint)');
+  // セルの余白(DataTable 側の padding)まで塗る
+  const fill = (bg: string): React.CSSProperties => ({ margin: '-3px -8px', padding: '3px 8px', background: bg });
+
+  const dateCol: Column<SheetRow> = {
+    key: 'date',
+    label: '日付',
+    width: isPhone ? 64 : 56,
+    locked: true,
+    render: (r) => {
+      if (r.kind !== 'day') return <b style={{ fontSize: 11 }}>{r.label}</b>;
+      const dow = dowOf(r.date!);
+      return (
+        <span style={{ fontWeight: 600 }}>
+          {mdOf(r.date!)}
+          {isPhone && (
+            <span style={{ marginLeft: 3, fontSize: 10, fontWeight: 400, color: dow === 0 || dow === 6 ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>
+              {WEEKDAYS[dow]}
+            </span>
+          )}
+        </span>
+      );
+    },
+    copyValue: (r) => (r.kind === 'day' ? mdOf(r.date!) : r.label),
+  };
+  const dowCol: Column<SheetRow> = {
+    key: 'dow',
+    label: '曜',
+    width: 36,
+    locked: true,
+    render: (r) => {
+      if (r.kind !== 'day') return null;
+      const dow = dowOf(r.date!);
+      return <span style={{ color: dow === 0 || dow === 6 ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>{WEEKDAYS[dow]}</span>;
+    },
+    copyValue: (r) => (r.kind === 'day' ? WEEKDAYS[dowOf(r.date!)] : ''),
+  };
+  const workCol: Column<SheetRow> = {
+    key: 'work',
+    label: '稼働時間',
+    width: isPhone ? 70 : 72,
+    locked: true,
+    render: (r) => {
+      if (r.kind !== 'day') {
+        const m = workSum(r);
+        return <b>{m > 0 ? fmtMinutes(m) : ''}</b>;
+      }
+      const d = r.date!;
+      const min = valueOf(d, 'WORK_MINUTES');
+      return (
+        <div style={{ lineHeight: 1.15 }} title={isCounted(d, today) ? undefined : '予定(当日になったら稼働時間に数えます)'}>
+          <select
+            value={textOf(d, 'WORK_MINUTES')}
+            onChange={(e) => setDaily(d, 'WORK_MINUTES', e.target.value)}
+            aria-label="稼働時間"
+            style={{ width: '100%', border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: 12, height: 18, color: faint(d) ?? 'var(--color-text)' }}
+          >
+            <option value="" />
+            {WORK_OPTIONS.map((o) => (
+              <option key={o} value={o}>
+                {fmtMinutes(o)}
+              </option>
+            ))}
+          </select>
+          {isPhone && min > 0 && <div style={{ fontSize: 9, color: faint(d) ?? 'var(--color-text-muted)' }}>席 {fmtSeats(min, 3)}</div>}
+        </div>
+      );
+    },
+    copyValue: (r) => {
+      if (r.kind !== 'day') return '';
+      const m = valueOf(r.date!, 'WORK_MINUTES');
+      return m > 0 ? fmtMinutes(m) : '';
+    },
+    pasteValue: (r, text) => {
+      if (r.kind === 'day') save(r.date!, 'WORK_MINUTES', parseWorkMinutes(text));
+    },
+  };
+  const seatCol: Column<SheetRow> = {
+    key: 'seats',
+    label: '席数',
+    width: 58,
+    locked: true,
+    render: (r) => {
+      const m = r.kind === 'day' ? valueOf(r.date!, 'WORK_MINUTES') : workSum(r);
+      return (
+        <div
+          style={{
+            ...fill('var(--color-highlight-soft)'),
+            textAlign: 'right',
+            fontWeight: r.kind === 'day' ? 400 : 700,
+            color: r.kind === 'day' ? faint(r.date!) : undefined,
+          }}
+        >
+          {fmtSeats(m, r.kind === 'day' ? 3 : 2) || ' '}
+        </div>
+      );
+    },
+    copyValue: (r) => fmtSeats(r.kind === 'day' ? valueOf(r.date!, 'WORK_MINUTES') : workSum(r), r.kind === 'day' ? 3 : 2),
+  };
+
+  const metricCols = (m: PlanMetric): Column<SheetRow>[] => {
+    const toss = m.key === 'TOSS_UP';
+    const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
+    const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
+    const numberCol = (key: PersonalDailyKey, label: string, actual?: boolean): Column<SheetRow> => ({
+      key,
+      label: `${m.label}${label}`,
+      width: isPhone ? 66 : 64,
+      locked: true,
+      renderHeader: () => (
+        <span style={{ color, fontWeight: actual ? 800 : 700 }}>
+          {!isPhone && <span style={{ background: color, color: 'var(--color-surface)', borderRadius: 3, padding: '0 3px', marginRight: 3 }}>{m.label}</span>}
+          {label}
+        </span>
+      ),
+      render: (r) => {
+        if (r.kind !== 'day') {
+          // 修正予算は入っている日があるときだけ合計を出す
+          const shown = key !== m.revised || r.days.some((d) => textOf(d, key) !== '');
+          return (
+            <div style={{ ...fill(actual ? soft : 'transparent'), textAlign: 'right', fontWeight: 700, color: actual ? color : undefined }}>
+              {shown ? sum(r.days, (d) => valueOf(d, key)) : ' '}
+            </div>
+          );
+        }
+        const d = r.date!;
+        const autoV = actual ? autoOf(d, key) : undefined;
+        const cell = (
+          <InlineNumber
+            value={numOf(d, key)}
+            placeholder={autoV ? String(autoV) : undefined}
+            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
+            onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
+          />
+        );
+        return (
+          <ForwardClick style={actual ? { ...fill(soft), color, fontWeight: 700 } : { color: 'var(--color-text-muted)' }}>{cell}</ForwardClick>
+        );
+      },
+      copyValue: (r) => {
+        if (r.kind !== 'day') return '';
+        return actual ? String(valueOf(r.date!, key) || '') : textOf(r.date!, key);
+      },
+      pasteValue: (r, text) => {
+        if (r.kind === 'day') save(r.date!, key, parseCount(text));
+      },
+    });
+    return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '修正予算')];
+  };
+
+  const columns: Column<SheetRow>[] = isPhone
+    ? [dateCol, workCol, ...metricCols(PLAN_METRICS.find((m) => m.key === phoneMetric)!)]
+    : [dateCol, dowCol, workCol, seatCol, ...PLAN_METRICS.flatMap(metricCols)];
+
+  const rowStyle = (r: SheetRow): React.CSSProperties | undefined => {
+    if (r.kind !== 'day') return { background: 'var(--color-highlight-soft)' };
+    if (r.date === today) return { background: 'var(--color-primary-soft)' };
+    const dow = dowOf(r.date!);
+    return dow === 0 || dow === 6 ? { background: 'var(--color-sunken)' } : undefined;
+  };
+
+  const table = (
+    <DataTable
+      columns={columns}
+      rows={rows}
+      total={rows.length}
+      page={1}
+      pageSize={rows.length}
+      onPageChange={() => undefined}
+      getRowId={(r) => r.id}
+      rowStyle={rowStyle}
+      fontSize={12}
+    />
   );
 
-  let weekStart = 0;
+  const panel = <SummaryPanel summary={summary} compact={isPhone} />;
+
+  if (isPhone) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {panel}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {PLAN_METRICS.map((m) => {
+            const on = phoneMetric === m.key;
+            const color = m.key === 'TOSS_UP' ? 'var(--color-primary)' : 'var(--color-appo)';
+            return (
+              <button
+                key={m.key}
+                onClick={() => setPhoneMetric(m.key)}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  border: `1px solid ${on ? color : 'var(--color-border-strong)'}`,
+                  background: on ? color : 'var(--color-surface)',
+                  color: on ? 'var(--color-surface)' : 'var(--color-text-muted)',
+                  boxShadow: 'none',
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        {table}
+      </div>
+    );
+  }
   return (
-    <>
-      {/* 累計 */}
+    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+      <div style={{ flex: '0 1 auto', minWidth: 0 }}>{table}</div>
+      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 8 }}>{panel}</div>
+    </div>
+  );
+}
+
+/** 累計(PC は表の右、携帯は上)。トスは青、アポはオレンジで分ける */
+function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof computeApSummary>; compact: boolean }) {
+  const { workMin, workedDays, restDays, stats } = summary;
+  const appo = stats[1];
+  const kpi = (label: string, value: React.ReactNode, color?: string) => (
+    <div>
+      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: compact ? 14 : 17, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 6 : 8 }}>
       <div
         style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'flex-start',
-          gap: '8px 18px',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${compact ? 4 : 2}, minmax(0, 1fr))`,
+          gap: compact ? 4 : '6px 10px',
           background: 'var(--color-surface)',
-          border,
+          border: '1px solid var(--color-border)',
           borderRadius: 'var(--radius-md)',
-          padding: '8px 12px',
-          marginBottom: 10,
+          padding: compact ? '6px 8px' : '8px 10px',
+          textAlign: compact ? 'center' : undefined,
         }}
       >
-        {item('名前', sheet.user.name)}
-        {item('稼働時間', workMin > 0 ? fmtMinutes(workMin) : '—', `今日まで ${workedDays}日稼働`)}
-        {item('席数', workMin > 0 ? fmtSeats(workMin, 2) : '—', `稼働時間 ÷ ${SEAT_HOURS}`)}
-        {stats.map((s) =>
-          item(`${s.label === 'トス' ? 'トス数' : 'アポイント数'}`, s.actual, `予算 ${s.plan}`),
-        )}
-        {item(
-          '平均値(1日)',
-          stats.map((s) => `${s.label} ${s.avg == null ? '—' : s.avg.toFixed(1)}`).join(' / '),
-          '実績 ÷ 稼働日数',
-        )}
-        {item('残日数', `${restDays}日`, '今日以降の稼働予定日')}
-        {stats.map((s) =>
-          item(`残${s.label}`, `${s.rest}件`, s.perDay == null ? undefined : `1日 ${s.perDay.toFixed(1)}件必要`, s.rest > 0 ? 'var(--color-danger)' : 'var(--color-success)'),
-        )}
-        {item('進捗(アポ)', fmtRate(appo.progress), '今日までの予算に対する実績', rateColor(appo.progress))}
+        {kpi(compact ? '稼働時間' : `稼働時間(今日まで ${workedDays}日)`, workMin > 0 ? fmtMinutes(workMin) : '—')}
+        {kpi('席数', workMin > 0 ? fmtSeats(workMin, 2) : '—')}
+        {kpi('残日数', `${restDays}日`)}
+        {kpi('進捗(アポ)', fmtRate(appo.progress), rateColor(appo.progress))}
       </div>
-
-      {/* 日別 */}
-      <div style={{ overflow: 'auto', border, borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', maxHeight: 'calc(var(--viewport-height) - 260px)' }}>
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: 640 }}>
-          <thead>
-            <tr>
-              <th rowSpan={2} style={{ ...plain, minWidth: 44 }}>日付</th>
-              <th rowSpan={2} style={plain}>曜日</th>
-              <th rowSpan={2} style={{ ...plain, minWidth: 64 }}>稼働時間</th>
-              <th rowSpan={2} style={{ ...plain, minWidth: 48 }}>席数</th>
-              {PLAN_METRICS.map((m) => (
-                <th key={m.key} colSpan={3} style={{ ...plain, fontSize: 11 }}>{m.label}</th>
-              ))}
-            </tr>
-            <tr>
-              {PLAN_METRICS.map((m) => (
-                <Fragment key={m.key}>
-                  <th style={{ ...green, top: 19 }}>月初予算</th>
-                  <th style={{ ...blue, top: 19 }}>実績</th>
-                  <th style={{ ...green, top: 19 }}>修正予算</th>
-                </Fragment>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((d, i) => {
-              const dow = new Date(`${d}T00:00:00`).getDay();
-              const weekend = dow === 0 || dow === 6;
-              const bg = d === today ? 'var(--color-primary-soft)' : weekend ? 'var(--color-sunken)' : undefined;
-              const min = valueOf(d, 'WORK_MINUTES');
-              const rows = [
-                <tr key={d}>
-                  <td style={{ ...td, background: bg, fontWeight: 600 }}>{`${Number(d.slice(5, 7))}/${Number(d.slice(8))}`}</td>
-                  <td style={{ ...td, background: bg, color: weekend ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>{WEEKDAYS[dow]}</td>
-                  <td style={{ ...td, background: bg }}>
-                    <select
-                      value={textOf(d, 'WORK_MINUTES')}
-                      onChange={(e) => setDaily(d, 'WORK_MINUTES', e.target.value)}
-                      aria-label="稼働時間"
-                      title={isCounted(d, today) ? undefined : '予定(当日になったら稼働時間に数えます)'}
-                      style={{
-                        width: '100%',
-                        height: 22,
-                        border: 'none',
-                        background: 'transparent',
-                        boxShadow: 'none',
-                        fontSize: 12,
-                        padding: '0 2px',
-                        textAlign: 'center',
-                        color: isCounted(d, today) ? 'var(--color-text)' : 'var(--color-text-faint)',
-                      }}
-                    >
-                      <option value="" />
-                      {WORK_OPTIONS.map((o) => (
-                        <option key={o} value={o}>{fmtMinutes(o)}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td style={{ ...calc, fontWeight: 400, color: isCounted(d, today) ? undefined : 'var(--color-text-faint)' }}>{fmtSeats(min, 3)}</td>
-                  {PLAN_METRICS.map((m) => {
-                    const autoV = autoOf(d, m.key);
-                    return (
-                      <Fragment key={m.key}>
-                        <td style={{ ...td, background: bg }}>
-                          <NumberCell value={textOf(d, m.budget)} onChange={(v) => setDaily(d, m.budget, v)} />
-                        </td>
-                        <td style={{ ...td, background: bg }}>
-                          <NumberCell
-                            value={textOf(d, m.key)}
-                            placeholder={autoV ? String(autoV) : ''}
-                            title={autoV ? `システム上の実績: ${autoV}` : undefined}
-                            onChange={(v) => setDaily(d, m.key, v)}
-                          />
-                        </td>
-                        <td style={{ ...td, background: bg }}>
-                          <NumberCell value={textOf(d, m.revised)} onChange={(v) => setDaily(d, m.revised, v)} />
-                        </td>
-                      </Fragment>
-                    );
-                  })}
-                </tr>,
-              ];
-              if (weekEnds.has(d)) {
-                rows.push(totalsRow('週計', days.slice(weekStart, i + 1), `w-${d}`));
-                weekStart = i + 1;
-              }
-              return rows;
-            })}
-            {totalsRow('月合計', days, 'total')}
-          </tbody>
-        </table>
+      <div style={{ display: 'grid', gridTemplateColumns: compact ? 'repeat(2, minmax(0, 1fr))' : '1fr', gap: compact ? 6 : 8 }}>
+        {stats.map((s) => {
+          const toss = s.key === 'TOSS_UP';
+          const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
+          const ratio = s.plan > 0 ? Math.min(1, s.actual / s.plan) : 0;
+          return (
+            <div
+              key={s.key}
+              style={{
+                background: 'var(--color-surface)',
+                border: `1px solid ${toss ? 'var(--color-primary-border)' : 'var(--color-appo-border)'}`,
+                borderTop: `3px solid ${color}`,
+                borderRadius: 'var(--radius-md)',
+                padding: compact ? '6px 8px' : '8px 10px',
+              }}
+            >
+              <div style={{ fontSize: compact ? 11 : 12, fontWeight: 700, color }}>{toss ? 'トス' : 'アポ'}</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                <span style={{ fontSize: compact ? 20 : 22, fontWeight: 700 }}>{s.actual}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>/ 予算 {s.plan}</span>
+              </div>
+              {!compact && (
+                <div style={{ height: 6, background: 'var(--color-sunken)', borderRadius: 3, margin: '4px 0' }}>
+                  <div style={{ width: `${ratio * 100}%`, height: 6, background: color, borderRadius: 3 }} />
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                残 <b style={{ color: s.rest > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>{s.rest}件</b>
+                {s.perDay != null && (
+                  <>
+                    {' '}・ 1日 <b>{s.perDay.toFixed(1)}件</b>必要
+                  </>
+                )}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>平均 {s.avg == null ? '—' : s.avg.toFixed(1)}件/日</div>
+            </div>
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }

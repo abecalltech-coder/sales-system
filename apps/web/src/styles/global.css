@@ -38,6 +38,10 @@
   --color-accent: #7a3fc4;
   --color-accent-soft: #f3ecfc;
   --color-highlight-soft: #fff7d1;
+  /* 個人別数値: アポ(トスは --color-primary の青。見分けやすいようにアポはオレンジ) */
+  --color-appo: #c2570c;
+  --color-appo-soft: #fdf0e6;
+  --color-appo-border: #f3c9a8;
 
   --radius-sm: 6px;
   --radius-md: 9px;

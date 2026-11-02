@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { AppointerSheet } from './AppointerSheet';
 import { DepartmentSummary } from './DepartmentSummary';
+import { RoleBadge } from './parts';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
 import { usePeriodMonth } from '../../lib/usePeriodMonth';
 import { api, ApiError } from '../../lib/api';
@@ -160,7 +161,7 @@ export function PersonalStatsPage() {
     <AppLayout>
       <div className="page" style={{ paddingBottom: 0, display: 'flex', flexDirection: 'column', minHeight: 'calc(var(--viewport-height) - 48px)' }}>
         <div className="page-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h1 className="page-title">個人別数値</h1>
             <MonthSwitcher />
             {departments.length > 1 && (
@@ -176,6 +177,12 @@ export function PersonalStatsPage() {
                   </option>
                 ))}
               </select>
+            )}
+            {!showSummary && sheet && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{sheet.user.name}</span>
+                {sheet.roleLabel && <RoleBadge label={sheet.roleLabel} />}
+              </span>
             )}
           </div>
           <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>

@@ -547,12 +547,14 @@ export interface PersonalStatsSheet {
   canEditTargets: boolean;
   /** アポインター用の日別シート(予算・稼働時間)で表示する */
   isAppointer: boolean;
+  /** 名前の横に出す役職名(AP / APリーダー) */
+  roleLabel: string;
 }
 
 export function usePersonalStatsUsers() {
   return useQuery({
     queryKey: ['personal-stats', 'users'],
-    queryFn: () => api.get<{ id: string; name: string; departmentId: string | null; departmentName: string | null; isAppointer: boolean }[]>('/personal-stats/users'),
+    queryFn: () => api.get<{ id: string; name: string; departmentId: string | null; departmentName: string | null; isAppointer: boolean; roleLabel: string }[]>('/personal-stats/users'),
     staleTime: 60_000,
   });
 }
@@ -560,7 +562,7 @@ export function usePersonalStatsUsers() {
 export interface PersonalStatsDepartment {
   month: string;
   days: string[];
-  members: Pick<PersonalStatsSheet, 'user' | 'values' | 'auto'>[];
+  members: Pick<PersonalStatsSheet, 'user' | 'values' | 'auto' | 'roleLabel'>[];
 }
 
 /** 部署サマリー(部署のAP全員分の日別の値) */
