@@ -9,7 +9,6 @@ import { useRealtimeSync } from '../lib/useRealtimeSync';
 import { useMe } from '../hooks/useApi';
 import { NotificationMenu } from './NotificationMenu';
 import { AccountBar } from './AccountBar';
-import { TaskAlerts } from './TaskAlerts';
 import { useChatUnread } from '../hooks/useChat';
 import { OnlineUsersWidget } from './OnlineUsersWidget';
 import { RemoteCursors } from './RemoteCursors';
@@ -313,7 +312,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <AccountBar />
           {children}
         </main>
-        <TaskAlerts />
         <PhoneBottomNav items={phoneItems} adminItems={phoneAdminItems} isManager={isManager} />
       </div>
     );
@@ -433,7 +431,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <AccountBar />
         {children}
       </main>
-      <TaskAlerts />
       <RemoteCursors />
     </div>
   );

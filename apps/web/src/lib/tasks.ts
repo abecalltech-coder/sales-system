@@ -33,13 +33,6 @@ export interface TaskItem {
   overdue: boolean;
 }
 
-export interface TaskAlert {
-  id: string;
-  title: string;
-  detail: string | null;
-  importance: number;
-  occurrence: string;
-}
 
 export type RepeatType = 'NONE' | 'MONTHLY' | 'WEEKLY' | 'DAILY' | 'WEEKDAYS' | 'HOURLY';
 
@@ -107,6 +100,3 @@ export function useTaskViewable() {
   return useQuery({ queryKey: ['tasks', 'viewable'], queryFn: () => api.get<TaskViewable>('/tasks/viewable'), staleTime: 60_000 });
 }
 
-export function useTaskAlerts(enabled = true) {
-  return useQuery({ queryKey: ['tasks', 'alerts'], queryFn: () => api.get<TaskAlert[]>('/tasks/alerts'), refetchInterval: 30_000, enabled });
-}
