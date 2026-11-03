@@ -35,6 +35,10 @@ export interface Column<T> {
   pasteValue?: (row: T, text: string) => void;
   /** trueの場合、列の削除・ドラッグ並び替えの対象外にする(例: 「+列を追加」ボタン列) */
   locked?: boolean;
+  /** セル全体の背景色(列ごとの塗りつぶし。要望: 個人別数値のトス/アポ)。undefined なら行の色のまま */
+  background?: (row: T) => string | undefined;
+  /** 見出しセルの背景色 */
+  headerBackground?: string;
 }
 
 interface DataTableProps<T> {
@@ -325,7 +329,7 @@ function RowInner<T>({
                             : stickyBackground,
                     }
                   : {
-                      backgroundColor: selected && !isFocusCell ? 'var(--color-primary-soft)' : cursor ? `${cursor.color}1a` : undefined,
+                      backgroundColor: selected && !isFocusCell ? 'var(--color-primary-soft)' : cursor ? `${cursor.color}1a` : col.background?.(row),
                     }),
               }}
             >
@@ -454,7 +458,7 @@ function TableHeadInner<T>({
               overflow: col.renderHeader ? 'visible' : 'hidden',
               textOverflow: 'ellipsis',
               cursor: colReorderable && !col.locked ? 'grab' : 'pointer',
-              background: 'var(--color-subtle)',
+              background: col.headerBackground ?? 'var(--color-subtle)',
               borderBottom: '1px solid var(--color-border-strong)',
               borderRight: freezeFirstColumn && colIdx === 0 ? '1px solid var(--color-border)' : undefined,
               borderLeft: dragOverCol === colIdx ? '2px solid var(--color-primary)' : undefined,

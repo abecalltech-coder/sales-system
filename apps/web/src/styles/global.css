@@ -38,6 +38,8 @@
   --color-accent: #7a3fc4;
   --color-accent-soft: #f3ecfc;
   --color-highlight-soft: #fff7d1;
+  /* 個人別数値: 週計の行(もっと薄い黄色) */
+  --color-highlight-faint: #fffcec;
   /* 個人別数値: アポ(トスは --color-primary の青。見分けやすいようにアポはオレンジ) */
   --color-appo: #c2570c;
   --color-appo-soft: #fdf0e6;

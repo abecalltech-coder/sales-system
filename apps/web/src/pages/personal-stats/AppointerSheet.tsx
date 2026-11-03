@@ -111,8 +111,9 @@ export function AppointerSheet({
   // 稼働時間は今日までの日だけ数える(先の日は予定)
   const workSum = (r: SheetRow) => sum(r.days.filter((d) => isCounted(d, today)), (d) => valueOf(d, 'WORK_MINUTES'));
   const faint = (d: string) => (isCounted(d, today) ? undefined : 'var(--color-text-faint)');
-  // セルの余白(DataTable 側の padding)まで塗る
-  const fill = (bg: string): React.CSSProperties => ({ margin: '-3px -8px', padding: '3px 8px', background: bg });
+  // 非稼働日(稼働時間が空の日)はグレー、週計・月合計は薄い黄色で行ごと塗る。それ以外の行は色を付けない(要望)
+  const isOffDay = (r: SheetRow) => r.kind === 'day' && !(valueOf(r.date!, 'WORK_MINUTES') > 0);
+  const rowTinted = (r: SheetRow) => r.kind !== 'day' || isOffDay(r);
 
   const dateCol: Column<SheetRow> = {
     key: 'date',
@@ -150,7 +151,7 @@ export function AppointerSheet({
   const workCol: Column<SheetRow> = {
     key: 'work',
     label: '稼働時間',
-    width: isPhone ? 70 : 72,
+    width: 54,
     locked: true,
     render: (r) => {
       if (r.kind !== 'day') {
@@ -165,7 +166,7 @@ export function AppointerSheet({
             value={textOf(d, 'WORK_MINUTES')}
             onChange={(e) => setDaily(d, 'WORK_MINUTES', e.target.value)}
             aria-label="稼働時間"
-            style={{ width: '100%', border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: 12, height: 18, color: faint(d) ?? 'var(--color-text)' }}
+            style={{ width: 'calc(100% + 8px)', margin: '0 -4px', border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: 12, height: 18, color: faint(d) ?? 'var(--color-text)' }}
           >
             <option value="" />
             {WORK_OPTIONS.map((o) => (
@@ -190,14 +191,13 @@ export function AppointerSheet({
   const seatCol: Column<SheetRow> = {
     key: 'seats',
     label: '席数',
-    width: 58,
+    width: 46,
     locked: true,
     render: (r) => {
       const m = r.kind === 'day' ? valueOf(r.date!, 'WORK_MINUTES') : workSum(r);
       return (
         <div
           style={{
-            ...fill('var(--color-highlight-soft)'),
             textAlign: 'right',
             fontWeight: r.kind === 'day' ? 400 : 700,
             color: r.kind === 'day' ? faint(r.date!) : undefined,
@@ -214,14 +214,17 @@ export function AppointerSheet({
     const toss = m.key === 'TOSS_UP';
     const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
     const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
+    // トスの列は青、アポの列はオレンジでセル全体を塗る(要望)。色付きの行(非稼働日・週計)は行の色を優先
     const numberCol = (key: PersonalDailyKey, label: string, actual?: boolean): Column<SheetRow> => ({
       key,
       label: `${m.label}${label}`,
       width: isPhone ? 66 : 64,
       locked: true,
+      background: (r) => (rowTinted(r) ? undefined : soft),
+      headerBackground: soft,
       renderHeader: () => (
         <span style={{ color, fontWeight: actual ? 800 : 700 }}>
-          {!isPhone && <span style={{ background: color, color: 'var(--color-surface)', borderRadius: 3, padding: '0 3px', marginRight: 3 }}>{m.label}</span>}
+          {!isPhone && `${m.label} `}
           {label}
         </span>
       ),
@@ -230,7 +233,7 @@ export function AppointerSheet({
           // 修正予算は入っている日があるときだけ合計を出す
           const shown = key !== m.revised || r.days.some((d) => textOf(d, key) !== '');
           return (
-            <div style={{ ...fill(actual ? soft : 'transparent'), textAlign: 'right', fontWeight: 700, color: actual ? color : undefined }}>
+            <div style={{ textAlign: 'right', fontWeight: 700, color: actual ? color : undefined }}>
               {shown ? sum(r.days, (d) => valueOf(d, key)) : ' '}
             </div>
           );
@@ -246,7 +249,7 @@ export function AppointerSheet({
           />
         );
         return (
-          <ForwardClick style={actual ? { ...fill(soft), color, fontWeight: 700 } : { color: 'var(--color-text-muted)' }}>{cell}</ForwardClick>
+          <ForwardClick style={actual ? { color, fontWeight: 700 } : { color: 'var(--color-text-muted)' }}>{cell}</ForwardClick>
         );
       },
       copyValue: (r) => {
@@ -264,11 +267,11 @@ export function AppointerSheet({
     ? [dateCol, workCol, ...metricCols(PLAN_METRICS.find((m) => m.key === phoneMetric)!)]
     : [dateCol, dowCol, workCol, seatCol, ...PLAN_METRICS.flatMap(metricCols)];
 
-  const rowStyle = (r: SheetRow): React.CSSProperties | undefined => {
-    if (r.kind !== 'day') return { background: 'var(--color-highlight-soft)' };
-    if (r.date === today) return { background: 'var(--color-primary-soft)' };
-    const dow = dowOf(r.date!);
-    return dow === 0 || dow === 6 ? { background: 'var(--color-sunken)' } : undefined;
+  // 縞模様(1行おきの色)も消すため、色を付けない行も透明を明示する
+  const rowStyle = (r: SheetRow): React.CSSProperties => {
+    if (r.kind !== 'day') return { background: 'var(--color-highlight-faint)' };
+    if (isOffDay(r)) return { background: 'var(--color-sunken)' };
+    return { background: 'transparent' };
   };
 
   const table = (
@@ -283,7 +286,7 @@ export function AppointerSheet({
       rowStyle={rowStyle}
       fontSize={12}
       pageScroll
-      hideRowNumbers={isPhone}
+      hideRowNumbers
     />
   );
 
