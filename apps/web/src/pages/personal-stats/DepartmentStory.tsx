@@ -143,7 +143,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
         width: opts.width ?? '100%',
         minWidth: 0,
         boxSizing: 'border-box',
-        textAlign: 'right',
+        textAlign: 'center',
         padding: isPhone ? '6px 5px' : '3px 5px',
         fontSize: isPhone ? 13 : 12,
         fontWeight: opts.strong ? 700 : 400,
@@ -166,7 +166,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
     whiteSpace: 'nowrap',
     textAlign: 'center',
   };
-  const td: React.CSSProperties = { padding: 0, borderBottom: '1px solid var(--color-sunken)', textAlign: 'right', fontSize: 12, whiteSpace: 'nowrap' };
+  const td: React.CSSProperties = { padding: 0, borderBottom: '1px solid var(--color-sunken)', textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap' };
   const calc: React.CSSProperties = { ...td, padding: '4px 6px', fontWeight: 700 };
   const goalBg = 'var(--color-warning-soft)';
   const card: React.CSSProperties = {
@@ -192,7 +192,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
         <table style={{ borderCollapse: 'collapse', width: '100%' }}>
           <thead>
             <tr>
-              <th style={{ ...th, textAlign: 'left' }}>項目</th>
+              <th style={th}>項目</th>
               <th style={{ ...th, background: goalBg }}>月目標</th>
               <th style={th}>実績</th>
               <th style={th}>達成率</th>
@@ -205,7 +205,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
               const total = monthTotal(m.key);
               return (
                 <tr key={m.key}>
-                  <td style={{ ...td, textAlign: 'left', padding: '4px 8px', fontWeight: 700 }}>{m.label}</td>
+                  <td style={{ ...td, padding: '4px 8px', fontWeight: 700 }}>{m.label}</td>
                   <td style={{ ...td, background: goalBg, width: 90 }}>
                     {cellInput(monthCell(m.key), { placeholder: cumGoal(weeks.length - 1, m.key)?.toString() ?? '' })}
                   </td>
@@ -265,7 +265,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...th, textAlign: 'left', ...sticky, background: 'var(--color-subtle)' }}>項目</th>
+              <th style={{ ...th, ...sticky, background: 'var(--color-subtle)' }}>項目</th>
               {week.map((d, i) => (
                 <th key={i} style={{ ...th, ...(d === today ? { background: 'var(--color-primary-soft)' } : {}) }}>
                   {dayHead(d, i)}
@@ -286,7 +286,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
               const cg = cumGoal(wi, m.key);
               return (
                 <tr key={m.key}>
-                  <td style={{ ...td, textAlign: 'left', padding: '4px 8px', fontWeight: 700, ...sticky }}>{m.label}</td>
+                  <td style={{ ...td, padding: '4px 8px', fontWeight: 700, ...sticky }}>{m.label}</td>
                   {week.map((d, i) => (
                     <td key={i} style={{ ...td, borderLeft: '1px solid var(--color-sunken)', background: d ? undefined : 'var(--color-sunken)' }}>
                       {d && cellInput(dayCell(d, m.key))}

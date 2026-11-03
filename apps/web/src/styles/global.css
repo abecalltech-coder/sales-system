@@ -585,6 +585,15 @@ main button {
 }
 
 /* 行番号の列を出さない表(個人別数値の携帯) */
+/* 個人別数値のシート: 表の文字はすべて中央揃え(要望) */
+.ps-center .data-table th,
+.ps-center .data-table td {
+  text-align: center;
+}
+.ps-center .data-table select {
+  text-align-last: center;
+}
+
 .dt-no-gutter .data-table > colgroup > col:first-child,
 .dt-no-gutter .data-table thead th:first-child,
 .dt-no-gutter .data-table tbody tr > td:first-child {

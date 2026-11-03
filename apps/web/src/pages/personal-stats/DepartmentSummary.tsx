@@ -71,7 +71,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
           }}
         >
           <div style={{ fontSize: 11, fontWeight: 700, color: toss ? 'var(--color-primary)' : 'var(--color-appo)' }}>部署{toss ? 'トス' : 'アポ'}</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
             <span style={{ fontSize: 20, fontWeight: 700 }}>{t.actual}</span>
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>/ 予算 {t.plan}</span>
           </div>
@@ -132,7 +132,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
   }
 
   const th: React.CSSProperties = { fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRight: border, borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap', background: 'var(--color-subtle)' };
-  const td: React.CSSProperties = { fontSize: 12, padding: '3px 6px', borderRight: border, borderBottom: border, textAlign: 'right', whiteSpace: 'nowrap' };
+  const td: React.CSSProperties = { fontSize: 12, padding: '3px 6px', borderRight: border, borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap' };
   const tossTh: React.CSSProperties = { ...th, background: 'var(--color-primary-soft)', color: 'var(--color-primary)' };
   const appoTh: React.CSSProperties = { ...th, background: 'var(--color-appo-soft)', color: 'var(--color-appo)' };
   const purple: React.CSSProperties = { ...th, background: 'var(--color-accent-soft)', color: 'var(--color-accent)' };
@@ -147,7 +147,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
       <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
         <thead>
           <tr>
-            <th style={{ ...th, textAlign: 'left' }}>名前</th>
+            <th style={th}>名前</th>
             <th style={th}>役職</th>
             <th style={th}>稼働時間</th>
             <th style={th}>席数</th>
@@ -169,7 +169,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
             const [toss, appo] = r.stats;
             return (
               <tr key={r.user.id}>
-                <td style={{ ...td, textAlign: 'left' }}>{nameButton(r.user.id, r.user.name)}</td>
+                <td style={td}>{nameButton(r.user.id, r.user.name)}</td>
                 <td style={{ ...td, textAlign: 'center' }}>{r.roleLabel && <RoleBadge label={r.roleLabel} />}</td>
                 <td style={td}>{r.workMin > 0 ? fmtMinutes(r.workMin) : '—'}</td>
                 <td style={td}>{fmtSeats(r.workMin, 2) || '—'}</td>
@@ -188,7 +188,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
             );
           })}
           <tr>
-            <td style={{ ...total, textAlign: 'left' }} colSpan={2}>
+            <td style={{ ...total, textAlign: 'center' }} colSpan={2}>
               部署合計({rows.length}人)
             </td>
             <td style={total}>{totalMin > 0 ? fmtMinutes(totalMin) : '—'}</td>

@@ -197,7 +197,7 @@ export function AppointerSheet({
       return (
         <div
           style={{
-            textAlign: 'right',
+            textAlign: 'center',
             fontWeight: r.kind === 'day' ? 400 : 700,
             color: r.kind === 'day' ? faint(r.date!) : undefined,
           }}
@@ -227,7 +227,7 @@ export function AppointerSheet({
           // 修正予算は入っている日があるときだけ合計を出す
           const shown = key !== m.revised || r.days.some((d) => textOf(d, key) !== '');
           return (
-            <div style={{ textAlign: 'right', fontWeight: 700, color: actual ? color : undefined }}>
+            <div style={{ textAlign: 'center', fontWeight: 700, color: actual ? color : undefined }}>
               {shown ? sum(r.days, (d) => valueOf(d, key)) : ' '}
             </div>
           );
@@ -240,6 +240,7 @@ export function AppointerSheet({
             placeholder={autoV ? String(autoV) : undefined}
             title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
             onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
+            align="center"
           />
         );
         return (
@@ -269,6 +270,7 @@ export function AppointerSheet({
   };
 
   const table = (
+    <div className="ps-center">
     <DataTable
       columns={columns}
       rows={rows}
@@ -282,6 +284,7 @@ export function AppointerSheet({
       pageScroll
       hideRowNumbers
     />
+    </div>
   );
 
   const panel = <SummaryPanel summary={summary} compact={isPhone} />;
@@ -353,7 +356,7 @@ function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof compute
           border: '1px solid var(--color-border)',
           borderRadius: 'var(--radius-md)',
           padding: compact ? '6px 8px' : '8px 10px',
-          textAlign: compact ? 'center' : undefined,
+          textAlign: 'center',
         }}
       >
         {kpi(compact ? '稼働時間' : `稼働時間(今日まで ${workedDays}日)`, workMin > 0 ? fmtMinutes(workMin) : '—')}
@@ -375,10 +378,11 @@ function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof compute
                 borderTop: `3px solid ${color}`,
                 borderRadius: 'var(--radius-md)',
                 padding: compact ? '6px 8px' : '8px 10px',
+                textAlign: 'center',
               }}
             >
               <div style={{ fontSize: compact ? 11 : 12, fontWeight: 700, color }}>{toss ? 'トス' : 'アポ'}</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
                 <span style={{ fontSize: compact ? 20 : 22, fontWeight: 700 }}>{s.actual}</span>
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>/ 予算 {s.plan}</span>
               </div>
