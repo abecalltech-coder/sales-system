@@ -14,7 +14,8 @@ const REPEAT_TYPES = ['NONE', 'MONTHLY', 'WEEKLY', 'DAILY', 'WEEKDAYS', 'HOURLY'
 /** リマインドなし(要望): 端末の通知もアプリ内の通知も出さない */
 export const REMIND_NONE = -1;
 /** リマインド(要望: 1日前〜5分前、なし)。null は期日ちょうど */
-export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5, REMIND_NONE];
+// 「通知しない」(REMIND_NONE)は選べない(要望: 通知しないとタスクの意味がない)。null=リマインドなし(期日の通知だけ)
+export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5];
 /** タスク閲覧範囲「AP全員」の対象になる役職 */
 const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
 const SNOOZE_MS = 5 * 60_000;
@@ -370,7 +371,6 @@ export class TasksService {
       const p = t.progress[0];
       const current = this.currentFor(t, p);
       if (!current || current.getTime() === NO_DUE.getTime()) continue;
-      if (t.remindMinutes === REMIND_NONE) continue; // リマインドなし
       // アプリ内の通知は期日の時刻になってから出す(要望: それまでは表示しない)。
       // リマインド(○分前)は端末の通知(sendDue)で知らせる
       if (current.getTime() > now) continue;
@@ -394,7 +394,6 @@ export class TasksService {
           const p = t.progress.find((x) => x.userId === uid);
           const current = this.currentFor(t, p);
           if (!current || current.getTime() === NO_DUE.getTime()) continue;
-          if (t.remindMinutes === REMIND_NONE) continue; // リマインドなし
           if (this.alertAt(t, current).getTime() > now) continue;
           if (p?.snoozeUntil && p.snoozeUntil.getTime() > now) continue;
           const sameOccurrence = p?.lastNotifiedOccurrence?.getTime() === current.getTime();
@@ -405,6 +404,10 @@ export class TasksService {
           const dueAfterRemind =
             isDue && now - current.getTime() < DUE_PUSH_WINDOW_MS && (t.remindMinutes ?? 0) > 0 && !!p?.lastNotifiedAt && p.lastNotifiedAt.getTime() < current.getTime();
           if (sameOccurrence && !afterSnooze && !dueAfterRemind) continue;
+          // 通知時刻から時間が経った初回の通知は、その後にタスクを作成・編集していなければ送らない
+          // (旧「通知しない」から切り替わった期限切れタスクが反映直後に一斉に鳴らないように)
+          const alertMs = this.alertAt(t, current).getTime();
+          if (!sameOccurrence && !afterSnooze && now - alertMs > DUE_PUSH_WINDOW_MS && t.updatedAt.getTime() < alertMs) continue;
 
           await this.prisma.taskProgress.upsert({
             where: { taskId_userId: { taskId: t.id, userId: uid } },

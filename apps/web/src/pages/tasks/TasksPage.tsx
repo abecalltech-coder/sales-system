@@ -208,7 +208,7 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
             </span>
             {repeat && <span>繰り返し: {repeat}</span>}
             {/* リマインドなし(期日の通知だけ)は表示しない */}
-            {t.currentDueAt && remind && t.remindMinutes !== null && <span>{t.remindMinutes === -1 ? '通知しない' : `リマインド: ${remind}`}</span>}
+            {t.currentDueAt && remind && t.remindMinutes !== null && <span>リマインド: {remind}</span>}
             <span>作成: {t.createdByName}</span>
           </span>
           {/* 誰のタスクか(要望: 1か所にまとめる)。部署・全員表示では担当者ごとの完了状況、それ以外は対象(All/部署/個人) */}
@@ -476,7 +476,7 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
                 </option>
               ))}
             </select>
-            {form.date && form.remindMinutes !== -1 && (
+            {form.date && (
               <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
                 {form.remindMinutes === null ? '期日の時刻に通知します' : 'リマインドと期日の時刻に別々に通知します'}
               </span>
