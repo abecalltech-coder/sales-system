@@ -113,7 +113,6 @@ export function AppointerSheet({
   const faint = (d: string) => (isCounted(d, today) ? undefined : 'var(--color-text-faint)');
   // 非稼働日(稼働時間が空の日)はグレー、週計・月合計は薄い黄色で行ごと塗る。それ以外の行は色を付けない(要望)
   const isOffDay = (r: SheetRow) => r.kind === 'day' && !(valueOf(r.date!, 'WORK_MINUTES') > 0);
-  const rowTinted = (r: SheetRow) => r.kind !== 'day' || isOffDay(r);
 
   const dateCol: Column<SheetRow> = {
     key: 'date',
@@ -214,20 +213,15 @@ export function AppointerSheet({
     const toss = m.key === 'TOSS_UP';
     const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
     const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
-    // トスの列は青、アポの列はオレンジでセル全体を塗る(要望)。色付きの行(非稼働日・週計)は行の色を優先
+    // 見出しは2段: 上にトス(青)/アポ(オレンジ)、下に月初予算・実績・修正予算。入力欄は稼働日は白のまま(要望)
     const numberCol = (key: PersonalDailyKey, label: string, actual?: boolean): Column<SheetRow> => ({
       key,
       label: `${m.label}${label}`,
       width: isPhone ? 66 : 64,
       locked: true,
-      background: (r) => (rowTinted(r) ? undefined : soft),
       headerBackground: soft,
-      renderHeader: () => (
-        <span style={{ color, fontWeight: actual ? 800 : 700 }}>
-          {!isPhone && `${m.label} `}
-          {label}
-        </span>
-      ),
+      group: { key: m.key, label: <span style={{ color }}>{m.label}</span>, background: soft },
+      renderHeader: () => <span style={{ color, fontWeight: actual ? 800 : 700 }}>{label}</span>,
       render: (r) => {
         if (r.kind !== 'day') {
           // 修正予算は入っている日があるときだけ合計を出す

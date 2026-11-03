@@ -58,7 +58,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
         const body = await retry.json().catch(() => ({ message: retry.statusText }));
         throw new ApiError(retry.status, body.message ?? retry.statusText);
       }
-      return retry.json();
+      return readJson(retry);
     }
   }
 
@@ -66,7 +66,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const body = await res.json().catch(() => ({ message: res.statusText }));
     throw new ApiError(res.status, body.message ?? res.statusText);
   }
-  return res.json();
+  return readJson(res);
+}
+
+/** 本文が空の応答(サーバーが null を返したときなど)は null にする。res.json() だと例外になり、成功したのに失敗と表示されていた */
+async function readJson(res: Response) {
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export const api = {

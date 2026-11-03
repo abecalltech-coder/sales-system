@@ -39,6 +39,8 @@ export interface Column<T> {
   background?: (row: T) => string | undefined;
   /** 見出しセルの背景色 */
   headerBackground?: string;
+  /** 見出しを2段にするときの上の段(同じ key が続く列はまとめて1マスにする。要望: 個人別数値のトス/アポ) */
+  group?: { key: string; label: ReactNode; background?: string };
 }
 
 interface DataTableProps<T> {
@@ -116,6 +118,8 @@ const fakeMouseEvent = (x: number, y: number) => ({ clientX: x, clientY: y, prev
 const DEFAULT_COLUMN_WIDTH = 120;
 const MIN_COLUMN_WIDTH = 56;
 const GUTTER_WIDTH = 34;
+/** 2段見出しの上の段の高さ(下の段の固定位置をこの分ずらす) */
+const GROUP_ROW_HEIGHT = 20;
 const EMPTY_IDS: string[] = [];
 
 const COLUMN_SEPARATOR: CSSProperties = {
@@ -407,14 +411,51 @@ function TableHeadInner<T>({
   onResetColumn,
   freezeFirstColumn,
 }: TableHeadProps<T>) {
+  // 上の段: 同じ group が続く列を1マスにまとめる。group の無い列は空のマス
+  const groupCells: { key: string; span: number; group?: Column<T>['group'] }[] = [];
+  columns.forEach((col) => {
+    const last = groupCells[groupCells.length - 1];
+    if (col.group && last?.group?.key === col.group.key) last.span += 1;
+    else groupCells.push({ key: col.group ? `g-${col.group.key}-${col.key}` : `e-${col.key}`, span: 1, group: col.group });
+  });
+  const hasGroups = groupCells.some((g) => g.group);
+  const headTop = hasGroups ? GROUP_ROW_HEIGHT : 0;
   return (
     <thead>
+      {hasGroups && (
+        <tr>
+          <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 4, height: GROUP_ROW_HEIGHT, padding: 0, background: 'var(--color-subtle)', borderRight: '1px solid var(--color-border)' }} />
+          {groupCells.map((g) => (
+            <th
+              key={g.key}
+              colSpan={g.span}
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 2,
+                height: GROUP_ROW_HEIGHT,
+                boxSizing: 'border-box',
+                padding: '0 8px',
+                textAlign: 'center',
+                fontSize: Math.max(fontSize - 1, 10),
+                fontWeight: 800,
+                whiteSpace: 'nowrap',
+                background: g.group?.background ?? 'var(--color-subtle)',
+                borderBottom: g.group ? '1px solid var(--color-border)' : undefined,
+                borderLeft: g.group ? '1px solid var(--color-border-strong)' : undefined,
+              }}
+            >
+              {g.group?.label}
+            </th>
+          ))}
+        </tr>
+      )}
       <tr style={{ background: 'var(--color-subtle)', borderBottom: '1px solid var(--color-border-strong)', textAlign: 'left' }}>
         <th
           title="行番号(クリックで行選択・ドラッグで範囲)"
           style={{
             position: 'sticky',
-            top: 0,
+            top: headTop,
             left: 0,
             zIndex: 4,
             padding: 0,
@@ -446,7 +487,7 @@ function TableHeadInner<T>({
             title={colReorderable && !col.locked ? 'ドラッグで列の並び替え / 右クリックで列メニュー' : undefined}
             style={{
               position: 'sticky',
-              top: 0,
+              top: headTop,
               left: freezeFirstColumn && colIdx === 0 ? GUTTER_WIDTH : undefined,
               zIndex: freezeFirstColumn && colIdx === 0 ? 3 : 2,
               padding: '4px 8px',
