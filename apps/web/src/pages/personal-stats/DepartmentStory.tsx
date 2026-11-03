@@ -243,14 +243,16 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
     );
   };
 
-  // PC: 行=項目、列=曜日(カレンダーを横に)+ 週・累計の集計
-  const weekPc = (week: (string | null)[], wi: number) => (
+  // 行=項目、列=曜日(カレンダーのように)、右に週・累計の集計(要望)。
+  // 携帯は表の中だけ横にスクロールし(画面は動かさない)、項目名は左に固定する
+  const sticky: React.CSSProperties = { position: 'sticky', left: 0, zIndex: 1, background: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' };
+  const weekCalendar = (week: (string | null)[], wi: number) => (
     <div key={wi} style={card}>
       {weekTitle(week, wi)}
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', minWidth: 980 }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', tableLayout: 'fixed', minWidth: isPhone ? 780 : 980 }}>
           <colgroup>
-            <col style={{ width: 90 }} />
+            <col style={{ width: isPhone ? 76 : 90 }} />
             {week.map((_d, i) => (
               <col key={i} />
             ))}
@@ -263,7 +265,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
           </colgroup>
           <thead>
             <tr>
-              <th style={{ ...th, textAlign: 'left' }}>項目</th>
+              <th style={{ ...th, textAlign: 'left', ...sticky, background: 'var(--color-subtle)' }}>項目</th>
               {week.map((d, i) => (
                 <th key={i} style={{ ...th, ...(d === today ? { background: 'var(--color-primary-soft)' } : {}) }}>
                   {dayHead(d, i)}
@@ -284,7 +286,7 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
               const cg = cumGoal(wi, m.key);
               return (
                 <tr key={m.key}>
-                  <td style={{ ...td, textAlign: 'left', padding: '4px 8px', fontWeight: 700 }}>{m.label}</td>
+                  <td style={{ ...td, textAlign: 'left', padding: '4px 8px', fontWeight: 700, ...sticky }}>{m.label}</td>
                   {week.map((d, i) => (
                     <td key={i} style={{ ...td, borderLeft: '1px solid var(--color-sunken)', background: d ? undefined : 'var(--color-sunken)' }}>
                       {d && cellInput(dayCell(d, m.key))}
@@ -305,99 +307,11 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
     </div>
   );
 
-  // 携帯: 行=項目、列=曜日(要望: PCと同じ向き)。週・累計の集計は下の表(行=項目)に分けて画面幅に収める
-  const weekPhone = (week: (string | null)[], wi: number) => (
-    <div key={wi} style={card}>
-      {weekTitle(week, wi)}
-      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
-        <colgroup>
-          <col style={{ width: 70 }} />
-          {week.map((_d, i) => (
-            <col key={i} />
-          ))}
-        </colgroup>
-        <thead>
-          <tr>
-            <th style={{ ...th, padding: '4px 2px' }} />
-            {week.map((d, i) => (
-              <th
-                key={i}
-                style={{ ...th, padding: '4px 0', fontSize: 11, lineHeight: 1.25, ...(d === today ? { background: 'var(--color-primary-soft)' } : {}) }}
-              >
-                {d ? (
-                  <span style={{ color: i === 6 ? 'var(--color-danger)' : i === 5 ? 'var(--color-primary)' : undefined }}>
-                    {Number(d.slice(8, 10))}
-                    <br />
-                    <span style={{ fontWeight: 400 }}>{WEEKDAYS[i]}</span>
-                  </span>
-                ) : (
-                  <span style={{ fontWeight: 400, color: 'var(--color-text-faint)' }}>{WEEKDAYS[i]}</span>
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {METRICS.map((m) => (
-            <tr key={m.key}>
-              <td style={{ ...td, textAlign: 'left', padding: '4px 4px 4px 6px', fontSize: 10.5, fontWeight: 700 }}>{m.label}</td>
-              {week.map((d, i) => (
-                <td key={i} style={{ ...td, borderLeft: '1px solid var(--color-sunken)', background: d ? undefined : 'var(--color-sunken)' }}>
-                  {d && cellInput(dayCell(d, m.key))}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {/* 週・累計の集計(行=項目) */}
-      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', borderTop: '2px solid var(--color-border)' }}>
-        <colgroup>
-          <col style={{ width: 70 }} />
-          <col />
-          <col />
-          <col />
-          <col />
-          <col />
-          <col />
-        </colgroup>
-        <thead>
-          <tr>
-            <th style={{ ...th, padding: '4px 2px' }} />
-            {['週計', '週目標', '週達成', '累計', '累計目標', '累計達成'].map((h) => (
-              <th key={h} style={{ ...th, padding: '4px 1px', fontSize: 10, ...(h === '週目標' ? { background: goalBg } : {}) }}>
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {METRICS.map((m) => {
-            const sum = weekSum(wi, m.key);
-            const cum = cumSum(wi, m.key);
-            const cg = cumGoal(wi, m.key);
-            const cellPad: React.CSSProperties = { padding: '5px 4px' };
-            return (
-              <tr key={m.key}>
-                <td style={{ ...td, textAlign: 'left', padding: '4px 4px 4px 6px', fontSize: 10.5, fontWeight: 700 }}>{m.label}</td>
-                <td style={{ ...calc, ...cellPad }}>{sum}</td>
-                <td style={{ ...td, background: goalBg }}>{cellInput(weekCell(wi, m.key), { strong: true })}</td>
-                <RateCell r={rateOf(sum, weekGoal(wi, m.key))} style={cellPad} />
-                <td style={{ ...calc, ...cellPad, borderLeft: '1px solid var(--color-border)' }}>{cum}</td>
-                <td style={{ ...calc, ...cellPad }}>{cg ?? '—'}</td>
-                <RateCell r={rateOf(cum, cg)} style={cellPad} />
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
 
   return (
     <div>
       {monthly}
-      {weeks.map((w, wi) => (isPhone ? weekPhone(w, wi) : weekPc(w, wi)))}
+      {weeks.map((w, wi) => weekCalendar(w, wi))}
     </div>
   );
 }
