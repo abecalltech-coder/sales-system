@@ -5,7 +5,7 @@ import { InlineNumber } from '../../components/InlineEdit';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { fmtRate, rateColor } from './parts';
 import { CumulativeChart } from './charts';
-import { PLAN_METRICS, PlanMetric, computeApSummary, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
+import { PLAN_METRICS, PlanMetric, computeApSummary, planOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
@@ -227,11 +227,19 @@ export function AppointerSheet({
       renderHeader: () => <span style={{ color, fontWeight: actual ? 800 : 700 }}>{label}</span>,
       render: (r) => {
         if (r.kind !== 'day') {
-          // 修正予算は入っている日があるときだけ合計を出す
-          const shown = key !== m.revised || r.days.some((d) => textOf(d, key) !== '');
+          // 修正予算の列の週計・月合計は「修正後の予算」(修正予算が入った日はそれ、無い日は月初予算)の合計。
+          // 上の累計カード・部署サマリーの予算と同じ数字にそろえる(要望: 上と下の合計が合わない)。修正予算が1日も無ければ空欄
+          if (key === m.revised) {
+            const shown = r.days.some((d) => textOf(d, key) !== '');
+            return (
+              <div style={{ textAlign: 'center', fontWeight: 700 }} title="修正後の予算の合計(修正予算が無い日は月初予算で計算)">
+                {shown ? sum(r.days, (d) => planOf(getter, d, m)) : ' '}
+              </div>
+            );
+          }
           return (
             <div style={{ textAlign: 'center', fontWeight: 700, color: actual ? color : undefined }}>
-              {shown ? sum(r.days, (d) => valueOf(d, key)) : ' '}
+              {sum(r.days, (d) => valueOf(d, key))}
             </div>
           );
         }
