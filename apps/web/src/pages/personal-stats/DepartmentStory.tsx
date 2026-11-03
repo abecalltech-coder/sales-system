@@ -305,61 +305,90 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
     </div>
   );
 
-  // 携帯: 行=日付、列=項目(画面幅に収める)。下に週・累計の集計
+  // 携帯: 行=項目、列=曜日(要望: PCと同じ向き)。週・累計の集計は下の表(行=項目)に分けて画面幅に収める
   const weekPhone = (week: (string | null)[], wi: number) => (
     <div key={wi} style={card}>
       {weekTitle(week, wi)}
       <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
         <colgroup>
-          <col style={{ width: 62 }} />
-          {METRICS.map((m) => (
-            <col key={m.key} />
+          <col style={{ width: 70 }} />
+          {week.map((_d, i) => (
+            <col key={i} />
           ))}
         </colgroup>
         <thead>
           <tr>
             <th style={{ ...th, padding: '4px 2px' }} />
-            {METRICS.map((m) => (
-              <th key={m.key} style={{ ...th, padding: '4px 1px', fontSize: 10, whiteSpace: 'normal', lineHeight: 1.2 }}>
-                {m.label}
+            {week.map((d, i) => (
+              <th
+                key={i}
+                style={{ ...th, padding: '4px 0', fontSize: 11, lineHeight: 1.25, ...(d === today ? { background: 'var(--color-primary-soft)' } : {}) }}
+              >
+                {d ? (
+                  <span style={{ color: i === 6 ? 'var(--color-danger)' : i === 5 ? 'var(--color-primary)' : undefined }}>
+                    {Number(d.slice(8, 10))}
+                    <br />
+                    <span style={{ fontWeight: 400 }}>{WEEKDAYS[i]}</span>
+                  </span>
+                ) : (
+                  <span style={{ fontWeight: 400, color: 'var(--color-text-faint)' }}>{WEEKDAYS[i]}</span>
+                )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {week.map((d, i) =>
-            d ? (
-              <tr key={i} style={d === today ? { background: 'var(--color-primary-soft)' } : undefined}>
-                <td style={{ ...td, textAlign: 'left', padding: '4px 6px', fontSize: 12 }}>{dayHead(d, i)}</td>
-                {METRICS.map((m) => (
-                  <td key={m.key} style={{ ...td, borderLeft: '1px solid var(--color-sunken)' }}>
-                    {cellInput(dayCell(d, m.key))}
-                  </td>
-                ))}
-              </tr>
-            ) : null,
-          )}
-          {[
-            { label: '週計', render: (m: MetricKey) => <td key={m} style={{ ...calc, padding: '5px 4px' }}>{weekSum(wi, m)}</td> },
-            {
-              label: '週目標',
-              bg: goalBg,
-              render: (m: MetricKey) => (
-                <td key={m} style={{ ...td, background: goalBg }}>
-                  {cellInput(weekCell(wi, m), { strong: true })}
+          {METRICS.map((m) => (
+            <tr key={m.key}>
+              <td style={{ ...td, textAlign: 'left', padding: '4px 4px 4px 6px', fontSize: 10.5, fontWeight: 700 }}>{m.label}</td>
+              {week.map((d, i) => (
+                <td key={i} style={{ ...td, borderLeft: '1px solid var(--color-sunken)', background: d ? undefined : 'var(--color-sunken)' }}>
+                  {d && cellInput(dayCell(d, m.key))}
                 </td>
-              ),
-            },
-            { label: '週達成', render: (m: MetricKey) => <RateCell key={m} r={rateOf(weekSum(wi, m), weekGoal(wi, m))} style={{ padding: '5px 4px' }} /> },
-            { label: '累計', render: (m: MetricKey) => <td key={m} style={{ ...calc, padding: '5px 4px' }}>{cumSum(wi, m)}</td> },
-            { label: '累計目標', render: (m: MetricKey) => <td key={m} style={{ ...calc, padding: '5px 4px' }}>{cumGoal(wi, m) ?? '—'}</td> },
-            { label: '累計達成', render: (m: MetricKey) => <RateCell key={m} r={rateOf(cumSum(wi, m), cumGoal(wi, m))} style={{ padding: '5px 4px' }} /> },
-          ].map((row, ri) => (
-            <tr key={row.label} style={{ background: row.bg ?? 'var(--color-subtle)', borderTop: ri === 0 ? '2px solid var(--color-border)' : undefined }}>
-              <td style={{ ...td, textAlign: 'left', padding: '5px 6px', fontSize: 11, fontWeight: 700 }}>{row.label}</td>
-              {METRICS.map((m) => row.render(m.key))}
+              ))}
             </tr>
           ))}
+        </tbody>
+      </table>
+      {/* 週・累計の集計(行=項目) */}
+      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', borderTop: '2px solid var(--color-border)' }}>
+        <colgroup>
+          <col style={{ width: 70 }} />
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+          <col />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={{ ...th, padding: '4px 2px' }} />
+            {['週計', '週目標', '週達成', '累計', '累計目標', '累計達成'].map((h) => (
+              <th key={h} style={{ ...th, padding: '4px 1px', fontSize: 10, ...(h === '週目標' ? { background: goalBg } : {}) }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {METRICS.map((m) => {
+            const sum = weekSum(wi, m.key);
+            const cum = cumSum(wi, m.key);
+            const cg = cumGoal(wi, m.key);
+            const cellPad: React.CSSProperties = { padding: '5px 4px' };
+            return (
+              <tr key={m.key}>
+                <td style={{ ...td, textAlign: 'left', padding: '4px 4px 4px 6px', fontSize: 10.5, fontWeight: 700 }}>{m.label}</td>
+                <td style={{ ...calc, ...cellPad }}>{sum}</td>
+                <td style={{ ...td, background: goalBg }}>{cellInput(weekCell(wi, m.key), { strong: true })}</td>
+                <RateCell r={rateOf(sum, weekGoal(wi, m.key))} style={cellPad} />
+                <td style={{ ...calc, ...cellPad, borderLeft: '1px solid var(--color-border)' }}>{cum}</td>
+                <td style={{ ...calc, ...cellPad }}>{cg ?? '—'}</td>
+                <RateCell r={rateOf(cum, cg)} style={cellPad} />
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
