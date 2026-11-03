@@ -1277,3 +1277,19 @@ model PersonalStatTarget {
   @@unique([userId, month, metricKey])
   @@index([month])
 }
+
+// 部署ストーリー(要望: 個人別数値の中の部署ごとのシート。週ごと・月ごとに追う。数字はすべて手入力)。
+// cell: "d:YYYY-MM-DD:<項目>"=日別の実績 / "w:<週番号>:<項目>"=週目標 / "m:<項目>"=月目標。departmentId='none' は部署なし
+model DepartmentStoryValue {
+  id           String   @id @default(uuid())
+  departmentId String
+  month        String   // "YYYY-MM"
+  cell         String
+  value        Int
+  version      Int      @default(1)
+  updatedBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([departmentId, month, cell])
+}

@@ -103,6 +103,25 @@ class SaveTargetDto {
   @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
 }
 
+/** 部署ストーリーの行(要望: トスアップ・アポイント・商談実施・成約法人・重説OK・ET) */
+export const STORY_METRICS = ['TOSS_UP', 'APPOINTMENT', 'MEETING', 'CONTRACT_CORP', 'JUSETSU_OK', 'ET'];
+const STORY_CELL_RE = new RegExp(
+  `^(d:\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])|w:[0-5]|m):(${STORY_METRICS.join('|')})$`,
+);
+
+class GetStoryQuery {
+  @IsString() departmentId!: string;
+  @Matches(PERIOD_RE) month!: string;
+}
+
+class SaveStoryDto {
+  @IsString() departmentId!: string;
+  @Matches(PERIOD_RE) month!: string;
+  @Matches(STORY_CELL_RE) cell!: string;
+  @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(1000000) value!: number | null;
+  @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
+}
+
 type AutoTarget = { id: string; name: string; roles: { role: { code: string } }[] };
 type AutoSource = Awaited<ReturnType<PersonalStatsService['loadAutoSource']>>;
 
@@ -304,6 +323,51 @@ class PersonalStatsService {
     return out;
   }
 
+  /** 部署ストーリーを見られる・入力できるか: 全員を見られる人は全部署、それ以外は自分の部署だけ */
+  private assertStoryAccess(viewer: AuthenticatedUser, departmentId: string) {
+    const own = (viewer.departmentId ?? 'none') === departmentId;
+    if (scopeOf(viewer) === 'ALL' || own) return;
+    throw new ForbiddenException('この部署のストーリーを見る権限がありません');
+  }
+
+  async story(viewer: AuthenticatedUser, departmentId: string, month: string) {
+    this.assertStoryAccess(viewer, departmentId);
+    const rows = await this.prisma.departmentStoryValue.findMany({ where: { departmentId, month } });
+    const values: Record<string, { value: number; version: number }> = {};
+    for (const r of rows) values[r.cell] = { value: r.value, version: r.version };
+    return { month, days: periodMonthDays(month), values };
+  }
+
+  /** 部署ストーリーのセルの保存(日別と同じく version で重なりを検出) */
+  async saveStory(viewer: AuthenticatedUser, dto: SaveStoryDto) {
+    this.assertStoryAccess(viewer, dto.departmentId);
+    if (dto.cell.startsWith('d:') && !dto.cell.startsWith(`d:${dto.month}-`)) throw new BadRequestException('対象月の日付ではありません');
+    const key = { departmentId: dto.departmentId, month: dto.month, cell: dto.cell };
+    let row: { value: number; version: number } | null = null;
+    if (dto.version == null) {
+      if (dto.value != null) {
+        try {
+          row = await this.prisma.departmentStoryValue.create({ data: { ...key, value: dto.value, updatedBy: viewer.id } });
+        } catch (e) {
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ConflictException(CONFLICT_MESSAGE);
+          throw e;
+        }
+      }
+    } else if (dto.value == null) {
+      const r = await this.prisma.departmentStoryValue.deleteMany({ where: { ...key, version: dto.version } });
+      if (r.count === 0) throw new ConflictException(CONFLICT_MESSAGE);
+    } else {
+      const r = await this.prisma.departmentStoryValue.updateMany({
+        where: { ...key, version: dto.version },
+        data: { value: dto.value, updatedBy: viewer.id, version: { increment: 1 } },
+      });
+      if (r.count === 0) throw new ConflictException(CONFLICT_MESSAGE);
+      row = await this.prisma.departmentStoryValue.findUnique({ where: { departmentId_month_cell: key } });
+    }
+    this.realtime.emitToAll('personal-stats.updated', { departmentId: dto.departmentId });
+    return row ? { value: row.value, version: row.version } : null;
+  }
+
   /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
     await this.assertAccess(viewer, dto.userId);
@@ -386,6 +450,16 @@ class PersonalStatsController {
   @Get('department')
   department(@Query() q: GetDepartmentQuery, @CurrentUser() user: AuthenticatedUser) {
     return this.service.department(user, q.departmentId, q.month);
+  }
+
+  @Get('story')
+  story(@Query() q: GetStoryQuery, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.story(user, q.departmentId, q.month);
+  }
+
+  @Put('story')
+  saveStory(@Body() dto: SaveStoryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveStory(user, dto);
   }
 
   @Put('daily')

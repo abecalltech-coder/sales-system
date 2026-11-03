@@ -35,6 +35,7 @@
 - **組織**: 会社 CH partners > 部署(CH東 / CH西 / CT東 / モバイル / クオリティ / バックヤード の順)> チーム。部署は「組織管理」(`Department`)が唯一の正で、マスタの部署 `DEPARTMENT_BRANCH`(トス/アポ詳細の部署・カレンダー題名・色・月次サマリー)は `Department.branchStatusId` で紐づけ `OrganizationsService.syncBranch` が名前・並び・有効を同期する。マスタ管理側は色だけ編集可。
 - **稼働ルール**(`/work-rules`): グループ別のルール一覧(`WorkRuleGroup`/`WorkRule`、`apps/api/src/work-rules/`)。閲覧は全員(管理者以外もナビの「管理」/スマホの「設定」に出す)、編集は `Role.canEditWorkRules`(ユーザー管理の役職ごとの設定)、管理者は常に可。
 - **クローズ報告**(`/close-reports`): 商談後のクローズ結果を入力し、決まった書式の報告テキストをコピー(`lib/closeReport.ts` の `buildText`。ユーザー指定の書式を厳守)。項目の並び・種類は `FIELD_DEFS`、項目名・必須・選択肢・管理費の範囲などはマスタ管理「クローズ報告」(system-settings `closeReportConfig`)。報告は本人分だけ `CloseReport` に保存。スマホ中心(少ない選択肢はボタン、作成ボタンは画面下に固定)。
+- **個人別数値 › 部署ストーリー**(下のタブ「部署ストーリー」、`pages/personal-stats/DepartmentStory.tsx`): 部署×月のカレンダー形式(月曜始まりの週)。行はトスアップ/アポイント/商談実施/成約法人/重説OK/ET、数字はすべて手入力(`DepartmentStoryValue`、cell は `d:日付:項目` / `w:週番号:項目`=週目標 / `m:項目`=月目標)。週計・週達成・累計・累計目標(週目標の積み上げ)・累計達成と月間(月目標が空なら週目標の合計)。見られる/入力できるのは自部署(全員を見られる人は全部署)。
 - **月単位運用**: トス/アポ/エントリーは `periodMonth`("YYYY-MM"、JST)で月ごとに管理。
 - **サマリー**(`/summary`): 部署別の実績表(`apps/api/src/department-summary/`)。名前照合は NFKC + 空白除去。
 - **申込情報/明細**(`/application-sheets`): 全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。
