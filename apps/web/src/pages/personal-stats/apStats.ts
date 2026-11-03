@@ -52,12 +52,17 @@ export function computeApSummary(days: string[], today: string, g: DayGetter) {
   const stats = PLAN_METRICS.map((m) => {
     const actual = sum(days, (d) => g.value(d, m.key));
     const plan = sum(days, (d) => planOf(g, d, m));
+    // 当初予算(月初予算だけの合計)と、修正予算が1日でも入っているか(累計カードで両方出すため)
+    const budgetTotal = sum(days, (d) => g.value(d, m.budget));
+    const hasRevised = days.some((d) => g.entered(d, m.revised));
     const planToDate = sum(counted, (d) => planOf(g, d, m));
     const rest = Math.max(0, plan - actual);
     return {
       ...m,
       actual,
       plan,
+      budgetTotal,
+      hasRevised,
       planToDate,
       rest,
       perDay: restDays > 0 ? rest / restDays : null,

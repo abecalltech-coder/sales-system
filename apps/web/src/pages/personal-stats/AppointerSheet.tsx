@@ -396,7 +396,19 @@ function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof compute
               <div style={{ fontSize: compact ? 11 : 12, fontWeight: 700, color }}>{toss ? 'トス' : 'アポ'}</div>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
                 <span style={{ fontSize: compact ? 20 : 22, fontWeight: 700 }}>{s.actual}</span>
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>/ 予算 {s.plan}</span>
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>件</span>
+              </div>
+              {/* 予算は大きめに、当初予算(月初予算の合計)と修正予算(修正後の合計)を両方出す(要望) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4, margin: '4px 0' }}>
+                {[
+                  { label: '当初予算', value: s.budgetTotal, on: !s.hasRevised },
+                  { label: '修正予算', value: s.hasRevised ? s.plan : null, on: s.hasRevised },
+                ].map((b) => (
+                  <div key={b.label} style={{ background: 'var(--color-subtle)', borderRadius: 6, padding: '2px 4px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700 }}>{b.label}</div>
+                    <div style={{ fontSize: compact ? 16 : 18, fontWeight: 800, color: b.on ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{b.value ?? '—'}</div>
+                  </div>
+                ))}
               </div>
               {!compact && (
                 <div style={{ height: 6, background: 'var(--color-sunken)', borderRadius: 3, margin: '4px 0' }}>

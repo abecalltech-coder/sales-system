@@ -7,7 +7,7 @@ import { api, ApiError } from '../lib/api';
 import { Avatar } from './Avatar';
 
 /**
- * 画面上部のバー(要望): 右端に自分のアカウントの四角いアイコン。押すと写真・通知オン/オフの設定が開く。
+ * 画面上部のバー(要望): 右端に自分のアカウントの四角いアイコン。押すと写真・通知オン/オフの設定とログアウトが開く。
  * 「別ウィンドウ」ボタンで今のタブを別のブラウザウィンドウとして独立して開ける。
  */
 export function AccountBar() {
@@ -67,7 +67,7 @@ export function AccountBar() {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label="アカウント設定"
-          title="アカウント設定(写真・通知)"
+          title="アカウント設定(写真・通知・ログアウト)"
           style={{ padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex' }}
         >
           <Avatar src={profile?.iconUrl} name={profile?.name ?? ''} seed={profile?.id} size={28} square />
@@ -104,6 +104,16 @@ function AccountSettings({ onClose }: { onClose: () => void }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : '画像を読み込めませんでした');
     }
+  };
+
+  // ログアウト(要望)。この端末の通知は前の人の分が届かないよう先に解除してから、ログイン画面へ(画面の状態も全部捨てる)
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = async () => {
+    setLoggingOut(true);
+    if (pushOn) await push.disable().catch(() => undefined);
+    await api.post('/auth/logout').catch(() => undefined);
+    queryClient.clear();
+    window.location.href = '/login';
   };
 
   const sendTest = async () => {
@@ -169,7 +179,10 @@ function AccountSettings({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
-      <div style={{ textAlign: 'right', marginTop: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        <button type="button" className="btn-danger" onClick={logout} disabled={loggingOut} style={{ fontSize: 11, padding: '2px 10px' }}>
+          {loggingOut ? 'ログアウト中...' : 'ログアウト'}
+        </button>
         <button type="button" onClick={onClose} style={{ fontSize: 11, padding: '2px 10px' }}>
           閉じる
         </button>
