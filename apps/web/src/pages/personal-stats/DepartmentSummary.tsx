@@ -107,7 +107,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>
                 <span>稼働 <b style={{ color: 'var(--color-text)' }}>{r.workMin > 0 ? fmtMinutes(r.workMin) : '—'}</b></span>
                 <span>席数 <b style={{ color: 'var(--color-text)' }}>{fmtSeats(r.workMin, 2) || '—'}</b></span>
-                <span>残日数 <b style={{ color: 'var(--color-text)' }}>{r.restDays}日</b></span>
+                <span>経過日数 <b style={{ color: 'var(--color-text)' }}>{r.workedDays}日</b></span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, fontSize: 12 }}>
                 <div style={{ background: 'var(--color-primary-soft)', borderRadius: 6, padding: '4px 6px' }}>
@@ -217,7 +217,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
               <th style={th}>名前</th>
               <th style={th}>稼働時間</th>
               <th style={th}>席数</th>
-              <th style={th}>残日数</th>
+              <th style={th} title="今日までに稼働時間が入っている日数">経過日数</th>
               <th style={{ ...th, ...sep }}>実績 / 予算</th>
               <th style={th}>残</th>
               <th style={th}>平均/日</th>
@@ -241,7 +241,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
                   </td>
                   <td style={td}>{r.workMin > 0 ? fmtMinutes(r.workMin) : '—'}</td>
                   <td style={td}>{fmtSeats(r.workMin, 2) || '—'}</td>
-                  <td style={td}>{r.restDays}日</td>
+                  <td style={td}>{r.workedDays}日</td>
                   {actualCell(toss.actual, toss.plan, 'var(--color-primary)', td)}
                   <td style={{ ...td, fontWeight: 700, color: restColor(toss.rest) }}>{toss.rest}</td>
                   <td style={td}>{avg(toss.avg)}</td>
