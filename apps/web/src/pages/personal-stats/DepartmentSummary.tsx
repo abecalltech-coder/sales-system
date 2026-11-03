@@ -50,7 +50,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
   const nameButton = (id: string, name: string) => (
     <button
       onClick={() => onOpen(id)}
-      style={{ border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: isPhone ? 14 : 12, fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}
+      style={{ border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: isPhone ? 14 : 13, fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}
     >
       {name}
     </button>
@@ -131,83 +131,145 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
     );
   }
 
-  const th: React.CSSProperties = { fontSize: 10, fontWeight: 700, padding: '3px 6px', borderRight: border, borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap', background: 'var(--color-subtle)' };
-  const td: React.CSSProperties = { fontSize: 12, padding: '3px 6px', borderRight: border, borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap' };
-  const tossTh: React.CSSProperties = { ...th, background: 'var(--color-primary-soft)', color: 'var(--color-primary)' };
-  const appoTh: React.CSSProperties = { ...th, background: 'var(--color-appo-soft)', color: 'var(--color-appo)' };
-  const purple: React.CSSProperties = { ...th, background: 'var(--color-accent-soft)', color: 'var(--color-accent)' };
-  const total: React.CSSProperties = { ...td, background: 'var(--color-highlight-soft)', fontWeight: 700 };
-  const tossTd = (v: React.ReactNode, extra?: React.CSSProperties) => <td style={{ ...td, background: 'var(--color-primary-soft)', ...extra }}>{v}</td>;
-  const appoTd = (v: React.ReactNode, extra?: React.CSSProperties) => <td style={{ ...td, background: 'var(--color-appo-soft)', ...extra }}>{v}</td>;
+  // PC(要望: 詰めすぎで見づらい): 上に部署合計のカード、下の表は余白を広めにして
+  // 見出しを「トス / アポ」の2段に。実績と予算は「実績 / 予算」の1マスにまとめて棒で達成度を見せる
+  const th: React.CSSProperties = { fontSize: 11, fontWeight: 700, padding: '6px 14px', borderBottom: border, textAlign: 'center', whiteSpace: 'nowrap', background: 'var(--color-subtle)', color: 'var(--color-text-muted)' };
+  const td: React.CSSProperties = { fontSize: 13, padding: '8px 14px', borderBottom: '1px solid var(--color-sunken)', textAlign: 'center', whiteSpace: 'nowrap' };
+  const sep: React.CSSProperties = { borderLeft: border };
+  const groupTh = (label: string, color: string, bg: string, span: number) => (
+    <th colSpan={span} style={{ ...th, ...sep, fontSize: 12, fontWeight: 800, color, background: bg }}>
+      {label}
+    </th>
+  );
+  const total: React.CSSProperties = { ...td, background: 'var(--color-highlight-faint)', fontWeight: 700, borderTop: border, borderBottom: 'none' };
+
+  /** 実績 / 予算 と達成度の棒 */
+  const actualCell = (actual: number, plan: number, color: string, style: React.CSSProperties) => {
+    const ratio = plan > 0 ? Math.min(1, actual / plan) : 0;
+    return (
+      <td style={{ ...style, ...sep, minWidth: 110 }}>
+        <div>
+          <b style={{ fontSize: 15, color }}>{actual}</b>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}> / {plan}</span>
+        </div>
+        <div style={{ height: 4, background: 'var(--color-sunken)', borderRadius: 2, marginTop: 3 }}>
+          <div style={{ width: `${ratio * 100}%`, height: 4, background: color, borderRadius: 2 }} />
+        </div>
+      </td>
+    );
+  };
+  const progressPill = (v: number | null) => (
+    <span style={{ display: 'inline-block', minWidth: 56, padding: '2px 8px', borderRadius: 999, fontWeight: 800, color: rateColor(v), border: `1px solid ${rateColor(v)}` }}>
+      {fmtRate(v)}
+    </span>
+  );
+
+  const kpi = (label: string, value: React.ReactNode, sub?: React.ReactNode, color?: string) => (
+    <div style={{ background: 'var(--color-surface)', border, borderTop: color ? `3px solid ${color}` : border, borderRadius: 'var(--radius-md)', padding: '10px 16px', textAlign: 'center', minWidth: 140 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: color ?? 'var(--color-text-muted)' }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+  const [tT, aT] = totalStats;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-    {charts}
-    <div style={{ overflowX: 'auto', border, borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', width: 'fit-content', maxWidth: '100%' }}>
-      <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-        <thead>
-          <tr>
-            <th style={th}>名前</th>
-            <th style={th}>役職</th>
-            <th style={th}>稼働時間</th>
-            <th style={th}>席数</th>
-            <th style={th}>残日数</th>
-            <th style={tossTh}>トス数</th>
-            <th style={tossTh}>予算</th>
-            <th style={tossTh}>残</th>
-            <th style={tossTh}>平均/日</th>
-            <th style={appoTh}>アポイント数</th>
-            <th style={appoTh}>予算</th>
-            <th style={appoTh}>残</th>
-            <th style={appoTh}>平均/日</th>
-            <th style={appoTh}>必要/日</th>
-            <th style={purple}>進捗(アポ)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const [toss, appo] = r.stats;
-            return (
-              <tr key={r.user.id}>
-                <td style={td}>{nameButton(r.user.id, r.user.name)}</td>
-                <td style={{ ...td, textAlign: 'center' }}>{r.roleLabel && <RoleBadge label={r.roleLabel} />}</td>
-                <td style={td}>{r.workMin > 0 ? fmtMinutes(r.workMin) : '—'}</td>
-                <td style={td}>{fmtSeats(r.workMin, 2) || '—'}</td>
-                <td style={td}>{r.restDays}日</td>
-                {tossTd(<b style={{ color: 'var(--color-primary)' }}>{toss.actual}</b>)}
-                {tossTd(toss.plan)}
-                {tossTd(toss.rest, { color: restColor(toss.rest) })}
-                {tossTd(avg(toss.avg))}
-                {appoTd(<b style={{ color: 'var(--color-appo)' }}>{appo.actual}</b>)}
-                {appoTd(appo.plan)}
-                {appoTd(appo.rest, { color: restColor(appo.rest) })}
-                {appoTd(avg(appo.avg))}
-                {appoTd(avg(appo.perDay))}
-                <td style={{ ...td, fontWeight: 700, color: rateColor(appo.progress) }}>{fmtRate(appo.progress)}</td>
-              </tr>
-            );
-          })}
-          <tr>
-            <td style={{ ...total, textAlign: 'center' }} colSpan={2}>
-              部署合計({rows.length}人)
-            </td>
-            <td style={total}>{totalMin > 0 ? fmtMinutes(totalMin) : '—'}</td>
-            <td style={total}>{fmtSeats(totalMin, 2) || '—'}</td>
-            <td style={total}>—</td>
-            <td style={{ ...total, color: 'var(--color-primary)' }}>{totalStats[0].actual}</td>
-            <td style={total}>{totalStats[0].plan}</td>
-            <td style={{ ...total, color: restColor(totalStats[0].rest) }}>{totalStats[0].rest}</td>
-            <td style={total}>{avg(totalStats[0].avg)}</td>
-            <td style={{ ...total, color: 'var(--color-appo)' }}>{totalStats[1].actual}</td>
-            <td style={total}>{totalStats[1].plan}</td>
-            <td style={{ ...total, color: restColor(totalStats[1].rest) }}>{totalStats[1].rest}</td>
-            <td style={total}>{avg(totalStats[1].avg)}</td>
-            <td style={total}>—</td>
-            <td style={{ ...total, color: rateColor(totalStats[1].progress) }}>{fmtRate(totalStats[1].progress)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        {kpi('人数', `${rows.length}人`, `稼働 ${totalMin > 0 ? fmtMinutes(totalMin) : '—'} ・ 席数 ${fmtSeats(totalMin, 2) || '—'}`)}
+        {kpi(
+          '部署トス',
+          <>
+            <span style={{ color: 'var(--color-primary)' }}>{tT.actual}</span>
+            <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}> / {tT.plan}</span>
+          </>,
+          <>
+            残 <b style={{ color: restColor(tT.rest) }}>{tT.rest}件</b> ・ 平均 {avg(tT.avg)}/日
+          </>,
+          'var(--color-primary)',
+        )}
+        {kpi(
+          '部署アポ',
+          <>
+            <span style={{ color: 'var(--color-appo)' }}>{aT.actual}</span>
+            <span style={{ fontSize: 13, color: 'var(--color-text-muted)' }}> / {aT.plan}</span>
+          </>,
+          <>
+            残 <b style={{ color: restColor(aT.rest) }}>{aT.rest}件</b> ・ 平均 {avg(aT.avg)}/日
+          </>,
+          'var(--color-appo)',
+        )}
+        {kpi('進捗(アポ)', <span style={{ color: rateColor(aT.progress) }}>{fmtRate(aT.progress)}</span>, '今日までの予算に対して', 'var(--color-accent)')}
+      </div>
+
+      {charts}
+
+      <div style={{ overflowX: 'auto', border, borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', width: 'fit-content', maxWidth: '100%' }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            <tr>
+              <th colSpan={4} style={th} />
+              {groupTh('トス', 'var(--color-primary)', 'var(--color-primary-soft)', 3)}
+              {groupTh('アポ', 'var(--color-appo)', 'var(--color-appo-soft)', 4)}
+              <th style={{ ...th, ...sep }} />
+            </tr>
+            <tr>
+              <th style={th}>名前</th>
+              <th style={th}>稼働時間</th>
+              <th style={th}>席数</th>
+              <th style={th}>残日数</th>
+              <th style={{ ...th, ...sep }}>実績 / 予算</th>
+              <th style={th}>残</th>
+              <th style={th}>平均/日</th>
+              <th style={{ ...th, ...sep }}>実績 / 予算</th>
+              <th style={th}>残</th>
+              <th style={th}>平均/日</th>
+              <th style={th}>必要/日</th>
+              <th style={{ ...th, ...sep }}>進捗(アポ)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const [toss, appo] = r.stats;
+              return (
+                <tr key={r.user.id}>
+                  <td style={td}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      {nameButton(r.user.id, r.user.name)}
+                      {r.roleLabel && <RoleBadge label={r.roleLabel} />}
+                    </span>
+                  </td>
+                  <td style={td}>{r.workMin > 0 ? fmtMinutes(r.workMin) : '—'}</td>
+                  <td style={td}>{fmtSeats(r.workMin, 2) || '—'}</td>
+                  <td style={td}>{r.restDays}日</td>
+                  {actualCell(toss.actual, toss.plan, 'var(--color-primary)', td)}
+                  <td style={{ ...td, fontWeight: 700, color: restColor(toss.rest) }}>{toss.rest}</td>
+                  <td style={td}>{avg(toss.avg)}</td>
+                  {actualCell(appo.actual, appo.plan, 'var(--color-appo)', td)}
+                  <td style={{ ...td, fontWeight: 700, color: restColor(appo.rest) }}>{appo.rest}</td>
+                  <td style={td}>{avg(appo.avg)}</td>
+                  <td style={td}>{avg(appo.perDay)}</td>
+                  <td style={{ ...td, ...sep }}>{progressPill(appo.progress)}</td>
+                </tr>
+              );
+            })}
+            <tr>
+              <td style={total}>部署合計({rows.length}人)</td>
+              <td style={total}>{totalMin > 0 ? fmtMinutes(totalMin) : '—'}</td>
+              <td style={total}>{fmtSeats(totalMin, 2) || '—'}</td>
+              <td style={total}>—</td>
+              {actualCell(tT.actual, tT.plan, 'var(--color-primary)', total)}
+              <td style={{ ...total, color: restColor(tT.rest) }}>{tT.rest}</td>
+              <td style={total}>{avg(tT.avg)}</td>
+              {actualCell(aT.actual, aT.plan, 'var(--color-appo)', total)}
+              <td style={{ ...total, color: restColor(aT.rest) }}>{aT.rest}</td>
+              <td style={total}>{avg(aT.avg)}</td>
+              <td style={total}>—</td>
+              <td style={{ ...total, ...sep }}>{progressPill(aT.progress)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
