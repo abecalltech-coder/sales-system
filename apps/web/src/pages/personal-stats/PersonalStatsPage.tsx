@@ -209,15 +209,16 @@ export function PersonalStatsPage() {
           <div
             style={{
               position: 'sticky',
-              // 携帯は画面下のメニューの上に常に出す
-              bottom: isPhone ? 'calc(64px + env(safe-area-inset-bottom))' : 0,
+              // 携帯は画面下のメニュー(高さ52px+上の線1px)にぴったり付けて常に出す(要望: 間に隙間が空いていた)
+              bottom: isPhone ? 'calc(53px + env(safe-area-inset-bottom))' : 0,
               display: 'flex',
               gap: 2,
               overflowX: 'auto',
               background: 'var(--color-subtle)',
               borderTop: '1px solid var(--color-border-strong)',
               padding: '0 4px',
-              margin: '0 -16px',
+              // ページの左右の余白(携帯8px / PC16px)ぶんだけ広げる。広げすぎると画面が横に動く(要望)
+              margin: isPhone ? '0 -8px' : '0 -16px',
               zIndex: 5,
             }}
           >
