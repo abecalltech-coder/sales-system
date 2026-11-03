@@ -74,6 +74,9 @@ function scopeOf(user: AuthenticatedUser): 'OWN' | 'TEAM' | 'DEPT' | 'ALL' {
   return best as 'OWN' | 'TEAM' | 'DEPT' | 'ALL';
 }
 
+/** AP・APリーダーは他の AP のシートも見られる(要望)。編集は従来どおり自分の範囲だけ */
+const viewsAllSales = (user: AuthenticatedUser) => user.roles.some((r) => SALES_ROLES.includes(r));
+
 class GetSheetQuery {
   @IsString() userId!: string;
   @Matches(PERIOD_RE) month!: string;
@@ -136,7 +139,7 @@ class PersonalStatsService {
 
   /** 人員シートのタブ: 有効なユーザーのうち営業系の役職の人(見られる範囲だけ) */
   async users(viewer: AuthenticatedUser) {
-    const scope = scopeOf(viewer);
+    const scope = viewsAllSales(viewer) ? 'ALL' : scopeOf(viewer);
     const where: Prisma.UserWhereInput = {
       status: 'ACTIVE',
       deletedAt: null,
@@ -194,7 +197,7 @@ class PersonalStatsService {
   }
 
   /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
-  private async assertAccess(viewer: AuthenticatedUser, userId: string) {
+  private async assertAccess(viewer: AuthenticatedUser, userId: string, mode: 'view' | 'edit' = 'edit') {
     const target = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
       select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true, name: true } } } } },
@@ -205,13 +208,18 @@ class PersonalStatsService {
       target.id === viewer.id ||
       scope === 'ALL' ||
       (scope === 'DEPT' && !!viewer.departmentId && target.departmentId === viewer.departmentId) ||
-      (scope === 'TEAM' && !!viewer.teamId && target.teamId === viewer.teamId);
+      (scope === 'TEAM' && !!viewer.teamId && target.teamId === viewer.teamId) ||
+      (mode === 'view' && viewsAllSales(viewer) && target.roles.some((r) => SALES_ROLES.includes(r.role.code)));
     if (!ok) throw new ForbiddenException('このユーザーのシートを見る権限がありません');
     return target;
   }
 
   async sheet(viewer: AuthenticatedUser, userId: string, month: string) {
-    const target = await this.assertAccess(viewer, userId);
+    const target = await this.assertAccess(viewer, userId, 'view');
+    const canEdit = await this.assertAccess(viewer, userId, 'edit').then(
+      () => true,
+      () => false,
+    );
     const days = periodMonthDays(month);
     const [rows, targets, auto] = await Promise.all([
       this.prisma.personalDailyStat.findMany({ where: { userId, date: { gte: days[0], lte: days[days.length - 1] } } }),
@@ -235,6 +243,8 @@ class PersonalStatsService {
         targets.map((t) => [t.metricKey, { weeklyStory: t.weeklyStory, monthlyGoal: t.monthlyGoal, version: t.version }]),
       ),
       canEditTargets: isAdmin(viewer),
+      /** 他の AP のシートは見るだけ(編集は自分の範囲) */
+      canEdit,
     };
   }
 

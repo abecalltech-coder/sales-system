@@ -91,8 +91,10 @@ export function AppointerSheet({
   const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
   const summary = computeApSummary(days, today, getter);
 
+  // 他の AP のシートは見るだけ(要望: AP は他の AP のシートも見られる。編集は自分の分だけ)
+  const readOnly = sheet.canEdit === false;
   const save = (d: string, key: PersonalDailyKey, v: number | null | undefined) => {
-    if (v === undefined) return; // 読めない値は無視
+    if (v === undefined || readOnly) return; // 読めない値・見るだけのシートは無視
     setDaily(d, key, v == null ? '' : String(v));
   };
 
@@ -164,6 +166,7 @@ export function AppointerSheet({
           <select
             value={textOf(d, 'WORK_MINUTES')}
             onChange={(e) => setDaily(d, 'WORK_MINUTES', e.target.value)}
+            disabled={readOnly}
             aria-label="稼働時間"
             style={{ width: 'calc(100% + 8px)', margin: '0 -4px', border: 'none', background: 'transparent', boxShadow: 'none', padding: 0, fontSize: 12, height: 18, color: faint(d) ?? 'var(--color-text)' }}
           >
@@ -241,6 +244,7 @@ export function AppointerSheet({
             title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
             onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
             align="center"
+            disabled={readOnly}
           />
         );
         return (
