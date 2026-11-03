@@ -46,7 +46,12 @@ export const IMPORTANCE: Record<number, { label: string; color: string; text: st
 };
 
 /** リマインド(要望: 1日前〜5分前)。null = 期日ちょうど */
+/**
+ * リマインド(期日より前の通知)。既定は「なし」= 期日の時刻の通知だけ(要望)。
+ * リマインドを選ぶと、リマインドの時刻と期日の時刻に別々に通知する。「通知しない」はどちらも送らない。
+ */
 export const REMIND_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'なし' },
   { value: 1440, label: '1日前' },
   { value: 720, label: '12時間前' },
   { value: 360, label: '6時間前' },
@@ -57,7 +62,6 @@ export const REMIND_OPTIONS: { value: number | null; label: string }[] = [
   { value: 15, label: '15分前' },
   { value: 10, label: '10分前' },
   { value: 5, label: '5分前' },
-  { value: null, label: '期日ちょうど' },
   { value: -1, label: '通知しない' },
 ];
 

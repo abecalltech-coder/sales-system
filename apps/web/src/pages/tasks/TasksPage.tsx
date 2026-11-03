@@ -207,7 +207,8 @@ function TaskRow({ t, onComplete, onReopen, onEdit, onDelete }: { t: TaskItem; o
               {fmtDue(t.currentDueAt)}
             </span>
             {repeat && <span>繰り返し: {repeat}</span>}
-            {t.currentDueAt && remind && <span>通知: {remind}</span>}
+            {/* リマインドなし(期日の通知だけ)は表示しない */}
+            {t.currentDueAt && remind && t.remindMinutes !== null && <span>{t.remindMinutes === -1 ? '通知しない' : `リマインド: ${remind}`}</span>}
             <span>作成: {t.createdByName}</span>
           </span>
           {/* 誰のタスクか(要望: 1か所にまとめる)。部署・全員表示では担当者ごとの完了状況、それ以外は対象(All/部署/個人) */}
@@ -462,18 +463,25 @@ export function TaskEditor({ task, onClose }: { task: TaskItem | null; onClose: 
         </div>
         <label style={row}>
           <span style={lab}>リマインド</span>
-          <select
-            value={form.remindMinutes === null ? '' : String(form.remindMinutes)}
-            onChange={(e) => set({ remindMinutes: e.target.value === '' ? null : Number(e.target.value) })}
-            disabled={!form.date}
-            style={{ fontSize: 13 }}
-          >
-            {REMIND_OPTIONS.map((o) => (
-              <option key={String(o.value)} value={o.value === null ? '' : String(o.value)}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+            <select
+              value={form.remindMinutes === null ? '' : String(form.remindMinutes)}
+              onChange={(e) => set({ remindMinutes: e.target.value === '' ? null : Number(e.target.value) })}
+              disabled={!form.date}
+              style={{ fontSize: 13 }}
+            >
+              {REMIND_OPTIONS.map((o) => (
+                <option key={String(o.value)} value={o.value === null ? '' : String(o.value)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            {form.date && form.remindMinutes !== -1 && (
+              <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
+                {form.remindMinutes === null ? '期日の時刻に通知します' : 'リマインドと期日の時刻に別々に通知します'}
+              </span>
+            )}
+          </span>
         </label>
         <div style={{ ...row, alignItems: 'start' }}>
           <span style={{ ...lab, paddingTop: 6 }}>繰り返し</span>
