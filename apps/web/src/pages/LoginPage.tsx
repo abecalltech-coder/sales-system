@@ -19,7 +19,8 @@ export function LoginPage() {
       await api.post('/auth/login', { email, password });
       // 同じ端末で別のユーザーがログインしたとき、前の人のメモ・アポ詳細などが画面に残らないようにする
       queryClient.clear();
-      navigate('/toss-cases');
+      // 行き先はタブ表示の設定で決める(HomeRedirect)
+      navigate('/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '通信エラーが発生しました');
     } finally {

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '../../components/AppLayout';
 import { useTossFormFields, useMe, TossFormField } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
+import { isNavTabAllowed } from '../../lib/navTabs';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
 
@@ -56,9 +57,12 @@ export function TossEntryPage() {
       <div className="page" style={{ maxWidth: 640 }}>
         <div className="page-header">
           <h1 className="page-title">トス登録</h1>
-          <button onClick={() => navigate('/toss-cases')} style={{ fontSize: 12 }}>
-            トス実績一覧へ →
-          </button>
+          {/* トス実績管理のタブが無い役職には一覧への入口を出さない */}
+          {isNavTabAllowed('/toss-cases', me?.visibleTabs) && (
+            <button onClick={() => navigate('/toss-cases')} style={{ fontSize: 12 }}>
+              トス実績一覧へ →
+            </button>
+          )}
         </div>
 
         <PresenceBar viewers={presence.viewers} />

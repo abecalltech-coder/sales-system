@@ -30,3 +30,19 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/admin/integrations', label: '連携設定', group: '管理' },
   { key: '/admin/audit-logs', label: '操作ログ', group: '管理' },
 ];
+
+/** 役職のタブ表示設定(visibleTabs)で開いてよいか。null は制限なし。一覧に無い画面(チャット等)は常に可 */
+export function isNavTabAllowed(path: string, visibleTabs: string[] | null | undefined): boolean {
+  if (!visibleTabs) return true;
+  if (!ALL_NAV_TABS.some((t) => t.key === path)) return true;
+  return visibleTabs.includes(path);
+}
+
+/**
+ * ログイン直後・「/」で開く画面(要望: タブを付けていない役職がトス実績を見られないように)。
+ * 従来どおりトス実績管理が見られる人はそこ、見られない人は表示できる最初のタブ、何も無ければタスク
+ */
+export function landingPath(visibleTabs: string[] | null | undefined): string {
+  if (isNavTabAllowed('/toss-cases', visibleTabs)) return '/toss-cases';
+  return ALL_NAV_TABS.find((t) => !t.key.startsWith('/admin/') && visibleTabs?.includes(t.key))?.key ?? '/tasks';
+}

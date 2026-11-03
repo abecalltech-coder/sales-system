@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { TossCasesListPage } from './pages/toss-cases/TossCasesListPage';
 import { TossEntryPage } from './pages/toss-cases/TossEntryPage';
@@ -23,7 +23,7 @@ import { MemosPage } from './pages/memos/MemosPage';
 import { WorkRulesPage } from './pages/work-rules/WorkRulesPage';
 import { CloseReportPage } from './pages/close-reports/CloseReportPage';
 import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
-import { RequireAuth } from './components/RequireAuth';
+import { HomeRedirect, RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
 
 function protect(element: JSX.Element) {
@@ -68,7 +68,7 @@ export function App() {
         <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
         <Route path="/admin/integrations" element={protectAdmin(<IntegrationsPage />)} />
-        <Route path="/" element={<Navigate to="/toss-cases" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
       </Routes>
     </BrowserRouter>
   );

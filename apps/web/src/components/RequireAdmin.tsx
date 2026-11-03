@@ -13,7 +13,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     if (error && !isLoggedOutError(error)) return <AuthRetry onRetry={() => void refetch()} />;
     return <Navigate to="/login" replace />;
   }
-  if (!data.roles.some((r) => ADMIN_ROLES.includes(r))) return <Navigate to="/toss-cases" replace />;
+  if (!data.roles.some((r) => ADMIN_ROLES.includes(r))) return <Navigate to="/" replace />;
 
   return <>{children}</>;
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { TossCasesService } from './toss-cases.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -36,6 +36,19 @@ const CSV_COLUMNS = [
   'statusId',
 ] as const;
 
+/** トス実績管理のタブ(ユーザー管理の「役職ごとのタブ表示」) */
+const TOSS_CASES_TAB = '/toss-cases';
+
+/**
+ * トス実績の一覧を見てよいか(要望: タブを付けていない役職(AP など)は、ログインしても一覧が見えないように)。
+ * トス登録などで toss_case の権限自体は持っているため、一覧・CSV はタブ表示の設定で絞る。管理者とタブ制限なしの役職は見られる
+ */
+function assertCanViewList(user: AuthenticatedUser) {
+  const isAdmin = user.roles.includes('SUPER_ADMIN') || user.roles.includes('ADMIN');
+  if (isAdmin || !user.visibleTabs || user.visibleTabs.includes(TOSS_CASES_TAB)) return;
+  throw new ForbiddenException('トス実績管理を見る権限がありません(ユーザー管理の役職ごとのタブ表示で設定します)');
+}
+
 @Controller('toss-cases')
 export class TossCasesController {
   constructor(
@@ -45,7 +58,8 @@ export class TossCasesController {
 
   @RequirePermissions({ resource: 'toss_case', action: 'view' })
   @Get()
-  list(@Query() query: ListQueryDto) {
+  list(@Query() query: ListQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    assertCanViewList(user);
     return this.tossCasesService.list(query);
   }
 
@@ -55,7 +69,8 @@ export class TossCasesController {
    */
   @RequirePermissions({ resource: 'toss_case', action: 'export' })
   @Get('export')
-  async export(@Res() res: Response, @Query('statusId') statusId?: string) {
+  async export(@Res() res: Response, @CurrentUser() user: AuthenticatedUser, @Query('statusId') statusId?: string) {
+    assertCanViewList(user);
     const statusMasters = await this.prisma.statusMaster.findMany({
       where: { category: { in: ['TOSS', 'TOSS_PRE_CONFIRM', 'TOSS_PROGRESS', 'TOSS_NG_REASON'] } },
     });
