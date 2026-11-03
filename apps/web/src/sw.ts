@@ -58,9 +58,27 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// ブラウザが通知の登録を入れ替えたとき(期限切れ等)、アプリを開かなくても新しい登録をサーバーへ送る
+// (要望: しばらく開かなくても通知が来るように)。ログイン切れで送れなければ、次に開いたときに画面側が登録し直す
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const e = event as ExtendableEvent & { oldSubscription?: PushSubscription | null; newSubscription?: PushSubscription | null };
+  e.waitUntil(
+    (async () => {
+      let sub = e.newSubscription ?? null;
+      if (!sub) {
+        const key = e.oldSubscription?.options.applicationServerKey;
+        if (!key) return;
+        sub = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      }
+      const json = sub.toJSON();
+      await callApi('/push/subscribe', { endpoint: json.endpoint, keys: json.keys }).catch(() => false);
+    })(),
+  );
+});
+
 /** 期限切れのアクセストークンを1回だけ更新して API を呼ぶ(通知のボタンはアプリを開かずに処理する) */
-async function callApi(path: string): Promise<boolean> {
-  const run = () => fetch(`/api${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+async function callApi(path: string, body: unknown = {}): Promise<boolean> {
+  const run = () => fetch(`/api${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   let res = await run();
   if (res.status === 401) {
     // 開いている画面と同時に更新すると全セッションが失効するため、画面側と同じロックで順番待ちにする

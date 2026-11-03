@@ -204,10 +204,13 @@ model RefreshToken {
   expiresAt DateTime
   revokedAt DateTime?
   replacedBy String?
+  // 端末(ログイン)ごとの系列。ローテーションしても同じ値を引き継ぐ。異常時はこの系列(その端末)だけ失効させる
+  familyId  String?
   createdByIp String?
   createdAt DateTime  @default(now())
 
   @@index([userId])
+  @@index([familyId])
 }
 
 model AuditLog {

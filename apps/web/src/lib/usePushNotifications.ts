@@ -10,6 +10,43 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 type PermissionState = NotificationPermission | 'unsupported';
 
+/** この端末で通知をOFFにしたか(OFFにした人には自動で登録し直さない) */
+const OPT_OUT_KEY = 'push.optOut';
+const optedOut = () => {
+  try {
+    return localStorage.getItem(OPT_OUT_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+const setOptOut = (v: boolean) => {
+  try {
+    if (v) localStorage.setItem(OPT_OUT_KEY, '1');
+    else localStorage.removeItem(OPT_OUT_KEY);
+  } catch {
+    // 保存できない端末では毎回登録し直すだけ
+  }
+};
+
+/** 購読を作って(無ければ)サーバーへ登録する。サーバー側で消えていても登録し直せる(同じ端末は上書き) */
+async function registerSubscription(): Promise<boolean> {
+  const { publicKey } = await api.get<{ publicKey: string | null }>('/push/vapid-public-key');
+  if (!publicKey) return false;
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+    });
+  }
+  const json = sub.toJSON();
+  await api.post('/push/subscribe', { endpoint: json.endpoint, keys: json.keys });
+  return true;
+}
+
+let resynced = false;
+
 /**
  * CLカレンダーのリマインド・実施報告のデスクトップ/スマホ通知(Web Push)を
  * 有効化するためのフック(セクション追加要望)。PWAとしてインストールされた
@@ -25,6 +62,14 @@ export function usePushNotifications() {
 
   useEffect(() => {
     if (permission !== 'granted' || !('serviceWorker' in navigator)) return;
+    // 開くたびに(1回だけ)通知の登録をサーバーへ送り直す。長く開かない間に期限切れで消えた登録や、
+    // ブラウザが入れ替えた登録でも、次に開いたときに通知が届くように戻す(要望: いつでも通知が来るように)
+    if (!resynced && !optedOut() && 'PushManager' in window) {
+      resynced = true;
+      registerSubscription()
+        .then((ok) => ok && setSubscribed(true))
+        .catch(() => undefined);
+    }
     navigator.serviceWorker.ready
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setSubscribed(Boolean(sub)))
@@ -46,22 +91,11 @@ export function usePushNotifications() {
         return;
       }
 
-      const { publicKey } = await api.get<{ publicKey: string | null }>('/push/vapid-public-key');
-      if (!publicKey) {
+      if (!(await registerSubscription())) {
         setError('サーバー側の通知設定が未完了です');
         return;
       }
-
-      const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
-        });
-      }
-      const json = sub.toJSON();
-      await api.post('/push/subscribe', { endpoint: json.endpoint, keys: json.keys });
+      setOptOut(false);
       setSubscribed(true);
     } catch {
       setError('通知の有効化に失敗しました');
@@ -82,6 +116,7 @@ export function usePushNotifications() {
         await api.request('/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => undefined);
         await sub.unsubscribe();
       }
+      setOptOut(true);
       setSubscribed(false);
     } catch {
       setError('通知の停止に失敗しました');

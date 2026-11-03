@@ -40,7 +40,8 @@
 - **申込情報/明細**(`/application-sheets`): 全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。
 - **案件管理**の一括投入は、手打ちの値を絶対に上書きしない(`Deal.importedKeys`、`apps/api/src/deals/import-merge.ts`)。
 - 一覧表は共通の `components/DataTable.tsx`(範囲選択・コピー/貼り付け・手動並び替え・行の非表示)。
-- 通知は Web Push(VAPID)+ アプリ内表示。ログインはリフレッシュトークン(ローテーション式)で 1 年保持。更新はタブ間で Web Locks により順番待ちにしている(同時更新すると全セッション失効するため)。
+- 通知は Web Push(VAPID)。開くたびに購読をサーバーへ登録し直す(`usePushNotifications`)、SW の `pushsubscriptionchange` でも登録し直す。タスク通知は取りこぼしても後から必ず送る(起点は system-settings `taskNotifyCatchupFrom`、それより前の回は送らない)。
+- ログインはリフレッシュトークン(ローテーション式)で 1 年保持。端末ごとの系列 `RefreshToken.familyId` で管理し、交換直後(5分以内)の古いトークンは出し直し、それ以外の異常もその端末の系列だけ失効(他の端末はログインしたまま)。更新はタブ間で Web Locks により順番待ち。
 
 ## コード
 - 周りのコードに合わせる。コメントは日本語で「なぜそうしたか(要望)」を短く書く既存の書き方に倣う。

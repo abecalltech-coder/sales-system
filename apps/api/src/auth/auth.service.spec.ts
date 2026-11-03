@@ -102,4 +102,46 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
   });
+
+  describe('リフレッシュ(複数端末で常時ログイン)', () => {
+    const active = { id: 't1', userId: 'user-1', tokenHash: 'h', expiresAt: new Date(Date.now() + 86400_000), revokedAt: null, replacedBy: null, familyId: 'fam-A' };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue(baseUser);
+      prisma.refreshToken.create.mockResolvedValue({});
+      prisma.refreshToken.update.mockResolvedValue({});
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    });
+
+    it('ローテーションしても同じ端末の系列を引き継ぐ', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue(active);
+      await service.refresh('raw', undefined);
+      expect(prisma.refreshToken.create.mock.calls[0][0].data.familyId).toBe('fam-A');
+      expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('交換直後の古いトークン(通信の行き違い)は、その端末だけで出し直してログインを保つ', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({ ...active, revokedAt: new Date(Date.now() - 30_000), replacedBy: 'next' });
+      const r = await service.refresh('raw', undefined);
+      expect(typeof r.refreshToken).toBe('string');
+      // 失効させるのはその端末の系列だけ(他の端末はログインしたまま)
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({ where: { familyId: 'fam-A', revokedAt: null }, data: expect.anything() });
+      expect(prisma.refreshToken.create.mock.calls[0][0].data.familyId).toBe('fam-A');
+    });
+
+    it('時間が経った失効済みトークンは拒否し、その端末の系列だけ失効させる(ユーザーの全端末は失効させない)', async () => {
+      prisma.refreshToken.findUnique.mockResolvedValue({ ...active, revokedAt: new Date(Date.now() - 3600_000), replacedBy: 'next' });
+      await expect(service.refresh('raw', undefined)).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+      expect(prisma.refreshToken.updateMany.mock.calls[0][0].where).toEqual({ familyId: 'fam-A', revokedAt: null });
+    });
+
+    it('ログインごとに別の系列になる', async () => {
+      await service.issueRefreshToken('user-1', undefined);
+      await service.issueRefreshToken('user-1', undefined);
+      const [a, b] = prisma.refreshToken.create.mock.calls.map((c) => c[0].data.familyId);
+      expect(a).toBeTruthy();
+      expect(a).not.toBe(b);
+    });
+  });
 });

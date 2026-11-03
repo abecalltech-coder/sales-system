@@ -19,8 +19,12 @@ export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5];
 /** タスク閲覧範囲「AP全員」の対象になる役職 */
 const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
 const SNOOZE_MS = 5 * 60_000;
-/** 期日の通知(リマインドとは別に鳴らす分)を送る猶予。これより前に期日を過ぎたものは送らない */
-const DUE_PUSH_WINDOW_MS = 30 * 60_000;
+/**
+ * 通知の取りこぼしを後から送る起点(system-settings。マイグレーションで反映した時刻を入れる)。
+ * これより前に過ぎた回は、反映直後に一斉に鳴らないよう送らない。これ以降はサーバーが止まっていても
+ * 再開した時点で必ず送る(要望: しばらく開かなくても、いつでも通知が来るように)。
+ */
+const CATCHUP_SETTING_KEY = 'taskNotifyCatchupFrom';
 const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 
 class SaveTaskDto {
@@ -384,11 +388,13 @@ export class TasksService {
   @Cron(CronExpression.EVERY_MINUTE)
   async sendDue() {
     try {
-      const [tasks, users] = await Promise.all([
+      const [tasks, users, catchupSetting] = await Promise.all([
         this.prisma.task.findMany({ where: { deletedAt: null, dueAt: { not: null } }, include: { progress: true } }),
         this.activeUsers(),
+        this.prisma.systemSetting.findUnique({ where: { key: CATCHUP_SETTING_KEY } }),
       ]);
       const now = Date.now();
+      const catchupFrom = typeof catchupSetting?.value === 'string' ? new Date(catchupSetting.value).getTime() || 0 : 0;
       for (const t of tasks) {
         for (const uid of this.targetsOf(t, users)) {
           const p = t.progress.find((x) => x.userId === uid);
@@ -400,14 +406,12 @@ export class TasksService {
           const afterSnooze = !!p?.snoozeUntil && (!p.lastNotifiedAt || p.lastNotifiedAt.getTime() < p.snoozeUntil.getTime());
           // 要望: リマインド(○分前)とは別に、期日の時刻にも必ず鳴らす(期日前に送ったのがリマインドだけなら期日にもう1回)
           const isDue = current.getTime() <= now;
-          // 期日から時間が経った分は送らない(反映直後に過去の期限切れタスクが一斉に鳴らないように)
           const dueAfterRemind =
-            isDue && now - current.getTime() < DUE_PUSH_WINDOW_MS && (t.remindMinutes ?? 0) > 0 && !!p?.lastNotifiedAt && p.lastNotifiedAt.getTime() < current.getTime();
+            isDue && current.getTime() >= catchupFrom && (t.remindMinutes ?? 0) > 0 && !!p?.lastNotifiedAt && p.lastNotifiedAt.getTime() < current.getTime();
           if (sameOccurrence && !afterSnooze && !dueAfterRemind) continue;
-          // 通知時刻から時間が経った初回の通知は、その後にタスクを作成・編集していなければ送らない
-          // (旧「通知しない」から切り替わった期限切れタスクが反映直後に一斉に鳴らないように)
+          // 起点より前に過ぎた回は、その後にタスクを作成・編集していなければ送らない(過去の分が一斉に鳴らないように)
           const alertMs = this.alertAt(t, current).getTime();
-          if (!sameOccurrence && !afterSnooze && now - alertMs > DUE_PUSH_WINDOW_MS && t.updatedAt.getTime() < alertMs) continue;
+          if (!sameOccurrence && !afterSnooze && alertMs < catchupFrom && t.updatedAt.getTime() < alertMs) continue;
 
           await this.prisma.taskProgress.upsert({
             where: { taskId_userId: { taskId: t.id, userId: uid } },

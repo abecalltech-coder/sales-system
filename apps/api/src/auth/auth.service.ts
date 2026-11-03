@@ -12,6 +12,8 @@ const ACCESS_TOKEN_TTL = '15m';
 // 要望: 端末でログインしていればログアウトさせない。使うたびに延長されるので、1年開かなければ再ログイン
 // (ブラウザがCookieを保持できる上限は約400日)
 export const REFRESH_TOKEN_TTL_DAYS = 365;
+/** 交換済みのトークンが届いても、この時間内なら通信の行き違いとして出し直す */
+const REUSE_GRACE_MS = 5 * 60_000;
 
 @Injectable()
 export class AuthService {
@@ -83,16 +85,25 @@ export class AuthService {
     });
   }
 
-  async issueRefreshToken(userId: string, ip: string | undefined): Promise<string> {
+  /** familyId を渡すとその端末の系列を引き継ぐ(ローテーション)。無ければ新しい端末(ログイン) */
+  async issueRefreshToken(userId: string, ip: string | undefined, familyId?: string): Promise<string> {
     const raw = randomUUID() + randomUUID();
     const tokenHash = this.hashToken(raw);
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60_000);
 
     await this.prisma.refreshToken.create({
-      data: { userId, tokenHash, expiresAt, createdByIp: ip },
+      data: { userId, tokenHash, expiresAt, createdByIp: ip, familyId: familyId ?? randomUUID() },
     });
 
     return raw;
+  }
+
+  /** その端末(系列)の有効なトークンをすべて失効させる。系列の無い古いトークンはそれ自身だけ */
+  private async revokeFamily(stored: { id: string; familyId: string | null }) {
+    await this.prisma.refreshToken.updateMany({
+      where: stored.familyId ? { familyId: stored.familyId, revokedAt: null } : { id: stored.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async refresh(rawToken: string | undefined, ip: string | undefined) {
@@ -101,16 +112,20 @@ export class AuthService {
 
     const stored = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
 
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
-      // 失効済み/不明なトークンの再利用は再利用攻撃の可能性があるため、
-      // 該当ユーザーの全セッションを失効させる。
-      if (stored?.userId) {
-        await this.prisma.refreshToken.updateMany({
-          where: { userId: stored.userId, revokedAt: null },
-          data: { revokedAt: new Date() },
-        });
-      }
+    if (!stored || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('リフレッシュトークンが無効です');
+    }
+
+    if (stored.revokedAt) {
+      // 交換した直後の古いトークンが届くのは、携帯で応答を受け取る前にアプリが裏に回った等の通信の行き違い。
+      // その端末の系列で新しいトークンを出し直す(要望: 複数端末で常時ログイン)。
+      const graceOk = !!stored.replacedBy && Date.now() - stored.revokedAt.getTime() < REUSE_GRACE_MS;
+      if (!graceOk) {
+        // 時間が経った失効済みトークンの再利用は盗用の可能性があるため、その端末の系列だけ失効させる
+        // (以前はユーザーの全セッションを失効させており、1台の行き違いで全端末がログアウトされていた)
+        await this.revokeFamily(stored);
+        throw new UnauthorizedException('リフレッシュトークンが無効です');
+      }
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
@@ -118,11 +133,14 @@ export class AuthService {
       throw new UnauthorizedException('ユーザーが無効です');
     }
 
-    // ローテーション: 旧トークンを失効させ新トークンを発行
-    const newRawToken = await this.issueRefreshToken(user.id, ip);
+    // 行き違いの出し直しでは、先に出していた後継トークンを失効させ、系列の有効なトークンを1つに保つ
+    if (stored.revokedAt) await this.revokeFamily(stored);
+
+    // ローテーション: 旧トークンを失効させ新トークンを発行(同じ端末の系列を引き継ぐ)
+    const newRawToken = await this.issueRefreshToken(user.id, ip, stored.familyId ?? undefined);
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
-      data: { revokedAt: new Date(), replacedBy: this.hashToken(newRawToken) },
+      data: { revokedAt: stored.revokedAt ?? new Date(), replacedBy: this.hashToken(newRawToken) },
     });
 
     const accessToken = this.signAccessToken(user.id, user.email);
