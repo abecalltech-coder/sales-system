@@ -5,11 +5,11 @@ import { InlineNumber } from '../../components/InlineEdit';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { fmtRate, rateColor } from './parts';
 import { CumulativeChart } from './charts';
-import { PLAN_METRICS, PlanMetric, computeApSummary, planOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
+import { PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
- * トス(青)・アポ(オレンジ)の「月初予算 / 実績 / 修正予算」を並べる。セル操作は案件管理と同じ DataTable
+ * トス(青)・アポ(オレンジ)の「月初予算 / 実績 / 着地見込み(自動)」を並べる。セル操作は案件管理と同じ DataTable
  * (矢印・Tab・Enter、範囲選択、コピー・貼り付け)。PC は表の右に累計、携帯は上に累計を出してトス/アポを切り替える。
  */
 
@@ -216,24 +216,22 @@ export function AppointerSheet({
     const toss = m.key === 'TOSS_UP';
     const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
     const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
-    // 見出しは2段: 上にトス(青)/アポ(オレンジ)、下に月初予算・実績・修正予算。入力欄は稼働日は白のまま(要望)
+    // 見出しは2段: 上にトス(青)/アポ(オレンジ)、下に月初予算・実績・着地見込み。入力欄は稼働日は白のまま(要望)
     const numberCol = (key: PersonalDailyKey, label: string, actual?: boolean): Column<SheetRow> => ({
       key,
       label: `${m.label}${label}`,
-      width: isPhone ? 66 : 64,
+      width: key === m.revised ? 74 : isPhone ? 66 : 64,
       locked: true,
       headerBackground: soft,
       group: { key: m.key, label: <span style={{ color }}>{m.label}</span>, background: soft },
       renderHeader: () => <span style={{ color, fontWeight: actual ? 800 : 700 }}>{label}</span>,
       render: (r) => {
         if (r.kind !== 'day') {
-          // 修正予算の列の週計・月合計は「修正後の予算」(修正予算が入った日はそれ、無い日は月初予算)の合計。
-          // 上の累計カード・部署サマリーの予算と同じ数字にそろえる(要望: 上と下の合計が合わない)。修正予算が1日も無ければ空欄
+          // 着地見込みの週計・月合計(要望: 修正予算 → 着地見込み。実績から自動で出し、手入力はしない)
           if (key === m.revised) {
-            const shown = r.days.some((d) => textOf(d, key) !== '');
             return (
-              <div style={{ textAlign: 'center', fontWeight: 700 }} title="修正後の予算の合計(修正予算が無い日は月初予算で計算)">
-                {shown ? sum(r.days, (d) => planOf(getter, d, m)) : ' '}
+              <div style={{ textAlign: 'center', fontWeight: 700 }} title="着地見込み = 過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">
+                {sum(r.days, (d) => landingOf(getter, d, m, today))}
               </div>
             );
           }
@@ -244,6 +242,12 @@ export function AppointerSheet({
           );
         }
         const d = r.date!;
+        if (key === m.revised) {
+          // 着地見込みは入力欄にしない。実績から来た数字は濃く、月初予算から来た数字(まだ実績の無い今日以降)は薄く
+          const fromActual = d < today || valueOf(d, m.key) > 0;
+          const v = landingOf(getter, d, m, today);
+          return <span style={{ color: fromActual ? 'var(--color-text)' : 'var(--color-text-faint)', fontWeight: fromActual ? 700 : 400 }}>{v || ''}</span>;
+        }
         const autoV = actual ? autoOf(d, key) : undefined;
         const cell = (
           <InlineNumber
@@ -261,13 +265,18 @@ export function AppointerSheet({
       },
       copyValue: (r) => {
         if (r.kind !== 'day') return '';
+        if (key === m.revised) return String(landingOf(getter, r.date!, m, today) || '');
         return actual ? String(valueOf(r.date!, key) || '') : textOf(r.date!, key);
       },
-      pasteValue: (r, text) => {
-        if (r.kind === 'day') save(r.date!, key, parseCount(text));
-      },
+      // 着地見込みは自動計算なので貼り付けもできない
+      pasteValue:
+        key === m.revised
+          ? undefined
+          : (r, text) => {
+              if (r.kind === 'day') save(r.date!, key, parseCount(text));
+            },
     });
-    return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '修正予算')];
+    return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '着地見込み')];
   };
 
   const columns: Column<SheetRow>[] = isPhone
@@ -380,6 +389,7 @@ function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof compute
         {stats.map((s) => {
           const toss = s.key === 'TOSS_UP';
           const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
+          const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
           const ratio = s.plan > 0 ? Math.min(1, s.actual / s.plan) : 0;
           return (
             <div
@@ -393,20 +403,17 @@ function SummaryPanel({ summary, compact }: { summary: ReturnType<typeof compute
                 textAlign: 'center',
               }}
             >
-              <div style={{ fontSize: compact ? 11 : 12, fontWeight: 700, color }}>{toss ? 'トス' : 'アポ'}</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4 }}>
-                <span style={{ fontSize: compact ? 20 : 22, fontWeight: 700 }}>{s.actual}</span>
-                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>件</span>
-              </div>
-              {/* 予算は大きめに、当初予算(月初予算の合計)と修正予算(修正後の合計)を両方出す(要望) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 4, margin: '4px 0' }}>
+              <div style={{ fontSize: compact ? 12 : 13, fontWeight: 800, color }}>{toss ? 'トス' : 'アポ'}</div>
+              {/* 実績・当初予算・着地見込みを同じ大きさの枠で並べ、何の数字か分かるように(要望) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4, margin: '4px 0' }}>
                 {[
-                  { label: '当初予算', value: s.budgetTotal, on: !s.hasRevised },
-                  { label: '修正予算', value: s.hasRevised ? s.plan : null, on: s.hasRevised },
+                  { label: toss ? 'トス数' : 'アポ数', value: s.actual, color, bg: soft },
+                  { label: '当初予算', value: s.plan, color: 'var(--color-text)', bg: 'var(--color-subtle)' },
+                  { label: '着地見込み', value: s.landing, color: 'var(--color-text)', bg: 'var(--color-subtle)' },
                 ].map((b) => (
-                  <div key={b.label} style={{ background: 'var(--color-subtle)', borderRadius: 6, padding: '2px 4px' }}>
+                  <div key={b.label} style={{ background: b.bg, borderRadius: 6, padding: '3px 2px' }}>
                     <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700 }}>{b.label}</div>
-                    <div style={{ fontSize: compact ? 16 : 18, fontWeight: 800, color: b.on ? 'var(--color-text)' : 'var(--color-text-muted)' }}>{b.value ?? '—'}</div>
+                    <div style={{ fontSize: compact ? 17 : 20, fontWeight: 800, color: b.color }}>{b.value}</div>
                   </div>
                 ))}
               </div>

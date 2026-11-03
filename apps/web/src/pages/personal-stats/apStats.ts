@@ -4,7 +4,7 @@ import { rateOf } from './parts';
 /**
  * アポインターのシートの累計計算(シート上部と部署サマリーで同じ計算を使う)。
  * - 稼働時間は月初に予定として全部入れるため、今日までの日だけ数える(要望)
- * - 予算は日ごとに「修正予算が入っていればそちらを優先」
+ * - 予算は月初予算。着地見込みは手入力せず、実績から自動で出す(要望: 修正予算 → 着地見込み)
  */
 
 export const SEAT_HOURS = 176;
@@ -30,7 +30,17 @@ export function todayKeyJst(): string {
 /** 今日までの日か(過去の月は全部、先の月は無し) */
 export const isCounted = (d: string, today: string) => d <= today;
 
-export const planOf = (g: DayGetter, d: string, m: PlanMetric) => (g.entered(d, m.revised) ? g.value(d, m.revised) : g.value(d, m.budget));
+export const planOf = (g: DayGetter, d: string, m: PlanMetric) => g.value(d, m.budget);
+
+/**
+ * 1日の着地見込み(要望: 実績に入れた数字がそのまま反映され、手入力はしない)。
+ * 過ぎた日は実績(無ければ0)、今日以降は実績があれば実績、まだ無ければ月初予算
+ */
+export const landingOf = (g: DayGetter, d: string, m: PlanMetric, today: string) => {
+  const actual = g.value(d, m.key);
+  if (d < today) return actual;
+  return actual > 0 ? actual : g.value(d, m.budget);
+};
 
 const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
 
@@ -52,17 +62,14 @@ export function computeApSummary(days: string[], today: string, g: DayGetter) {
   const stats = PLAN_METRICS.map((m) => {
     const actual = sum(days, (d) => g.value(d, m.key));
     const plan = sum(days, (d) => planOf(g, d, m));
-    // 当初予算(月初予算だけの合計)と、修正予算が1日でも入っているか(累計カードで両方出すため)
-    const budgetTotal = sum(days, (d) => g.value(d, m.budget));
-    const hasRevised = days.some((d) => g.entered(d, m.revised));
+    const landing = sum(days, (d) => landingOf(g, d, m, today));
     const planToDate = sum(counted, (d) => planOf(g, d, m));
     const rest = Math.max(0, plan - actual);
     return {
       ...m,
       actual,
       plan,
-      budgetTotal,
-      hasRevised,
+      landing,
       planToDate,
       rest,
       perDay: restDays > 0 ? rest / restDays : null,

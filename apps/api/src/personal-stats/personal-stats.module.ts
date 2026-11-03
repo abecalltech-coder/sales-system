@@ -381,6 +381,10 @@ class PersonalStatsService {
   /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
     await this.assertAccess(viewer, dto.userId);
+    // 旧「修正予算」は着地見込み(実績から自動計算)に変わったため、手入力は受け付けない(要望)
+    if (dto.metricKey.endsWith('_REVISED') && dto.value != null) {
+      throw new BadRequestException('着地見込みは実績から自動で計算されるため入力できません');
+    }
     if (dto.metricKey === 'WORK_MINUTES' && dto.value != null && (dto.value < 60 || dto.value > 480 || dto.value % 15 !== 0)) {
       throw new BadRequestException('稼働時間は1〜8時間を15分刻みで選んでください');
     }

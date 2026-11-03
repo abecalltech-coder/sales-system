@@ -27,9 +27,11 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
     const actual = rows.reduce((a, r) => a + r.stats[i].actual, 0);
     const plan = rows.reduce((a, r) => a + r.stats[i].plan, 0);
     const planToDate = rows.reduce((a, r) => a + r.stats[i].planToDate, 0);
+    const landing = rows.reduce((a, r) => a + r.stats[i].landing, 0);
     return {
       actual,
       plan,
+      landing,
       rest: Math.max(0, plan - actual),
       avg: totalWorkedDays > 0 ? actual / totalWorkedDays : null,
       progress: rateOf(actual, planToDate || null),
@@ -209,8 +211,8 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
           <thead>
             <tr>
               <th colSpan={4} style={th} />
-              {groupTh('トス', 'var(--color-primary)', 'var(--color-primary-soft)', 3)}
-              {groupTh('アポ', 'var(--color-appo)', 'var(--color-appo-soft)', 4)}
+              {groupTh('トス', 'var(--color-primary)', 'var(--color-primary-soft)', 4)}
+              {groupTh('アポ', 'var(--color-appo)', 'var(--color-appo-soft)', 5)}
               <th style={{ ...th, ...sep }} />
             </tr>
             <tr>
@@ -219,9 +221,11 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
               <th style={th}>席数</th>
               <th style={th} title="今日までに稼働時間が入っている日数">経過日数</th>
               <th style={{ ...th, ...sep }}>実績 / 予算</th>
+              <th style={th} title="過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">着地見込み</th>
               <th style={th}>残</th>
               <th style={th}>平均/日</th>
               <th style={{ ...th, ...sep }}>実績 / 予算</th>
+              <th style={th} title="過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">着地見込み</th>
               <th style={th}>残</th>
               <th style={th}>平均/日</th>
               <th style={th}>必要/日</th>
@@ -243,9 +247,11 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
                   <td style={td}>{fmtSeats(r.workMin, 2) || '—'}</td>
                   <td style={td}>{r.workedDays}日</td>
                   {actualCell(toss.actual, toss.plan, 'var(--color-primary)', td)}
+                  <td style={{ ...td, fontWeight: 700 }}>{toss.landing}</td>
                   <td style={{ ...td, fontWeight: 700, color: restColor(toss.rest) }}>{toss.rest}</td>
                   <td style={td}>{avg(toss.avg)}</td>
                   {actualCell(appo.actual, appo.plan, 'var(--color-appo)', td)}
+                  <td style={{ ...td, fontWeight: 700 }}>{appo.landing}</td>
                   <td style={{ ...td, fontWeight: 700, color: restColor(appo.rest) }}>{appo.rest}</td>
                   <td style={td}>{avg(appo.avg)}</td>
                   <td style={td}>{avg(appo.perDay)}</td>
@@ -259,9 +265,11 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
               <td style={total}>{fmtSeats(totalMin, 2) || '—'}</td>
               <td style={total}>—</td>
               {actualCell(tT.actual, tT.plan, 'var(--color-primary)', total)}
+              <td style={total}>{tT.landing}</td>
               <td style={{ ...total, color: restColor(tT.rest) }}>{tT.rest}</td>
               <td style={total}>{avg(tT.avg)}</td>
               {actualCell(aT.actual, aT.plan, 'var(--color-appo)', total)}
+              <td style={total}>{aT.landing}</td>
               <td style={{ ...total, color: restColor(aT.rest) }}>{aT.rest}</td>
               <td style={total}>{avg(aT.avg)}</td>
               <td style={total}>—</td>

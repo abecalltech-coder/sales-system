@@ -10,7 +10,7 @@ import { DayGetter, PlanMetric, isCounted, planOf } from './apStats';
 const colorOf = (key: PlanMetric['key']) => (key === 'TOSS_UP' ? 'var(--color-primary)' : 'var(--color-appo)');
 const softOf = (key: PlanMetric['key']) => (key === 'TOSS_UP' ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)');
 
-/** 日ごとの累計(予算は修正予算を優先。実績は今日までの日だけ) */
+/** 日ごとの累計(予算は月初予算。実績は今日までの日だけ) */
 export function cumulativeSeries(days: string[], today: string, g: DayGetter, m: PlanMetric) {
   let a = 0;
   let p = 0;
