@@ -33,6 +33,27 @@ export const SECTION_ORDER: SectionKey[] = ['basic', 'result', 'indoor', 'anshin
 
 const RESULTS = ['ET', '成約', '保留A', '保留B', '失注', '月内失注', '取次不可'];
 
+/**
+ * あんしんBiz・法人モバイル・funfo は同じ形にそろえる(要望)。
+ * 提案済み → 結果(失注なら失注理由)、未定案 → 未定案理由。選択肢は商材ごとにマスタ管理で変更できる。
+ */
+function productFields(section: 'anshin' | 'mobile' | 'funfo'): FieldDef[] {
+  return [
+    { key: `${section}Proposal`, section, kind: 'choice', label: '提案', options: ['提案済み', '未定案'] },
+    { key: `${section}Result`, section, kind: 'choice', label: '結果', options: ['獲得', '保留', '失注', '対象外'], showWhen: { key: `${section}Proposal`, index: 0 } },
+    {
+      key: `${section}LostReason`,
+      section,
+      kind: 'choice',
+      label: '失注理由',
+      options: ['課金オプションネックNG', 'オプションの重複付帯NG', '面倒NG', '電気失注NG', 'コンビニ払い希望'],
+      showWhen: { key: `${section}Result`, index: 2 },
+    },
+    // 選択肢が空の間はテキスト入力。マスタ管理で選択肢を足すとプルダウンになる
+    { key: `${section}Undecided`, section, kind: 'choice', label: '未定案理由', options: [], showWhen: { key: `${section}Proposal`, index: 1 } },
+  ];
+}
+
 export const FIELD_DEFS: FieldDef[] = [
   { key: 'storeName', section: 'basic', kind: 'text', label: '店舗名' },
   { key: 'visitDate', section: 'basic', kind: 'date', label: '訪問日' },
@@ -63,22 +84,9 @@ export const FIELD_DEFS: FieldDef[] = [
   { key: 'indoorView', section: 'indoor', kind: 'choice', label: 'Googleインドアビュー', options: ['撮影不要', '撮影済み', '予約'] },
   { key: 'photoAgreement', section: 'indoor', kind: 'choice', label: '撮影同意書', options: ['不要', '回収済み', '未回収'] },
 
-  { key: 'anshinProposal', section: 'anshin', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
-  { key: 'anshinResult', section: 'anshin', kind: 'choice', label: '結果', options: ['獲得', '保留', '失注', '対象外'], showWhen: { key: 'anshinProposal', index: 0 } },
-  {
-    key: 'anshinLostReason',
-    section: 'anshin',
-    kind: 'choice',
-    label: '失注理由',
-    options: ['課金オプションネックNG', 'オプションの重複付帯NG', '面倒NG', '電気失注NG', 'コンビニ払い希望'],
-    showWhen: { key: 'anshinResult', index: 2 },
-  },
-
-  { key: 'mobileProposal', section: 'mobile', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
-  { key: 'mobileResult', section: 'mobile', kind: 'choice', label: '結果', options: ['トスアップ'], showWhen: { key: 'mobileProposal', index: 0 } },
-
-  { key: 'funfoProposal', section: 'funfo', kind: 'choice', label: '提案', options: ['提案済み', '未提案'] },
-  { key: 'funfoReason', section: 'funfo', kind: 'text', label: '未提案理由' },
+  ...productFields('anshin'),
+  ...productFields('mobile'),
+  ...productFields('funfo'),
 
   { key: 'storeSites', section: 'detail', kind: 'sites', label: '店舗', options: RESULTS },
   { key: 'officeSites', section: 'detail', kind: 'sites', label: '事務所', options: RESULTS },
@@ -87,10 +95,11 @@ export const FIELD_DEFS: FieldDef[] = [
   { key: 'settleDate', section: 'detail', kind: 'settleDate', label: '決着予定日' },
   { key: 'method', section: 'detail', kind: 'choice', label: '対応手段', options: ['-', '訪問', '電話'] },
   { key: 'storeSupport', section: 'detail', kind: 'choice', label: '店サポ解約誘導', options: ['有', '無'] },
-  { key: 'logSubmit', section: 'detail', kind: 'choice', label: 'ログ提出', options: ['済', '未'] },
+  { key: 'logSubmit', section: 'detail', kind: 'choice', label: 'ログ提出', options: ['完了', '未完了'] },
   { key: 'salesNumber', section: 'detail', kind: 'choice', label: '営業担当番号', options: [] },
   { key: 'chNumber', section: 'detail', kind: 'choice', label: 'ＣＨ代表番号', options: [] },
-  { key: 'incompleteReason', section: 'detail', kind: 'text', label: '未完了理由' },
+  // ログ提出が「未完了」(2番目)のときだけ出す(要望)
+  { key: 'incompleteReason', section: 'detail', kind: 'text', label: '未完了理由', showWhen: { key: 'logSubmit', index: 1 } },
   { key: 'memo', section: 'detail', kind: 'textarea', label: '備考' },
 ];
 
@@ -104,6 +113,8 @@ export interface FeeRule {
 }
 
 export interface CloseReportConfig {
+  /** 設定の形の版。項目の作りを変えたときに上げ、古い保存値の該当項目は既定値に戻す */
+  version: number;
   title: string;
   maxResults: number;
   sections: Record<SectionKey, string>;
@@ -113,7 +124,17 @@ export interface CloseReportConfig {
   feeRules: FeeRule[];
 }
 
+/**
+ * 版ごとに既定値へ戻す項目。v2: 商材3つを「提案済み/未定案」にそろえ、ログ提出を「完了/未完了」に(要望)。
+ * 以前に保存された選択肢(未提案・トスアップ・済/未)のままだと条件が合わないため。
+ */
+const CONFIG_VERSION = 2;
+const RESET_BY_VERSION: Record<number, string[]> = {
+  2: ['anshinProposal', 'mobileProposal', 'mobileResult', 'funfoProposal', 'logSubmit'],
+};
+
 export const DEFAULT_CONFIG: CloseReportConfig = {
+  version: CONFIG_VERSION,
   title: 'クローズ結果報告',
   maxResults: 5,
   sections: { basic: '基本情報', result: 'クローズ結果', indoor: 'インドアビュー', anshin: 'あんしんBiz', mobile: '法人モバイル', funfo: 'funfo', detail: '詳細' },
@@ -129,10 +150,14 @@ export const DEFAULT_CONFIG: CloseReportConfig = {
 export function mergeConfig(saved: unknown): CloseReportConfig {
   const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<CloseReportConfig>;
   const fields = { ...DEFAULT_CONFIG.fields };
+  const savedVersion = Number(s.version) || 1;
+  const reset = new Set(Object.entries(RESET_BY_VERSION).flatMap(([ver, keys]) => (savedVersion < Number(ver) ? keys : [])));
   for (const [k, v] of Object.entries(s.fields ?? {})) {
-    if (fields[k] && v) fields[k] = { ...fields[k], ...v, options: Array.isArray(v.options) ? v.options : fields[k].options };
+    if (!fields[k] || !v || reset.has(k)) continue;
+    fields[k] = { ...fields[k], ...v, options: Array.isArray(v.options) ? v.options : fields[k].options };
   }
   return {
+    version: CONFIG_VERSION,
     title: s.title || DEFAULT_CONFIG.title,
     maxResults: Math.min(10, Math.max(1, Number(s.maxResults) || DEFAULT_CONFIG.maxResults)),
     sections: { ...DEFAULT_CONFIG.sections, ...(s.sections ?? {}) },
@@ -226,6 +251,7 @@ export function buildText(config: CloseReportConfig, values: CloseValues, userNa
   lines.push('');
   lines.push(`≪${config.sections.detail}≫`);
   for (const def of FIELD_DEFS.filter((d) => d.section === 'detail' && d.key !== 'memo')) {
+    if (!vis(def.key)) continue;
     if (def.kind === 'sites') {
       const count = str(values[`${def.key}Count`]) || '0';
       const res = Number(count) > 0 ? str(values[`${def.key}Result`]) : '';

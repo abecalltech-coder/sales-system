@@ -133,7 +133,16 @@ export function CloseReportConfigEditor() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <input value={f.label} onChange={(e) => setField(def.key, { label: e.target.value })} style={{ ...input, flex: 1, minWidth: 0, fontWeight: 700 }} />
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 4 }}>{kindNote(def.kind, def.key)}</div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 4 }}>
+                  {def.showWhen && (
+                    // 条件付きの項目は、どの選択肢のときに出るかを示す(選択肢の並びで決まるため)
+                    <span style={{ color: 'var(--color-primary)' }}>
+                      「{cfg.fields[def.showWhen.key]?.label}」が{def.showWhen.index + 1}番目の選択肢(
+                      {cfg.fields[def.showWhen.key]?.options[def.showWhen.index] ?? '未設定'})のときだけ表示。
+                    </span>
+                  )}
+                  {kindNote(def.kind)}
+                </div>
                 {HAS_OPTIONS.has(def.kind) && <OptionsEditor options={f.options} onChange={(options) => setField(def.key, { options })} isPhone={isPhone} input={input} />}
               </div>
             );
@@ -174,7 +183,7 @@ export function CloseReportConfigEditor() {
   );
 }
 
-function kindNote(kind: string, key: string) {
+function kindNote(kind: string) {
   if (kind === 'user') return 'システムのユーザーから選択';
   if (kind === 'fee') return '獲得プランに合わせて自動で選択肢を作る(上の「全体」で設定)';
   if (kind === 'sites') return '拠点数 + 結果。下の選択肢が「結果」になります';
@@ -182,7 +191,6 @@ function kindNote(kind: string, key: string) {
   if (kind === 'date') return '日付';
   if (kind === 'number') return '数字';
   if (kind === 'textarea') return '自由記述(複数行)';
-  if (key === 'cbAmount') return '他社解約金補填・CBで2番目の選択肢(振込)を選んだときだけ表示';
   if (kind === 'choice') return '選択肢が7個以下で短ければボタン、それ以外はプルダウン。空ならテキスト入力';
   return 'テキスト入力';
 }
