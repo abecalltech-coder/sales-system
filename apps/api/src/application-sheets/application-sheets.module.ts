@@ -36,21 +36,29 @@ class AddPhotoDto {
   @IsString() @MaxLength(300_000) thumb!: string;
 }
 
+/** 申込情報は作成したアカウント本人だけのもの(要望: 他のアカウントの作成分は管理者も含めて見られない) */
 @Injectable()
-class ApplicationSheetsService {
+export class ApplicationSheetsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
   ) {}
 
-  /** 申込情報は全員で共有するため、変更を全員の画面へ知らせる(内容はAPIで取り直す) */
-  private changed(id: string) {
-    this.realtime.emitToAll('application-sheets.updated', { id });
+  /** 変更は本人の他の端末へだけ知らせる(内容はAPIで取り直す) */
+  private changed(id: string, userId: string) {
+    this.realtime.emitToUser(userId, 'application-sheets.updated', { id });
   }
 
-  async list() {
+  /** 本人の申込情報を取る。他のアカウントの分は存在しないものとして扱う */
+  private async ownSheet(id: string, userId: string) {
+    const sheet = await this.prisma.applicationSheet.findFirst({ where: { id, createdBy: userId, deletedAt: null } });
+    if (!sheet) throw new NotFoundException('申込情報が見つかりません');
+    return sheet;
+  }
+
+  async list(userId: string) {
     const rows = await this.prisma.applicationSheet.findMany({
-      where: { deletedAt: null },
+      where: { createdBy: userId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 2000,
       include: { _count: { select: { photos: true } } },
@@ -73,13 +81,12 @@ class ApplicationSheetsService {
         updatedBy: userId,
       },
     });
-    this.changed(row.id);
+    this.changed(row.id, userId);
     return row;
   }
 
   async update(id: string, dto: SaveSheetDto, userId: string) {
-    const existing = await this.prisma.applicationSheet.findFirst({ where: { id, deletedAt: null } });
-    if (!existing) throw new NotFoundException('申込情報が見つかりません');
+    const existing = await this.ownSheet(id, userId);
     const hasJuryo = dto.hasJuryo ?? existing.hasJuryo;
     const hasDoryoku = dto.hasDoryoku ?? existing.hasDoryoku;
     if (!hasJuryo && !hasDoryoku) throw new BadRequestException('従量・動力のどちらか(または両方)を選んでください');
@@ -93,12 +100,13 @@ class ApplicationSheetsService {
         updatedBy: userId,
       },
     });
-    this.changed(id);
+    this.changed(id, userId);
     return row;
   }
 
   /** 写真の一覧(小さい画像のみ。元の大きさは photo() で個別に取る) */
-  photos(sheetId: string) {
+  async photos(sheetId: string, userId: string) {
+    await this.ownSheet(sheetId, userId);
     return this.prisma.applicationSheetPhoto.findMany({
       where: { sheetId },
       orderBy: { createdAt: 'asc' },
@@ -106,34 +114,39 @@ class ApplicationSheetsService {
     });
   }
 
-  async photo(photoId: string) {
-    const p = await this.prisma.applicationSheetPhoto.findUnique({ where: { id: photoId }, select: { id: true, image: true } });
+  async photo(photoId: string, userId: string) {
+    const p = await this.prisma.applicationSheetPhoto.findFirst({
+      where: { id: photoId, sheet: { createdBy: userId, deletedAt: null } },
+      select: { id: true, image: true },
+    });
     if (!p) throw new NotFoundException('写真が見つかりません');
     return p;
   }
 
   async addPhoto(sheetId: string, dto: AddPhotoDto, userId: string) {
-    const sheet = await this.prisma.applicationSheet.findFirst({ where: { id: sheetId, deletedAt: null } });
-    if (!sheet) throw new NotFoundException('申込情報が見つかりません');
+    await this.ownSheet(sheetId, userId);
     if (!dto.image.startsWith('data:image/') || !dto.thumb.startsWith('data:image/')) throw new BadRequestException('画像の形式が正しくありません');
     const p = await this.prisma.applicationSheetPhoto.create({
       data: { sheetId, section: dto.section, image: dto.image, thumb: dto.thumb, createdBy: userId },
       select: { id: true, section: true, thumb: true, createdAt: true },
     });
     await this.prisma.applicationSheet.update({ where: { id: sheetId }, data: { updatedBy: userId } });
-    this.changed(sheetId);
+    this.changed(sheetId, userId);
     return p;
   }
 
-  async removePhoto(photoId: string) {
+  async removePhoto(photoId: string, userId: string) {
+    const own = await this.prisma.applicationSheetPhoto.findFirst({ where: { id: photoId, sheet: { createdBy: userId, deletedAt: null } }, select: { id: true } });
+    if (!own) throw new NotFoundException('写真が見つかりません');
     const p = await this.prisma.applicationSheetPhoto.delete({ where: { id: photoId } });
-    this.changed(p.sheetId);
+    this.changed(p.sheetId, userId);
     return { ok: true };
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string) {
+    await this.ownSheet(id, userId);
     await this.prisma.applicationSheet.update({ where: { id }, data: { deletedAt: new Date() } });
-    this.changed(id);
+    this.changed(id, userId);
     return { ok: true };
   }
 }
@@ -163,8 +176,8 @@ class ApplicationSheetsController {
   constructor(private readonly service: ApplicationSheetsService) {}
 
   @Get()
-  list() {
-    return this.service.list();
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.list(user.id);
   }
 
   @Post()
@@ -178,13 +191,13 @@ class ApplicationSheetsController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.remove(id, user.id);
   }
 
   @Get(':id/photos')
-  photos(@Param('id') id: string) {
-    return this.service.photos(id);
+  photos(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.photos(id, user.id);
   }
 
   @Post(':id/photos')
@@ -193,13 +206,13 @@ class ApplicationSheetsController {
   }
 
   @Get('photos/:photoId')
-  photo(@Param('photoId') photoId: string) {
-    return this.service.photo(photoId);
+  photo(@Param('photoId') photoId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.photo(photoId, user.id);
   }
 
   @Delete('photos/:photoId')
-  removePhoto(@Param('photoId') photoId: string) {
-    return this.service.removePhoto(photoId);
+  removePhoto(@Param('photoId') photoId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.removePhoto(photoId, user.id);
   }
 }
 
