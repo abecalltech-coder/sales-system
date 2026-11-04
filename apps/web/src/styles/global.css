@@ -44,6 +44,10 @@
   --color-appo: #c2570c;
   --color-appo-soft: #fdf0e6;
   --color-appo-border: #f3c9a8;
+  /* トークスクリプト: APランクの目印 */
+  --color-rank-bronze: #a8642a;
+  --color-rank-silver: #8a909c;
+  --color-rank-gold: #c79a12;
 
   --radius-sm: 6px;
   --radius-md: 9px;

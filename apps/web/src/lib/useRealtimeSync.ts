@@ -158,6 +158,10 @@ export function useRealtimeSync() {
     const handleCbCases = () =>
       queryClient.invalidateQueries({ queryKey: ["cb-cases"] });
     s.on("cb-cases.updated", handleCbCases);
+    // トークスクリプト(全員で共有)
+    const handleTalkScripts = () =>
+      queryClient.invalidateQueries({ queryKey: ["talk-scripts"] });
+    s.on("talk-scripts.updated", handleTalkScripts);
     // 個人別数値(責任者と本人が同じシートを見ることがある)
     const handlePersonalStats = () =>
       queryClient.invalidateQueries({ queryKey: ["personal-stats"] });
@@ -174,6 +178,7 @@ export function useRealtimeSync() {
       s.off("work-rules.updated", handleWorkRules);
       s.off("close-report-config.updated", handleCloseConfig);
       s.off("cb-cases.updated", handleCbCases);
+      s.off("talk-scripts.updated", handleTalkScripts);
       s.off("personal-stats.updated", handlePersonalStats);
       s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);

@@ -32,6 +32,7 @@ export interface RoleItem {
   /** タスクの閲覧範囲(AP / DEPT / ALL)。空=自分のみ */
   taskView: string[];
   canEditWorkRules: boolean;
+  canEditTalkScripts: boolean;
 }
 
 export function useRoles() {
@@ -335,6 +336,7 @@ export interface UserListItem {
   employeeCode: string | null;
   departmentId: string | null;
   teamId: string | null;
+  talkRank: string | null;
   status: string;
   version: number;
   roles: { role: { code: string; name: string } }[];

@@ -64,7 +64,7 @@ export class RolesService implements OnModuleInit {
   list() {
     return this.prisma.role.findMany({
       orderBy: { name: 'asc' },
-      select: { id: true, code: true, name: true, visibleTabs: true, taskView: true, canEditWorkRules: true },
+      select: { id: true, code: true, name: true, visibleTabs: true, taskView: true, canEditWorkRules: true, canEditTalkScripts: true },
     });
   }
 
@@ -79,6 +79,7 @@ export class RolesService implements OnModuleInit {
           : {}),
         ...(dto.taskView !== undefined ? { taskView: [...new Set(dto.taskView)] } : {}),
         ...(dto.canEditWorkRules !== undefined ? { canEditWorkRules: dto.canEditWorkRules } : {}),
+        ...(dto.canEditTalkScripts !== undefined ? { canEditTalkScripts: dto.canEditTalkScripts } : {}),
       },
     });
   }

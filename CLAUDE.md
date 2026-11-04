@@ -37,6 +37,7 @@
 - **クローズ報告**(`/close-reports`): 商談後のクローズ結果を入力し、決まった書式の報告テキストをコピー(`lib/closeReport.ts` の `buildText`。ユーザー指定の書式を厳守)。項目の並び・種類は `FIELD_DEFS`、項目名・必須・選択肢・管理費の範囲などはマスタ管理「クローズ報告」(system-settings `closeReportConfig`)。報告は本人分だけ `CloseReport` に保存。スマホ中心(少ない選択肢はボタン、作成ボタンは画面下に固定)。
 - **個人別数値 › 部署ストーリー**(下のタブ「部署ストーリー」、`pages/personal-stats/DepartmentStory.tsx`): 部署×月のカレンダー形式(月曜始まりの週)。行はトスアップ/アポイント/商談実施/成約法人/重説OK/ET、数字はすべて手入力(`DepartmentStoryValue`、cell は `d:日付:項目` / `w:週番号:項目`=週目標 / `m:項目`=月目標)。週計・週達成・累計・累計目標(週目標の積み上げ)・累計達成と月間(月目標が空なら週目標の合計)。見られる/入力できるのは自部署(全員を見られる人は全部署)。
 - **CB管理**(`/cb-cases`): CB案件の一覧(`CbCase`、`apps/api/src/cb-cases/`)。案件名・区分(社販/エネパル違約金/既契約違約金/クレーム)・成約日・MC日・CB金額・ステータス(MC待ち/MC済み/情報回収中/申請済み)・備考(金額内訳)、すべて任意。全員で共有、使える役職はタブ表示で制御(API も判定)。PC は一覧でその場編集、携帯はカードを押して編集。
+- **トークスクリプト**(`/talk-scripts`、`apps/api/src/talk-scripts/`): APランク(ブロンズ/シルバー/ゴールド。ユーザー管理の `User.talkRank`、最初に開くランク)ごとのベーストーク(`TalkStep`)とアウト返し(`TalkOut`)。全ランク閲覧可。トークの中でアウトを押すとその場に開き、「アウト返し集」タブで単体でも見られる。アウトは `ranks` で使うランクを選び、複数選ぶと同じ内容を共有。編集は `Role.canEditTalkScripts`(ユーザー管理の役職ごとの設定)、管理者は常に可。
 - **月単位運用**: トス/アポ/エントリーは `periodMonth`("YYYY-MM"、JST)で月ごとに管理。
 - **サマリー**(`/summary`): 部署別の実績表(`apps/api/src/department-summary/`)。名前照合は NFKC + 空白除去。
 - **申込情報/明細**(`/application-sheets`): 作成したアカウント本人だけが見られる(管理者も他の人の分は見られない。API も `createdBy` で判定)。全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。作成画面は背景を押しても閉じず、入力中の内容は端末の下書き(`applicationSheet.draft:<ユーザーID>`)に残して、画面を開くと復元する。

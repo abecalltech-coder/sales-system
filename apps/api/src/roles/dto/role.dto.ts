@@ -18,4 +18,9 @@ export class UpdateRoleDto {
   @IsOptional()
   @IsBoolean()
   canEditWorkRules?: boolean;
+
+  // トークスクリプトの作成・編集・削除を許可するか(閲覧はタブが見える人全員)
+  @IsOptional()
+  @IsBoolean()
+  canEditTalkScripts?: boolean;
 }

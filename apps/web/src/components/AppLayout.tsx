@@ -57,6 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: '/final-report', label: '最終報告', icon: 'clipboard' },
       { to: '/close-reports', label: 'クローズ報告', icon: 'flag' },
       { to: '/cb-cases', label: 'CB管理', icon: 'yen' },
+      { to: '/talk-scripts', label: 'トークスクリプト', icon: 'script' },
       { to: '/application-sheets', label: '申込情報/明細', icon: 'form' },
     ],
   },

@@ -81,6 +81,7 @@ model User {
   iconUrl           String?
   displayOrder      Int            @default(0)
   preferredViewMode ViewMode       @default(AUTO)
+  talkRank          String?        // APランク: BRONZE / SILVER / GOLD(トークスクリプトで最初に開くランク)
   failedLoginCount  Int            @default(0)
   lockedUntil       DateTime?
   createdAt         DateTime       @default(now())
@@ -171,6 +172,7 @@ model Role {
   taskView    String[]     @default([])
   // 稼働ルールの作成・編集・削除ができるか(ユーザー管理で編集)。閲覧は全員。管理者は常に可
   canEditWorkRules Boolean @default(false)
+  canEditTalkScripts Boolean @default(false) // トークスクリプトの作成・編集・削除を許可するか
   permissions Permission[]
   users       UserRole[]
 }
@@ -1312,4 +1314,38 @@ model CbCase {
   deletedAt    DateTime?
 
   @@index([createdAt])
+}
+
+// トークスクリプトのベーストーク(要望: APのランクごとに違う)
+model TalkStep {
+  id        String    @id @default(uuid())
+  rank      String    // BRONZE / SILVER / GOLD
+  name      String    @default("")
+  body      String    @default("")
+  outIds    String[]  @default([]) // このトークで出やすいアウト(TalkOut.id)
+  order     Int       @default(0)
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([rank, order])
+}
+
+// トークスクリプトのアウト返し(要望: ランクごとに作成し、使うランクを選んで他のランクにも流用できる)
+model TalkOut {
+  id        String    @id @default(uuid())
+  ranks     String[]  @default([]) // このアウトを使うランク
+  label     String    @default("")
+  category  String    @default("")
+  body      String    @default("")
+  order     Int       @default(0)
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([order])
 }

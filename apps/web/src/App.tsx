@@ -23,6 +23,7 @@ import { MemosPage } from './pages/memos/MemosPage';
 import { WorkRulesPage } from './pages/work-rules/WorkRulesPage';
 import { CloseReportPage } from './pages/close-reports/CloseReportPage';
 import { CbCasesPage } from './pages/cb-cases/CbCasesPage';
+import { TalkScriptsPage } from './pages/talk-scripts/TalkScriptsPage';
 import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
 import { HomeRedirect, RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
@@ -61,6 +62,7 @@ export function App() {
         <Route path="/work-rules" element={protect(<WorkRulesPage />)} />
         <Route path="/close-reports" element={protect(<CloseReportPage />)} />
         <Route path="/cb-cases" element={protect(<CbCasesPage />)} />
+        <Route path="/talk-scripts" element={protect(<TalkScriptsPage />)} />
         <Route path="/chat/:roomId" element={protect(<ChatPage />)} />
         <Route path="/admin/users" element={protectAdmin(<UsersAdminPage />)} />
         <Route path="/admin/organizations" element={protectAdmin(<OrganizationsAdminPage />)} />

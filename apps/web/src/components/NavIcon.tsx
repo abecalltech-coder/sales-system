@@ -25,7 +25,8 @@ export type IconName =
   | 'book'
   | 'flag'
   | 'grid'
-  | 'yen';
+  | 'yen'
+  | 'script';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -145,6 +146,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M3 10h18M3 15h18M9 4v16" />
+    </>
+  ),
+  // トークスクリプト
+  script: (
+    <>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4 4v-4h-.5A1.5 1.5 0 0 1 4 14.5z" />
+      <path d="M8 8.5h8M8 12h5" />
     </>
   ),
   // 稼働ルール

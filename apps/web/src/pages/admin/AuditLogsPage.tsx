@@ -22,6 +22,7 @@ const RESOURCE_TABS: Record<string, string> = {
   'work-rules': '稼働ルール',
   'close-reports': 'クローズ報告',
   'cb-cases': 'CB管理',
+  'talk-scripts': 'トークスクリプト',
   'automation-rules': 'マスタ管理',
   'toss-form': 'トスフォーム設定',
   'custom-fields': 'カスタム項目管理',

@@ -45,6 +45,7 @@ import { MemosModule } from './memos/memos.module';
 import { WorkRulesModule } from './work-rules/work-rules.module';
 import { CloseReportsModule } from './close-reports/close-reports.module';
 import { CbCasesModule } from './cb-cases/cb-cases.module';
+import { TalkScriptsModule } from './talk-scripts/talk-scripts.module';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { CbCasesModule } from './cb-cases/cb-cases.module';
     WorkRulesModule,
     CloseReportsModule,
     CbCasesModule,
+    TalkScriptsModule,
     PreferencesModule,
     TossFormModule,
     AuditLogsModule,

@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { DataTable, Column } from '../../components/DataTable';
-import { InlineText } from '../../components/InlineEdit';
+import { InlineSelect, InlineText } from '../../components/InlineEdit';
+import { TALK_RANKS } from '../talk-scripts/TalkScriptsPage';
 import { useUsers, useDepartments, useRoles, UserListItem, RoleItem, DepartmentItem } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { ALL_NAV_TABS } from '../../lib/navTabs';
@@ -445,11 +446,21 @@ function TabVisibilitySettings() {
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
   });
+  // トークスクリプトの編集権限(要望: 稼働ルールと同じくユーザー管理で変更)
+  const talkScriptsMutation = useMutation({
+    mutationFn: (v: { id: string; canEditTalkScripts: boolean }) => api.patch(`/roles/${v.id}`, { canEditTalkScripts: v.canEditTalkScripts }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['roles'] });
+      queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : '更新に失敗しました'),
+  });
   const isAdminRole = (role: RoleItem) => role.code === 'SUPER_ADMIN' || role.code === 'ADMIN';
 
   return (
     <div style={{ marginTop: 28 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示・タスク閲覧範囲・稼働ルール編集の設定</h2>
+      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>役職ごとのタブ表示・タスク閲覧範囲・稼働ルール/トークスクリプト編集の設定</h2>
       <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
         チェックを外すと、そのロールを持つユーザーのサイドナビからタブが消えます(未チェック=非表示)。システム管理者の「ユーザー管理」は締め出し防止のため常に表示です。
       </p>
@@ -494,6 +505,16 @@ function TabVisibilitySettings() {
                     編集できる
                   </label>
                   <span style={{ color: 'var(--color-text-faint)' }}>{isAdminRole(role) ? '(管理者は常に可)' : '(閲覧は全員)'}</span>
+                  <span style={{ fontWeight: 900, marginLeft: 8 }}>トークスクリプト</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={isAdminRole(role) || role.canEditTalkScripts}
+                      disabled={isAdminRole(role) || talkScriptsMutation.isPending}
+                      onChange={() => talkScriptsMutation.mutate({ id: role.id, canEditTalkScripts: !role.canEditTalkScripts })}
+                    />
+                    編集できる
+                  </label>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 4 }}>
                   {groups.map((g) => (
@@ -577,6 +598,13 @@ export function UsersAdminPage() {
     onError: (err) => setError(err instanceof ApiError ? err.message : '所属の更新に失敗しました'),
   });
 
+  const updateRankMutation = useMutation({
+    mutationFn: (vars: { id: string; version: number; talkRank: string | null }) =>
+      api.patch(`/users/${vars.id}`, { version: vars.version, talkRank: vars.talkRank }),
+    onSuccess: invalidateUsers,
+    onError: (err) => setError(err instanceof ApiError ? err.message : 'APランクの更新に失敗しました'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: invalidateUsers,
@@ -621,6 +649,19 @@ export function UsersAdminPage() {
         const team = dept?.teams.find((t) => t.id === r.teamId);
         return [dept?.name, team?.name].filter(Boolean).join(' / ');
       },
+    },
+    {
+      key: 'talkRank',
+      label: 'APランク',
+      width: 100,
+      render: (r) => (
+        <InlineSelect
+          value={r.talkRank}
+          options={TALK_RANKS.map((t) => ({ id: t.id, label: t.label }))}
+          onSave={(v) => updateRankMutation.mutate({ id: r.id, version: r.version, talkRank: v || null })}
+        />
+      ),
+      copyValue: (r) => TALK_RANKS.find((t) => t.id === r.talkRank)?.label ?? '',
     },
     {
       key: 'status',

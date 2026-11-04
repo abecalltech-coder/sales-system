@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsArray, IsEnum, IsIn, IsInt, IsOptional, IsString, IsUUID } from 'class-validator';
 
 enum UserStatusDto {
   ACTIVE = 'ACTIVE',
@@ -30,4 +30,9 @@ export class UpdateUserDto {
   @IsArray()
   @IsString({ each: true })
   roleCodes?: string[];
+
+  // APランク(トークスクリプトで最初に開くランク)。null で未設定に戻す
+  @IsOptional()
+  @IsIn(['BRONZE', 'SILVER', 'GOLD'])
+  talkRank?: string | null;
 }
