@@ -36,10 +36,13 @@ import { AuthenticatedUser } from '../auth/types';
 const CB_TAB = '/cb-cases';
 /** ステータスの選択肢(要望) */
 export const CB_STATUSES = ['MC待ち', 'MC済み', '情報回収中', '申請済み'];
+/** 区分の選択肢(要望) */
+export const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム'];
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 class SaveCbCaseDto {
   @IsOptional() @IsString() @MaxLength(300) caseName?: string;
+  @IsOptional() @ValidateIf((_o, v) => v !== null) @IsIn(CB_CATEGORIES) category?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(DATE_RE) contractDate?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(DATE_RE) mcDate?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsInt() @Min(-100_000_000) @Max(100_000_000) cbAmount?: number | null;
@@ -70,6 +73,7 @@ class CbTabGuard implements CanActivate {
 /** 渡された項目だけを更新用に取り出す(すべて任意) */
 const pick = (dto: SaveCbCaseDto) => ({
   ...(dto.caseName !== undefined ? { caseName: dto.caseName.trim() } : {}),
+  ...(dto.category !== undefined ? { category: dto.category } : {}),
   ...(dto.contractDate !== undefined ? { contractDate: dto.contractDate } : {}),
   ...(dto.mcDate !== undefined ? { mcDate: dto.mcDate } : {}),
   ...(dto.cbAmount !== undefined ? { cbAmount: dto.cbAmount } : {}),

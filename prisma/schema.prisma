@@ -1298,6 +1298,7 @@ model DepartmentStoryValue {
 model CbCase {
   id           String    @id @default(uuid())
   caseName     String    @default("")
+  category     String?   // 区分: 社販 / エネパル違約金 / 既契約違約金 / クレーム
   contractDate String?   // 成約日 "YYYY-MM-DD"
   mcDate       String?   // MC日 "YYYY-MM-DD"
   cbAmount     Int?      // CB金額(円)

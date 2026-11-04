@@ -9,10 +9,13 @@ import { api, ApiError } from '../../lib/api';
 
 /** ステータスの選択肢(要望) */
 const CB_STATUSES = ['MC待ち', 'MC済み', '情報回収中', '申請済み'];
+/** 区分の選択肢(要望) */
+const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム'];
 
 interface CbCase {
   id: string;
   caseName: string;
+  category: string | null;
   contractDate: string | null;
   mcDate: string | null;
   cbAmount: number | null;
@@ -22,7 +25,7 @@ interface CbCase {
   createdAt: string;
 }
 
-type Patch = Partial<Pick<CbCase, 'caseName' | 'contractDate' | 'mcDate' | 'cbAmount' | 'status' | 'memo'>>;
+type Patch = Partial<Pick<CbCase, 'caseName' | 'category' | 'contractDate' | 'mcDate' | 'cbAmount' | 'status' | 'memo'>>;
 
 /** "YYYY-MM-DD" ⇔ 一覧の日付部品(ISO)。日付だけを扱うので端末の日付で変換する */
 const dateToIso = (d: string | null) => (d ? new Date(`${d}T00:00:00`).toISOString() : null);
@@ -36,7 +39,7 @@ const fmtYen = (n: number | null) => (n == null ? '' : `${n.toLocaleString('ja-J
 
 /**
  * CB管理(要望: CBの案件を登録して一覧で管理する。開いたときは一覧)。
- * 項目は案件名・成約日・MC日・CB金額・ステータス・備考(金額内訳)で、すべて任意。
+ * 項目は案件名・区分・成約日・MC日・CB金額・ステータス・備考(金額内訳)で、すべて任意。
  * PC は一覧のセルをその場で直せる。携帯はカードを押すと編集画面。行の削除は右クリック(長押し)メニュー。
  */
 export function CbCasesPage() {
@@ -89,6 +92,20 @@ export function CbCasesPage() {
       render: (r) => <InlineText value={r.caseName} onSave={(v) => save(r, { caseName: v })} />,
       copyValue: (r) => r.caseName,
       pasteValue: (r, t) => save(r, { caseName: t.trim() }),
+    },
+    {
+      key: 'category',
+      label: '区分',
+      width: 120,
+      render: (r) => (
+        <InlineSelect value={r.category} options={CB_CATEGORIES.map((s) => ({ id: s, label: s }))} onSave={(v) => save(r, { category: v || null })} />
+      ),
+      copyValue: (r) => r.category ?? '',
+      pasteValue: (r, t) => {
+        const v = t.trim();
+        if (!v) save(r, { category: null });
+        else if (CB_CATEGORIES.includes(v)) save(r, { category: v });
+      },
     },
     {
       key: 'contractDate',
@@ -186,7 +203,7 @@ export function CbCasesPage() {
           onDeleteRows={(ids) => {
             if (window.confirm(`選択した ${ids.length} 件を削除しますか？`)) remove.mutate(ids);
           }}
-          mobileCard={{ title: 'caseName', badge: 'status', meta: ['contractDate', 'mcDate', 'cbAmount'] }}
+          mobileCard={{ title: 'caseName', badge: 'status', meta: ['category', 'contractDate', 'mcDate', 'cbAmount'] }}
         />
         {!isLoading && (data ?? []).length === 0 && (
           <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 8 }}>まだ案件がありません。「＋ 案件登録」から登録してください</p>
@@ -228,6 +245,7 @@ function CbEditor({
 }) {
   const [form, setForm] = useState({
     caseName: item?.caseName ?? '',
+    category: item?.category ?? '',
     contractDate: item?.contractDate ?? '',
     mcDate: item?.mcDate ?? '',
     cbAmount: item?.cbAmount == null ? '' : String(item.cbAmount),
@@ -242,6 +260,7 @@ function CbEditor({
       const amount = form.cbAmount.replace(/[,円¥￥\s]/g, '');
       const body = {
         caseName: form.caseName,
+        category: form.category || null,
         contractDate: form.contractDate || null,
         mcDate: form.mcDate || null,
         cbAmount: amount === '' ? null : Math.round(Number(amount)),
@@ -278,6 +297,15 @@ function CbEditor({
         </div>
         {label('案件名')}
         <input value={form.caseName} onChange={(e) => set({ caseName: e.target.value })} style={input} />
+        {label('区分')}
+        <select value={form.category} onChange={(e) => set({ category: e.target.value })} style={input}>
+          <option value="">選択してください</option>
+          {CB_CATEGORIES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
         <div style={{ display: 'flex', gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             {label('成約日')}
