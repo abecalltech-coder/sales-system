@@ -2,6 +2,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useCloseReportConfig } from '../close-reports/CloseReportPage';
+import { useMe } from '../../hooks/useApi';
 import { api, ApiError } from '../../lib/api';
 import { logCopy } from '../../lib/copyLog';
 import { recognizeBill, extractBillFields } from '../../lib/ocr';
@@ -56,16 +57,60 @@ async function copyText(text: string, source: string, target?: string) {
   logCopy(source, text, { target });
 }
 
+/**
+ * 作成・編集中の内容(要望: 他のタブを押すなどで入力内容が消えないように)。
+ * 文字を入れるたびに端末へ残し、他の画面へ移っても再読み込みしても、この画面を開くと同じ内容で開き直す。
+ * 保存するか、確認のうえ破棄して閉じると消す。
+ */
+const sheetDraftKey = (userId: string) => `applicationSheet.draft:${userId}`;
+
+function readSheetDraft(key: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    const v = raw ? (JSON.parse(raw) as Draft) : null;
+    return v?.data ? { ...v, data: normalizeSheetData(v.data) } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSheetDraft(key: string, d: Draft | null) {
+  try {
+    if (d) localStorage.setItem(key, JSON.stringify({ id: d.id, inputCode: d.inputCode, hasJuryo: d.hasJuryo, hasDoryoku: d.hasDoryoku, data: d.data }));
+    else localStorage.removeItem(key);
+  } catch {
+    /* 保存できない端末(プライベートモード等)では下書きなし */
+  }
+}
+
+/** 保存済みの内容と比べるための文字列(未保存かどうかの判定用) */
+const sheetContent = (d: Draft) => JSON.stringify({ inputCode: d.inputCode ?? null, hasJuryo: d.hasJuryo, hasDoryoku: d.hasDoryoku, data: d.data });
+
 /** 申込情報/明細(要望): 申込情報と従量・動力の電気情報をまとめて作成し、全体コピーする */
 export function ApplicationSheetsPage() {
   const { data: rows, isLoading } = useQuery({ queryKey: ['application-sheets'], queryFn: () => api.get<SheetRow[]>('/application-sheets') });
+  const { data: me } = useMe();
+  const draftKey = me ? sheetDraftKey(me.id) : null;
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [restored, setRestored] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [q, setQ] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const flash = (m: string) => {
     setToast(m);
     window.setTimeout(() => setToast(null), 1500);
   };
+
+  // 作成途中の下書きがあれば、画面を開いたときに同じ内容で開き直す
+  useEffect(() => {
+    if (!draftKey || draftLoaded) return;
+    const saved = readSheetDraft(draftKey);
+    if (saved) {
+      setDraft(saved);
+      setRestored(true);
+    }
+    setDraftLoaded(true);
+  }, [draftKey, draftLoaded]);
 
   const filtered = (rows ?? []).filter((r) => !q || JSON.stringify(r.data).includes(q) || (r.inputCode ?? '').includes(q));
 
@@ -115,13 +160,37 @@ export function ApplicationSheetsPage() {
           ))}
         </div>
       </div>
-      {draft && <SheetEditor initial={draft} onClose={() => setDraft(null)} onCopied={() => flash('全体をコピーしました')} />}
+      {draft && draftKey && draftLoaded && (
+        <SheetEditor
+          initial={draft}
+          draftKey={draftKey}
+          restored={restored}
+          onClose={() => {
+            setDraft(null);
+            setRestored(false);
+          }}
+          onCopied={() => flash('全体をコピーしました')}
+        />
+      )}
       {toast && <div className="chat-toast">{toast}</div>}
     </AppLayout>
   );
 }
 
-function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: () => void; onCopied: () => void }) {
+function SheetEditor({
+  initial,
+  draftKey,
+  restored,
+  onClose,
+  onCopied,
+}: {
+  initial: Draft;
+  draftKey: string;
+  /** 前回の下書きから開き直したとき(まだ保存されていない) */
+  restored: boolean;
+  onClose: () => void;
+  onCopied: () => void;
+}) {
   const queryClient = useQueryClient();
   const [d, setD] = useState<Draft>(initial);
   const dRef = useRef(d);
@@ -129,6 +198,22 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const isNew = !d.id;
+  // 最後に保存した内容。下書きから開き直したときは未保存扱いにする
+  const savedContent = useRef<string | null>(restored ? null : sheetContent(initial));
+  const sendingContent = useRef<string | null>(null);
+  const dirty = sheetContent(d) !== savedContent.current;
+
+  // 入力のたびに端末へ下書きを残す(要望)。保存済みの内容と同じになったら消す
+  useEffect(() => {
+    writeSheetDraft(draftKey, sheetContent(d) !== savedContent.current ? d : null);
+  }, [d, draftKey]);
+
+  // 未保存の内容があるときは、確認してから閉じる(誤って閉じて消えないように)
+  const requestClose = () => {
+    if (dirty && !window.confirm('保存していない入力内容があります。破棄して閉じますか？')) return;
+    writeSheetDraft(draftKey, null);
+    onClose();
+  };
 
   const setSection = (sec: 'application' | 'contact', patch: Section) => setD((cur) => ({ ...cur, data: { ...cur.data, [sec]: { ...(cur.data[sec] ?? {}), ...patch } } }));
   const listKey = (kind: ElectricKind): 'juryoList' | 'doryokuList' => (kind === 'juryo' ? 'juryoList' : 'doryokuList');
@@ -153,11 +238,14 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
   const save = useMutation({
     mutationFn: async () => {
       const cur = dRef.current;
+      sendingContent.current = sheetContent(cur);
       const body = { inputCode: cur.inputCode ?? '', hasJuryo: cur.hasJuryo, hasDoryoku: cur.hasDoryoku, data: cur.data };
       return cur.id ? api.patch<SheetRow>(`/application-sheets/${cur.id}`, body) : api.post<SheetRow>('/application-sheets', body);
     },
     onSuccess: (row) => {
       setError(null);
+      // 保存中に打った分は未保存のまま下書きに残す
+      savedContent.current = sendingContent.current;
       setD((cur) => ({ ...cur, id: row.id }));
       setSavedAt(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
       queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
@@ -175,6 +263,7 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
     mutationFn: () => api.delete(`/application-sheets/${d.id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['application-sheets'] });
+      writeSheetDraft(draftKey, null);
       onClose();
     },
   });
@@ -193,14 +282,20 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
   const typeLabel = { juryo: '従量', doryoku: '動力' } as const;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760, width: '100%', padding: 0, maxHeight: '94vh', display: 'flex', flexDirection: 'column' }}>
+    // 背景を押しても閉じない(要望: 他のタブを押してしまって入力内容が消えるのを防ぐ)。閉じるのは「閉じる」ボタンだけ
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 760, width: '100%', padding: 0, maxHeight: '94vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--color-border)' }}>
           <h2 style={{ margin: 0, fontSize: 15, flex: 1 }}>{isNew ? '申込情報を作成' : '申込情報を編集'}</h2>
-          <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+          <button type="button" onClick={requestClose} style={{ fontSize: 12 }}>
             閉じる
           </button>
         </div>
+        {restored && dirty && (
+          <p style={{ margin: 0, padding: '6px 14px', fontSize: 12, color: 'var(--color-warning)', borderBottom: '1px solid var(--color-border)' }}>
+            前回の入力内容を復元しました。まだ保存されていません。
+          </p>
+        )}
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -312,7 +407,8 @@ function SheetEditor({ initial, onClose, onCopied }: { initial: Draft; onClose: 
             </button>
           )}
           {error && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
-          {savedAt && !error && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{savedAt} に保存しました</span>}
+          {!error && dirty && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>未保存(入力内容はこの端末に保持中)</span>}
+          {savedAt && !error && !dirty && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{savedAt} に保存しました</span>}
           <span style={{ flex: 1 }} />
           <button
             type="button"

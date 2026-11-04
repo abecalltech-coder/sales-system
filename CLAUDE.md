@@ -39,7 +39,7 @@
 - **CB管理**(`/cb-cases`): CB案件の一覧(`CbCase`、`apps/api/src/cb-cases/`)。案件名・区分(社販/エネパル違約金/既契約違約金/クレーム)・成約日・MC日・CB金額・ステータス(MC待ち/MC済み/情報回収中/申請済み)・備考(金額内訳)、すべて任意。全員で共有、使える役職はタブ表示で制御(API も判定)。PC は一覧でその場編集、携帯はカードを押して編集。
 - **月単位運用**: トス/アポ/エントリーは `periodMonth`("YYYY-MM"、JST)で月ごとに管理。
 - **サマリー**(`/summary`): 部署別の実績表(`apps/api/src/department-summary/`)。名前照合は NFKC + 空白除去。
-- **申込情報/明細**(`/application-sheets`): 全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。
+- **申込情報/明細**(`/application-sheets`): 全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。作成画面は背景を押しても閉じず、入力中の内容は端末の下書き(`applicationSheet.draft:<ユーザーID>`)に残して、画面を開くと復元する。
 - **案件管理**の一括投入は、手打ちの値を絶対に上書きしない(`Deal.importedKeys`、`apps/api/src/deals/import-merge.ts`)。
 - 一覧表は共通の `components/DataTable.tsx`(範囲選択・コピー/貼り付け・手動並び替え・行の非表示)。
 - 通知は Web Push(VAPID)。開くたびに購読をサーバーへ登録し直す(`usePushNotifications`)、SW の `pushsubscriptionchange` でも登録し直す。タスク通知は取りこぼしても後から必ず送る(起点は system-settings `taskNotifyCatchupFrom`、それより前の回は送らない)。
