@@ -19,6 +19,7 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/cl-calendar', label: 'CLカレンダー', group: '営業' },
   { key: '/final-report', label: '最終報告', group: '営業' },
   { key: '/close-reports', label: 'クローズ報告', group: '営業' },
+  { key: '/cb-cases', label: 'CB管理', group: '営業' },
   { key: '/application-sheets', label: '申込情報/明細', group: '営業' },
   { key: '/personal-stats', label: '個人別数値', group: 'トップ' },
   { key: '/admin/users', label: 'ユーザー管理', group: '管理' },

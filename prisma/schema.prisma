@@ -1293,3 +1293,22 @@ model DepartmentStoryValue {
 
   @@unique([departmentId, month, cell])
 }
+
+// CB管理(要望: CBの案件を登録して一覧で管理する。項目はすべて任意)
+model CbCase {
+  id           String    @id @default(uuid())
+  caseName     String    @default("")
+  contractDate String?   // 成約日 "YYYY-MM-DD"
+  mcDate       String?   // MC日 "YYYY-MM-DD"
+  cbAmount     Int?      // CB金額(円)
+  status       String?   // MC待ち / MC済み / 情報回収中 / 申請済み
+  memo         String    @default("") // 備考(金額内訳など自由記述)
+  version      Int       @default(1)
+  createdBy    String?
+  updatedBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@index([createdAt])
+}

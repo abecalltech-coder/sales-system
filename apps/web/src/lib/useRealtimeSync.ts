@@ -154,6 +154,10 @@ export function useRealtimeSync() {
     const handleCloseConfig = () =>
       queryClient.invalidateQueries({ queryKey: ["close-report-config"] });
     s.on("close-report-config.updated", handleCloseConfig);
+    // CB管理(全員で共有)
+    const handleCbCases = () =>
+      queryClient.invalidateQueries({ queryKey: ["cb-cases"] });
+    s.on("cb-cases.updated", handleCbCases);
     // 個人別数値(責任者と本人が同じシートを見ることがある)
     const handlePersonalStats = () =>
       queryClient.invalidateQueries({ queryKey: ["personal-stats"] });
@@ -169,6 +173,7 @@ export function useRealtimeSync() {
       s.off("tasks.updated", handleTasks);
       s.off("work-rules.updated", handleWorkRules);
       s.off("close-report-config.updated", handleCloseConfig);
+      s.off("cb-cases.updated", handleCbCases);
       s.off("personal-stats.updated", handlePersonalStats);
       s.off("users.updated", handleUsers);
       if (timer !== undefined) window.clearTimeout(timer);

@@ -24,7 +24,8 @@ export type IconName =
   | 'memo'
   | 'book'
   | 'flag'
-  | 'grid';
+  | 'grid'
+  | 'yen';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chart: (
@@ -124,6 +125,12 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <rect x="4" y="4" width="16" height="16" rx="3" />
       <path d="M8.5 12l2.5 2.5 4.5-5" />
+    </>
+  ),
+  // CB管理
+  yen: (
+    <>
+      <path d="M6 4l6 8 6-8M12 12v8M7 13h10M7 17h10" />
     </>
   ),
   // クローズ報告
