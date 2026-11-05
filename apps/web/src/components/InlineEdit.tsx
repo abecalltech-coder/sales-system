@@ -313,6 +313,8 @@ export function InlineNumber({
           value={draft}
           disabled={disabled}
           placeholder={placeholder}
+          // 開いたら全選択: 打つと置き換わる(要望: 5 に 0 を打って 50 にならないように)
+          onFocus={(e) => e.currentTarget.select()}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}

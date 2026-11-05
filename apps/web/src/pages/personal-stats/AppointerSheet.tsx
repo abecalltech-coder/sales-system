@@ -214,6 +214,8 @@ export function AppointerSheet({
     const color = toss ? 'var(--color-primary)' : 'var(--color-appo)';
     const soft = toss ? 'var(--color-primary-soft)' : 'var(--color-appo-soft)';
     // 見出しは2段: 上にトス(青)/アポ(オレンジ)、下に月初予算・実績・着地見込み。入力欄は稼働日は白のまま(要望)
+    // 今日までの着地見込みの表示: 実績が入っていれば0でも出す(要望)。未入力の日は空欄
+    const landingText = (d: string) => (numOf(d, m.key) != null || autoOf(d, m.key) ? String(landingOf(getter, d, m, today)) : '');
     const numberCol = (key: PersonalDailyKey, label: string, actual?: boolean): Column<SheetRow> => ({
       key,
       label: `${m.label}${label}`,
@@ -227,15 +229,15 @@ export function AppointerSheet({
           // 着地見込みの週計・月合計
           if (key === m.revised) {
             return (
-              <div style={{ textAlign: 'center', fontWeight: 700 }} title={LANDING_HELP}>
+              <div data-cell-readonly style={{ textAlign: 'center', fontWeight: 700 }} title={LANDING_HELP}>
                 {sum(r.days, (d) => landingOf(getter, d, m, today))}
               </div>
             );
           }
           // 実績は今日までなので、未来の日だけの週は0も出さず空欄にする(要望)
-          if (actual && r.days.every((d) => d > today)) return <span />;
+          if (actual && r.days.every((d) => d > today)) return <span data-cell-readonly />;
           return (
-            <div style={{ textAlign: 'center', fontWeight: 700, color: actual ? color : undefined }}>
+            <div data-cell-readonly style={{ textAlign: 'center', fontWeight: 700, color: actual ? color : undefined }}>
               {sum(r.days, (d) => valueOf(d, key))}
             </div>
           );
@@ -243,10 +245,10 @@ export function AppointerSheet({
         const d = r.date!;
         // 着地見込み: 当日を含む過去日は実績と同じで入力不可、未来日は手打ち(要望)
         if (key === m.revised && d <= today) {
-          return <span style={{ color: 'var(--color-text)', fontWeight: 700 }}>{landingOf(getter, d, m, today) || ''}</span>;
+          return <span data-cell-readonly style={{ color: 'var(--color-text)', fontWeight: 700 }}>{landingText(d)}</span>;
         }
         // 実績は今日までの日にだけ入力する(要望)
-        if (actual && d > today) return <span />;
+        if (actual && d > today) return <span data-cell-readonly />;
         const autoV = actual ? autoOf(d, key) : undefined;
         const cell = (
           <InlineNumber
@@ -264,13 +266,15 @@ export function AppointerSheet({
       },
       copyValue: (r) => {
         if (r.kind !== 'day') return '';
-        if (key === m.revised) return String(landingOf(getter, r.date!, m, today) || '');
-        return actual ? String(valueOf(r.date!, key) || '') : textOf(r.date!, key);
+        if (key === m.revised) return landingText(r.date!);
+        return actual ? String(numOf(r.date!, key) ?? autoOf(r.date!, key) ?? '') : textOf(r.date!, key);
       },
       // 貼り付けも入力と同じ: 着地見込みは未来日だけ、実績は今日までだけ
       pasteValue: (r, text) => {
         if (r.kind !== 'day' || (key === m.revised && r.date! <= today) || (actual && r.date! > today)) return;
-        save(r.date!, key, parseCount(text));
+        const v = parseCount(text);
+        // Delete で消すときも入力欄と同じ: 自動の数字を消したら0にする
+        save(r.date!, key, actual && v === null && numOf(r.date!, key) == null && autoOf(r.date!, key) ? 0 : v);
       },
     });
     return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '着地見込み')];

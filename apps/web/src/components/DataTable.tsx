@@ -1081,6 +1081,7 @@ function DataTableGrid<T>({
     const arrow = ({ ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] } as Record<string, [number, number]>)[e.key];
     if (arrow && (inTextField || isSelect) && !mod && !e.altKey && editingCellRef.current && sel) {
       e.preventDefault();
+      enterEditedCellRef.current = null;
       t.blur();
       const [dr, dc] = arrow;
       setSel((s) => {
@@ -1098,6 +1099,12 @@ function DataTableGrid<T>({
       e.preventDefault();
       toggleBold();
       return;
+    }
+    // 入力欄の Enter は確定(各入力コンポーネント側で blur)。押して開いたセルでも次の Enter で下へ進むよう覚えておく(要望)。
+    // Escape は取り消しなので、次の Enter はもう一度入力になる
+    if (inTextField && sel) {
+      if (e.key === 'Enter' && !mod && !e.shiftKey && !e.altKey) enterEditedCellRef.current = { fr: sel.fr, fc: sel.fc };
+      else if (e.key === 'Escape') enterEditedCellRef.current = null;
     }
     // テキスト入力欄はネイティブ挙動(文字のコピー・元に戻す等)に任せる。
     if (inTextField) return;
@@ -1174,15 +1181,20 @@ function DataTableGrid<T>({
     if (e.key === 'Enter') {
       e.preventDefault();
       const activated = enterEditedCellRef.current;
-      if (activated && activated.fr === sel.fr && activated.fc === sel.fc) {
+      const isReadonly = (r: number) => !!gridRef.current?.querySelector(`td[data-row="${r}"][data-col="${sel.fc}"] [data-cell-readonly]`);
+      if ((activated && activated.fr === sel.fr && activated.fc === sel.fc) || isReadonly(sel.fr)) {
         enterEditedCellRef.current = null;
-        move(1, 0);
+        // 入力できないセル(data-cell-readonly。週計など)は飛ばして、下の入力できるセルへ。下に無ければその場に留まる
+        let next = sel.fr + 1;
+        while (next < rowsRef.current.length && isReadonly(next)) next += 1;
+        if (next < rowsRef.current.length) move(next - sel.fr, 0);
       } else {
         enterEditedCellRef.current = { fr: sel.fr, fc: sel.fc };
         activateCell(sel.fr, sel.fc);
       }
       return;
     }
+    if (e.key.startsWith('Arrow')) enterEditedCellRef.current = null;
     if (e.key === 'ArrowUp') move(-1, 0);
     else if (e.key === 'ArrowDown') move(1, 0);
     else if (e.key === 'ArrowLeft') move(0, -1);
@@ -1194,6 +1206,7 @@ function DataTableGrid<T>({
   const onCellMouseDown = useCallback((e: ReactMouseEvent, r: number, c: number) => {
     // 右クリックは無視
     if (e.button !== 0) return;
+    enterEditedCellRef.current = null;
     dragRef.current = { startR: r, startC: c };
     hoverRef.current = { r, c };
     draggingRef.current = false;
