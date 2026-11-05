@@ -3,7 +3,6 @@ import {
   Body,
   ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   Injectable,
   Module,
@@ -22,8 +21,9 @@ import { periodMonthDays, periodMonthRange } from '../common/utils/period.util';
 /**
  * 個人別数値(要望: シフトに代わり、人員ごとのシートで日別の実績を入力・集計する。スプレッドシートの週次表の再現)。
  * - 日別の値は手入力したものだけ PersonalDailyStat に持つ。入力が無い日はシステム上の実績(トス・アポ・商談)から自動で出す
- * - 週目標(ストーリー)・あるべき姿(月間目標)はユーザー×月で PersonalStatTarget に持ち、管理者だけ編集できる
- * - 見られる範囲は既存の権限(トス/アポの編集範囲)に合わせる: 自分のみ / チーム / 部署 / 全員
+ * - 週目標(ストーリー)・あるべき姿(月間目標)はユーザー×月で PersonalStatTarget に持つ
+ * - すべての入力は誰でもできる(要望)
+ * - 月初予算は月末まで入力できる。実績は今日まで。着地見込みは今日までは実績と同じ、明日以降は手入力(要望)
  */
 
 export const METRICS = [
@@ -43,6 +43,8 @@ const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
 const todayJst = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 /** 着地見込みを手入力できる日か(明日以降) */
 export const isLandingEditable = (date: string, today: string) => date > today;
+/** 実績を入力できる日か(今日まで) */
+export const isActualEditable = (date: string, today: string) => date <= today;
 /** 人員シートのタブに並べる役職(要望: AP と APリーダーだけ。CL は不要) */
 const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
@@ -50,9 +52,6 @@ const APPOINTER_ROLES = SALES_ROLES;
 /** 名前の横に出す役職名(APリーダーを優先) */
 const roleLabelOf = (roles: { role: { code: string; name: string } }[]) =>
   (roles.find((r) => r.role.code === 'AP_LEADER') ?? roles.find((r) => r.role.code === 'AP'))?.role.name ?? '';
-
-const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
-const SCOPE_RANK: Record<string, number> = { OWN: 0, TEAM: 1, DEPT: 2, ALL: 3 };
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
@@ -63,19 +62,6 @@ const norm = (s: string | null | undefined) => (s ?? '').normalize('NFKC').repla
 const matches = (opt: { internalCode: string; displayName: string } | undefined, codes: string[], names: string[]) =>
   !!opt && (codes.includes(opt.internalCode) || names.includes(opt.displayName.trim()));
 const jstDateKey = (d: Date) => new Date(d.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
-
-const isAdmin = (user: AuthenticatedUser) => user.roles.some((r) => ADMIN_ROLES.includes(r));
-
-/** 見られる範囲。管理者は全員、それ以外はトス/アポの「編集」権限の範囲(一般ユーザーは自分だけ) */
-function scopeOf(user: AuthenticatedUser): 'OWN' | 'TEAM' | 'DEPT' | 'ALL' {
-  if (isAdmin(user)) return 'ALL';
-  let best = 'OWN';
-  for (const p of user.permissions) {
-    if (p.action !== 'edit' || !['toss_case', 'appointment'].includes(p.resource)) continue;
-    if ((SCOPE_RANK[p.scope] ?? 0) > SCOPE_RANK[best]) best = p.scope;
-  }
-  return best as 'OWN' | 'TEAM' | 'DEPT' | 'ALL';
-}
 
 class GetSheetQuery {
   @IsString() userId!: string;
@@ -192,26 +178,18 @@ export class PersonalStatsService {
     };
   }
 
-  /** 対象ユーザーを見られる/編集できるか(要望: 営業系の役職の人のシートは誰でも変更できる) */
-  private async assertAccess(viewer: AuthenticatedUser, userId: string) {
+  /** 対象ユーザーを取る(要望: すべての入力は誰でもできるので、見る人では絞らない) */
+  private async targetUser(userId: string) {
     const target = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
       select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true, name: true } } } } },
     });
     if (!target) throw new NotFoundException('ユーザーが見つかりません');
-    const scope = scopeOf(viewer);
-    const ok =
-      target.id === viewer.id ||
-      scope === 'ALL' ||
-      (scope === 'DEPT' && !!viewer.departmentId && target.departmentId === viewer.departmentId) ||
-      (scope === 'TEAM' && !!viewer.teamId && target.teamId === viewer.teamId) ||
-      target.roles.some((r) => SALES_ROLES.includes(r.role.code));
-    if (!ok) throw new ForbiddenException('このユーザーのシートを見る権限がありません');
     return target;
   }
 
-  async sheet(viewer: AuthenticatedUser, userId: string, month: string) {
-    const target = await this.assertAccess(viewer, userId);
+  async sheet(userId: string, month: string) {
+    const target = await this.targetUser(userId);
     const days = periodMonthDays(month);
     const [rows, targets, auto] = await Promise.all([
       this.prisma.personalDailyStat.findMany({ where: { userId, date: { gte: days[0], lte: days[days.length - 1] } } }),
@@ -234,13 +212,11 @@ export class PersonalStatsService {
       targets: Object.fromEntries(
         targets.map((t) => [t.metricKey, { weeklyStory: t.weeklyStory, monthlyGoal: t.monthlyGoal, version: t.version }]),
       ),
-      canEditTargets: isAdmin(viewer),
-      /** 他の AP のシートは見るだけ(編集は自分の範囲) */
     };
   }
 
   /**
-   * システム上の実績から日別の値を出す(手入力が無い日の初期値。サマリーと同じ照合の仕方)。
+   * システム上の実績から日別の値を出す(手入力が無い日の初期値。サマリーと同じ照合の仕方)。未来日は出さない(実績は今日まで)。
    * - トスアップ数: トス実績の「AP」が本人(またはトス担当者)のトス件数(トス日)
    * - アポイント数: そのうち進捗が「前確OK」のもの(トス日)+アポ登録で作った本人のアポ詳細(作成日)
    * - 商談実施数・重説OK数・ET数: アポ詳細の「AP」が本人(役職がCLの人は「CL」が本人)のもの
@@ -300,8 +276,9 @@ export class PersonalStatsService {
       );
 
     const out: Record<string, Record<string, number>> = {};
+    const today = todayJst();
     const add = (d: Date | null, key: string) => {
-      if (!d || d < start || d >= end) return;
+      if (!d || d < start || d >= end || jstDateKey(d) > today) return;
       const day = (out[jstDateKey(d)] ??= {});
       day[key] = (day[key] ?? 0) + 1;
     };
@@ -324,15 +301,7 @@ export class PersonalStatsService {
     return out;
   }
 
-  /** 部署ストーリーを見られる・入力できるか: 全員を見られる人は全部署、それ以外は自分の部署だけ */
-  private assertStoryAccess(viewer: AuthenticatedUser, departmentId: string) {
-    const own = (viewer.departmentId ?? 'none') === departmentId;
-    if (scopeOf(viewer) === 'ALL' || own) return;
-    throw new ForbiddenException('この部署のストーリーを見る権限がありません');
-  }
-
-  async story(viewer: AuthenticatedUser, departmentId: string, month: string) {
-    this.assertStoryAccess(viewer, departmentId);
+  async story(departmentId: string, month: string) {
     const rows = await this.prisma.departmentStoryValue.findMany({ where: { departmentId, month } });
     const values: Record<string, { value: number; version: number }> = {};
     for (const r of rows) values[r.cell] = { value: r.value, version: r.version };
@@ -341,7 +310,6 @@ export class PersonalStatsService {
 
   /** 部署ストーリーのセルの保存(日別と同じく version で重なりを検出) */
   async saveStory(viewer: AuthenticatedUser, dto: SaveStoryDto) {
-    this.assertStoryAccess(viewer, dto.departmentId);
     if (dto.cell.startsWith('d:') && !dto.cell.startsWith(`d:${dto.month}-`)) throw new BadRequestException('対象月の日付ではありません');
     const key = { departmentId: dto.departmentId, month: dto.month, cell: dto.cell };
     let row: { value: number; version: number } | null = null;
@@ -371,7 +339,11 @@ export class PersonalStatsService {
 
   /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
-    await this.assertAccess(viewer, dto.userId);
+    await this.targetUser(dto.userId);
+    // 実績の入力は今日までだけ(要望)。消すのはいつでもできる
+    if (METRIC_KEYS.includes(dto.metricKey) && dto.value != null && !isActualEditable(dto.date, todayJst())) {
+      throw new BadRequestException('実績は今日までの日にだけ入力できます');
+    }
     // 着地見込みの手入力は未来日だけ(要望: 当日を含む過去日は実績と同じ)。消すのはいつでもできる
     if (dto.metricKey.endsWith('_REVISED') && dto.value != null && !isLandingEditable(dto.date, todayJst())) {
       throw new BadRequestException('当日までの着地見込みは実績と同じになるため入力できません');
@@ -407,10 +379,9 @@ export class PersonalStatsService {
     return row ? { value: row.value, version: row.version } : null;
   }
 
-  /** 週目標・あるべき姿の保存(管理者のみ) */
+  /** 週目標・あるべき姿の保存 */
   async saveTarget(viewer: AuthenticatedUser, dto: SaveTargetDto) {
-    if (!isAdmin(viewer)) throw new ForbiddenException('週目標・あるべき姿は管理者だけが編集できます');
-    await this.assertAccess(viewer, dto.userId);
+    await this.targetUser(dto.userId);
     const key = { userId: dto.userId, month: dto.month, metricKey: dto.metricKey };
     const data: { weeklyStory?: number | null; monthlyGoal?: number | null } = {};
     if (dto.weeklyStory !== undefined) data.weeklyStory = dto.weeklyStory;
@@ -448,8 +419,8 @@ class PersonalStatsController {
   }
 
   @Get()
-  sheet(@Query() q: GetSheetQuery, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.sheet(user, q.userId, q.month);
+  sheet(@Query() q: GetSheetQuery) {
+    return this.service.sheet(q.userId, q.month);
   }
 
   @Get('department')
@@ -458,8 +429,8 @@ class PersonalStatsController {
   }
 
   @Get('story')
-  story(@Query() q: GetStoryQuery, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.story(user, q.departmentId, q.month);
+  story(@Query() q: GetStoryQuery) {
+    return this.service.story(q.departmentId, q.month);
   }
 
   @Put('story')

@@ -546,7 +546,6 @@ export interface PersonalStatsSheet {
   /** システム上の実績から出した値(手入力が無い日に使う) */
   auto: Record<string, Partial<Record<PersonalMetricKey, number>>>;
   targets: Partial<Record<PersonalMetricKey, PersonalStatTarget>>;
-  canEditTargets: boolean;
   /** アポインター用の日別シート(予算・稼働時間)で表示する */
   isAppointer: boolean;
   /** 名前の横に出す役職名(AP / APリーダー) */

@@ -243,6 +243,8 @@ export function AppointerSheet({
         if (key === m.revised && d <= today) {
           return <span style={{ color: 'var(--color-text)', fontWeight: 700 }}>{landingOf(getter, d, m, today) || ''}</span>;
         }
+        // 実績は今日までの日にだけ入力する(要望)
+        if (actual && d > today) return <span />;
         const autoV = actual ? autoOf(d, key) : undefined;
         const cell = (
           <InlineNumber
@@ -262,9 +264,9 @@ export function AppointerSheet({
         if (key === m.revised) return String(landingOf(getter, r.date!, m, today) || '');
         return actual ? String(valueOf(r.date!, key) || '') : textOf(r.date!, key);
       },
-      // 着地見込みへの貼り付けは未来日だけ(今日までは実績と同じ)
+      // 貼り付けも入力と同じ: 着地見込みは未来日だけ、実績は今日までだけ
       pasteValue: (r, text) => {
-        if (r.kind !== 'day' || (key === m.revised && r.date! <= today)) return;
+        if (r.kind !== 'day' || (key === m.revised && r.date! <= today) || (actual && r.date! > today)) return;
         save(r.date!, key, parseCount(text));
       },
     });
