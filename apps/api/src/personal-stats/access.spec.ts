@@ -74,6 +74,31 @@ describe('PersonalStatsService の入力ルール', () => {
     expect(sheet.auto['2026-11-07']).toBeUndefined();
   });
 
+  it('未来日の実績が残っていても画面へ返さない(予算・着地見込みは返す)', async () => {
+    const { prisma, service } = setup();
+    prisma.personalDailyStat.findMany.mockResolvedValue([
+      { userId: 'other', date: '2026-11-05', metricKey: 'TOSS_UP', value: 1, version: 1 },
+      { userId: 'other', date: '2026-11-06', metricKey: 'TOSS_UP', value: 2, version: 1 },
+      { userId: 'other', date: '2026-11-06', metricKey: 'TOSS_UP_BUDGET', value: 3, version: 1 },
+      { userId: 'other', date: '2026-11-06', metricKey: 'TOSS_UP_REVISED', value: 4, version: 1 },
+    ]);
+    const sheet = await service.sheet('other', '2026-11');
+    expect(sheet.values['2026-11-05'].TOSS_UP.value).toBe(1);
+    expect(sheet.values['2026-11-06'].TOSS_UP).toBeUndefined();
+    expect(sheet.values['2026-11-06'].TOSS_UP_BUDGET.value).toBe(3);
+    expect(sheet.values['2026-11-06'].TOSS_UP_REVISED.value).toBe(4);
+  });
+
+  it('部署ストーリーの日別の実績は未来日に入力できない(目標は入力できる)', async () => {
+    const { prisma, service } = setup();
+    const story = (cell: string) => ({ departmentId: 'd1', month: '2026-11', cell, value: 1, version: null });
+    await expect(service.saveStory(viewer, story('d:2026-11-06:TOSS_UP'))).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.departmentStoryValue.create).not.toHaveBeenCalled();
+    await expect(service.saveStory(viewer, story('d:2026-11-05:TOSS_UP'))).resolves.toEqual({ value: 1, version: 1 });
+    await expect(service.saveStory(viewer, story('w:4:TOSS_UP'))).resolves.toEqual({ value: 1, version: 1 });
+    await expect(service.saveStory(viewer, story('m:TOSS_UP'))).resolves.toEqual({ value: 1, version: 1 });
+  });
+
   it('人員の一覧は見る人の範囲で絞らない', async () => {
     const { prisma, service } = setup();
     await service.users();

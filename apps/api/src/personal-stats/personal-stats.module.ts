@@ -45,6 +45,8 @@ const todayJst = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().s
 export const isLandingEditable = (date: string, today: string) => date > today;
 /** 実績を入力できる日か(今日まで) */
 export const isActualEditable = (date: string, today: string) => date <= today;
+/** 画面へ返す日別の値: 未来日の実績は出さない(要望: 残っていても週計・月合計・カードに数えない) */
+const isVisibleStat = (r: { date: string; metricKey: string }, today: string) => !METRIC_KEYS.includes(r.metricKey) || isActualEditable(r.date, today);
 /** 人員シートのタブに並べる役職(要望: AP と APリーダーだけ。CL は不要) */
 const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
@@ -161,6 +163,7 @@ export class PersonalStatsService {
     const members = (await this.users()).filter((u) => (u.departmentId ?? 'none') === departmentId);
     const days = periodMonthDays(month);
     const ids = members.map((m) => m.id);
+    const today = todayJst();
     const [rows, roles, src] = await Promise.all([
       this.prisma.personalDailyStat.findMany({ where: { userId: { in: ids }, date: { gte: days[0], lte: days[days.length - 1] } } }),
       this.prisma.userRole.findMany({ where: { userId: { in: ids } }, select: { userId: true, role: { select: { code: true } } } }),
@@ -171,7 +174,7 @@ export class PersonalStatsService {
       days,
       members: members.map((m) => {
         const values: Record<string, Record<string, { value: number; version: number }>> = {};
-        for (const r of rows) if (r.userId === m.id) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
+        for (const r of rows) if (r.userId === m.id && isVisibleStat(r, today)) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
         const target = { id: m.id, name: m.name, roles: roles.filter((r) => r.userId === m.id).map((r) => ({ role: r.role })) };
         return { user: { id: m.id, name: m.name }, roleLabel: m.roleLabel, values, auto: this.computeAuto(target, src) };
       }),
@@ -198,7 +201,8 @@ export class PersonalStatsService {
     ]);
 
     const values: Record<string, Record<string, { value: number; version: number }>> = {};
-    for (const r of rows) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
+    const today = todayJst();
+    for (const r of rows) if (isVisibleStat(r, today)) (values[r.date] ??= {})[r.metricKey] = { value: r.value, version: r.version };
 
     return {
       user: { id: target.id, name: target.name },
@@ -311,6 +315,10 @@ export class PersonalStatsService {
   /** 部署ストーリーのセルの保存(日別と同じく version で重なりを検出) */
   async saveStory(viewer: AuthenticatedUser, dto: SaveStoryDto) {
     if (dto.cell.startsWith('d:') && !dto.cell.startsWith(`d:${dto.month}-`)) throw new BadRequestException('対象月の日付ではありません');
+    // 日別のセルは実績なので今日までだけ(要望)。消すのはいつでもできる
+    if (dto.cell.startsWith('d:') && dto.value != null && !isActualEditable(dto.cell.slice(2, 12), todayJst())) {
+      throw new BadRequestException('実績は今日までの日にだけ入力できます');
+    }
     const key = { departmentId: dto.departmentId, month: dto.month, cell: dto.cell };
     let row: { value: number; version: number } | null = null;
     if (dto.version == null) {

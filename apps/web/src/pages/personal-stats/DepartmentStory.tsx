@@ -289,7 +289,8 @@ export function DepartmentStory({ departmentId, departmentName, month }: { depar
                   <td style={{ ...td, padding: '4px 8px', fontWeight: 700, ...sticky }}>{m.label}</td>
                   {week.map((d, i) => (
                     <td key={i} style={{ ...td, borderLeft: '1px solid var(--color-sunken)', background: d ? undefined : 'var(--color-sunken)' }}>
-                      {d && cellInput(dayCell(d, m.key))}
+                      {/* 日別は実績なので今日までだけ入力する(要望) */}
+                      {d && d <= today && cellInput(dayCell(d, m.key))}
                     </td>
                   ))}
                   <td style={{ ...calc, borderLeft: '1px solid var(--color-border)' }}>{sum}</td>
