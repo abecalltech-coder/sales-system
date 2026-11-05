@@ -232,6 +232,8 @@ export function AppointerSheet({
               </div>
             );
           }
+          // 実績は今日までなので、未来の日だけの週は0も出さず空欄にする(要望)
+          if (actual && r.days.every((d) => d > today)) return <span />;
           return (
             <div style={{ textAlign: 'center', fontWeight: 700, color: actual ? color : undefined }}>
               {sum(r.days, (d) => valueOf(d, key))}
