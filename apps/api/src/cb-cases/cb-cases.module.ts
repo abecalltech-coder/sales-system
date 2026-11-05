@@ -42,6 +42,7 @@ const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 class SaveCbCaseDto {
   @IsOptional() @IsString() @MaxLength(300) caseName?: string;
+  @IsOptional() @IsString() @MaxLength(100) applicationNo?: string;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @IsIn(CB_CATEGORIES) category?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(DATE_RE) contractDate?: string | null;
   @IsOptional() @ValidateIf((_o, v) => v !== null) @Matches(DATE_RE) mcDate?: string | null;
@@ -73,6 +74,7 @@ class CbTabGuard implements CanActivate {
 /** 渡された項目だけを更新用に取り出す(すべて任意) */
 const pick = (dto: SaveCbCaseDto) => ({
   ...(dto.caseName !== undefined ? { caseName: dto.caseName.trim() } : {}),
+  ...(dto.applicationNo !== undefined ? { applicationNo: dto.applicationNo.trim() } : {}),
   ...(dto.category !== undefined ? { category: dto.category } : {}),
   ...(dto.contractDate !== undefined ? { contractDate: dto.contractDate } : {}),
   ...(dto.mcDate !== undefined ? { mcDate: dto.mcDate } : {}),

@@ -15,6 +15,7 @@ const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 
 interface CbCase {
   id: string;
   caseName: string;
+  applicationNo: string;
   category: string | null;
   contractDate: string | null;
   mcDate: string | null;
@@ -25,7 +26,7 @@ interface CbCase {
   createdAt: string;
 }
 
-type Patch = Partial<Pick<CbCase, 'caseName' | 'category' | 'contractDate' | 'mcDate' | 'cbAmount' | 'status' | 'memo'>>;
+type Patch = Partial<Pick<CbCase, 'caseName' | 'applicationNo' | 'category' | 'contractDate' | 'mcDate' | 'cbAmount' | 'status' | 'memo'>>;
 
 /** "YYYY-MM-DD" ⇔ 一覧の日付部品(ISO)。日付だけを扱うので端末の日付で変換する */
 const dateToIso = (d: string | null) => (d ? new Date(`${d}T00:00:00`).toISOString() : null);
@@ -39,7 +40,7 @@ const fmtYen = (n: number | null) => (n == null ? '' : `${n.toLocaleString('ja-J
 
 /**
  * CB管理(要望: CBの案件を登録して一覧で管理する。開いたときは一覧)。
- * 項目は案件名・区分・成約日・MC日・CB金額・ステータス・備考(金額内訳)で、すべて任意。
+ * 項目は案件名・申込番号・区分・成約日・MC日・CB金額・ステータス・備考(金額内訳)で、すべて任意。
  * PC は一覧のセルをその場で直せる。携帯はカードを押すと編集画面。行の削除は右クリック(長押し)メニュー。
  */
 export function CbCasesPage() {
@@ -56,7 +57,7 @@ export function CbCasesPage() {
     return (data ?? []).filter(
       (r) =>
         (!statusFilter || (statusFilter === 'none' ? !r.status : r.status === statusFilter)) &&
-        (!kw || r.caseName.toLowerCase().includes(kw) || r.memo.toLowerCase().includes(kw)),
+        (!kw || r.caseName.toLowerCase().includes(kw) || r.applicationNo.toLowerCase().includes(kw) || r.memo.toLowerCase().includes(kw)),
     );
   }, [data, keyword, statusFilter]);
   const totalAmount = rows.reduce((a, r) => a + (r.cbAmount ?? 0), 0);
@@ -92,6 +93,14 @@ export function CbCasesPage() {
       render: (r) => <InlineText value={r.caseName} onSave={(v) => save(r, { caseName: v })} />,
       copyValue: (r) => r.caseName,
       pasteValue: (r, t) => save(r, { caseName: t.trim() }),
+    },
+    {
+      key: 'applicationNo',
+      label: '申込番号',
+      width: 130,
+      render: (r) => <InlineText value={r.applicationNo} onSave={(v) => save(r, { applicationNo: v })} />,
+      copyValue: (r) => r.applicationNo,
+      pasteValue: (r, t) => save(r, { applicationNo: t.trim() }),
     },
     {
       key: 'category',
@@ -173,7 +182,7 @@ export function CbCasesPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-          <input placeholder="案件名・備考で検索" value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: isPhone ? '100%' : 220 }} />
+          <input placeholder="案件名・申込番号・備考で検索" value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: isPhone ? '100%' : 220 }} />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">ステータス: すべて</option>
             {CB_STATUSES.map((s) => (
@@ -203,7 +212,7 @@ export function CbCasesPage() {
           onDeleteRows={(ids) => {
             if (window.confirm(`選択した ${ids.length} 件を削除しますか？`)) remove.mutate(ids);
           }}
-          mobileCard={{ title: 'caseName', badge: 'status', meta: ['category', 'contractDate', 'mcDate', 'cbAmount'] }}
+          mobileCard={{ title: 'caseName', badge: 'status', meta: ['applicationNo', 'category', 'contractDate', 'mcDate', 'cbAmount'] }}
         />
         {!isLoading && (data ?? []).length === 0 && (
           <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 8 }}>まだ案件がありません。「＋ 案件登録」から登録してください</p>
@@ -245,6 +254,7 @@ function CbEditor({
 }) {
   const [form, setForm] = useState({
     caseName: item?.caseName ?? '',
+    applicationNo: item?.applicationNo ?? '',
     category: item?.category ?? '',
     contractDate: item?.contractDate ?? '',
     mcDate: item?.mcDate ?? '',
@@ -260,6 +270,7 @@ function CbEditor({
       const amount = form.cbAmount.replace(/[,円¥￥\s]/g, '');
       const body = {
         caseName: form.caseName,
+        applicationNo: form.applicationNo,
         category: form.category || null,
         contractDate: form.contractDate || null,
         mcDate: form.mcDate || null,
@@ -297,6 +308,8 @@ function CbEditor({
         </div>
         {label('案件名')}
         <input value={form.caseName} onChange={(e) => set({ caseName: e.target.value })} style={input} />
+        {label('申込番号')}
+        <input value={form.applicationNo} onChange={(e) => set({ applicationNo: e.target.value })} style={input} />
         {label('区分')}
         <select value={form.category} onChange={(e) => set({ category: e.target.value })} style={input}>
           <option value="">選択してください</option>

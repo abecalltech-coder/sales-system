@@ -16,8 +16,6 @@ export type PlanMetric = (typeof PLAN_METRICS)[number];
 
 export interface DayGetter {
   value: (d: string, key: PersonalDailyKey) => number;
-  /** 手入力があるか(未来日の着地見込みの判定に使う) */
-  entered: (d: string, key: PersonalDailyKey) => boolean;
 }
 
 export const fmtMinutes = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
@@ -34,14 +32,11 @@ export const planOf = (g: DayGetter, d: string, m: PlanMetric) => g.value(d, m.b
 
 /**
  * 1日の着地見込み(要望: 当日を含む過去日は実績と同じ、未来日は手打ちできる)。
- * 今日までは実績(無ければ0)、明日以降は手入力があればそれ、無ければ月初予算
+ * 今日までは実績、明日以降は手入力の数字(どちらも無ければ0)
  */
-export const landingOf = (g: DayGetter, d: string, m: PlanMetric, today: string) => {
-  if (d <= today) return g.value(d, m.key);
-  return g.entered(d, m.revised) ? g.value(d, m.revised) : g.value(d, m.budget);
-};
+export const landingOf = (g: DayGetter, d: string, m: PlanMetric, today: string) => g.value(d, d <= today ? m.key : m.revised);
 
-export const LANDING_HELP = '着地見込み = 今日までは実績、明日以降は手入力(無ければ月初予算)';
+export const LANDING_HELP = '着地見込み = 今日までは実績、明日以降は手入力の数字';
 
 const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
 

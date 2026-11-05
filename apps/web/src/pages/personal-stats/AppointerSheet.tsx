@@ -9,7 +9,7 @@ import { LANDING_HELP, PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fm
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
- * トス(青)・アポ(オレンジ)の「月初予算 / 実績 / 着地見込み(自動)」を並べる。セル操作は案件管理と同じ DataTable
+ * トス(青)・アポ(オレンジ)の「月初予算 / 実績 / 着地見込み(今日までは実績、明日以降は手入力)」を並べる。セル操作は案件管理と同じ DataTable
  * (矢印・Tab・Enter、範囲選択、コピー・貼り付け)。PC は表の右に累計、携帯は上に累計を出してトス/アポを切り替える。
  */
 
@@ -87,7 +87,7 @@ export function AppointerSheet({
     const t = textOf(d, key);
     return t === '' ? null : Number(t);
   };
-  const getter = { value: (d: string, key: PersonalDailyKey) => valueOf(d, key), entered: (d: string, key: PersonalDailyKey) => textOf(d, key) !== '' };
+  const getter = { value: (d: string, key: PersonalDailyKey) => valueOf(d, key) };
   const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
   const summary = computeApSummary(days, today, getter);
 
@@ -242,17 +242,16 @@ export function AppointerSheet({
           );
         }
         const d = r.date!;
-        // 着地見込み: 当日を含む過去日は実績と同じで入力不可、未来日は手打ち(要望)。空欄の未来日は月初予算を薄く出す
+        // 着地見込み: 当日を含む過去日は実績と同じで入力不可、未来日は手打ち(要望)
         if (key === m.revised && d <= today) {
           return <span style={{ color: 'var(--color-text)', fontWeight: 700 }}>{landingOf(getter, d, m, today) || ''}</span>;
         }
         const autoV = actual ? autoOf(d, key) : undefined;
-        const budgetV = key === m.revised ? valueOf(d, m.budget) : 0;
         const cell = (
           <InlineNumber
             value={numOf(d, key)}
-            placeholder={autoV ? String(autoV) : budgetV ? String(budgetV) : undefined}
-            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : key === m.revised ? '未入力の日は月初予算で計算します' : undefined}
+            placeholder={autoV ? String(autoV) : undefined}
+            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
             onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
             align="center"
             disabled={readOnly}

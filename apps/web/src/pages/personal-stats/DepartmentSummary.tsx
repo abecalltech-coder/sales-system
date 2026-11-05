@@ -16,8 +16,7 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
   const today = todayKeyJst();
   const rows = data.members.map((m) => {
     const value = (d: string, key: PersonalDailyKey) => m.values[d]?.[key]?.value ?? m.auto[d]?.[key as PersonalMetricKey] ?? 0;
-    const entered = (d: string, key: PersonalDailyKey) => m.values[d]?.[key] != null;
-    return { user: m.user, roleLabel: m.roleLabel, ...computeApSummary(data.days, today, { value, entered }) };
+    return { user: m.user, roleLabel: m.roleLabel, ...computeApSummary(data.days, today, { value }) };
   });
 
   // 部署合計(残件数・進捗は部署全体の予算と実績で出す)
