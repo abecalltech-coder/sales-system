@@ -214,12 +214,7 @@ export function PersonalStatsPage() {
               month={month}
             />
           ) : sheet ? (
-            <>
-              {sheet.canEdit === false && (
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 6px' }}>他の人のシートのため見るだけです(入力は本人・管理者のみ)</p>
-              )}
-              <AppointerSheet sheet={sheet} drafts={drafts} valueOf={valueOf} manualOf={manualOf} autoOf={autoOf} setDaily={setDaily} />
-            </>
+            <AppointerSheet sheet={sheet} drafts={drafts} valueOf={valueOf} manualOf={manualOf} autoOf={autoOf} setDaily={setDaily} />
           ) : null}
         </div>
 

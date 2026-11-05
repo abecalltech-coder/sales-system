@@ -77,9 +77,6 @@ function scopeOf(user: AuthenticatedUser): 'OWN' | 'TEAM' | 'DEPT' | 'ALL' {
   return best as 'OWN' | 'TEAM' | 'DEPT' | 'ALL';
 }
 
-/** AP・APリーダーは他の AP のシートも見られる(要望)。編集は従来どおり自分の範囲だけ */
-const viewsAllSales = (user: AuthenticatedUser) => user.roles.some((r) => SALES_ROLES.includes(r));
-
 class GetSheetQuery {
   @IsString() userId!: string;
   @Matches(PERIOD_RE) month!: string;
@@ -134,23 +131,19 @@ type AutoSource = Awaited<ReturnType<PersonalStatsService['loadAutoSource']>>;
 const CONFLICT_MESSAGE = '他のユーザーが先に更新しました。最新の値を表示します';
 
 @Injectable()
-class PersonalStatsService {
+export class PersonalStatsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
   ) {}
 
-  /** 人員シートのタブ: 有効なユーザーのうち営業系の役職の人(見られる範囲だけ) */
-  async users(viewer: AuthenticatedUser) {
-    const scope = viewsAllSales(viewer) ? 'ALL' : scopeOf(viewer);
+  /** 人員シートのタブ: 有効なユーザーのうち営業系の役職の人(要望: 誰でも全員のシートを見て変更できる) */
+  async users() {
     const where: Prisma.UserWhereInput = {
       status: 'ACTIVE',
       deletedAt: null,
       roles: { some: { role: { code: { in: SALES_ROLES } } } },
     };
-    if (scope === 'OWN') where.id = viewer.id;
-    else if (scope === 'TEAM') where.OR = [{ id: viewer.id }, ...(viewer.teamId ? [{ teamId: viewer.teamId }] : [])];
-    else if (scope === 'DEPT') where.OR = [{ id: viewer.id }, ...(viewer.departmentId ? [{ departmentId: viewer.departmentId }] : [])];
     // 部署ごとに切り替えて見るため、部署(組織管理の並び順)も返す
     const users = await this.prisma.user.findMany({
       where,
@@ -176,10 +169,10 @@ class PersonalStatsService {
 
   /**
    * 部署サマリー(要望): 部署のアポインター全員分の日別の値をまとめて返す。集計は画面側(シートの累計と同じ計算)。
-   * 見られる範囲の人だけ。departmentId='none' は部署なしの人
+   * departmentId='none' は部署なしの人
    */
-  async department(viewer: AuthenticatedUser, departmentId: string, month: string) {
-    const members = (await this.users(viewer)).filter((u) => (u.departmentId ?? 'none') === departmentId);
+  async department(departmentId: string, month: string) {
+    const members = (await this.users()).filter((u) => (u.departmentId ?? 'none') === departmentId);
     const days = periodMonthDays(month);
     const ids = members.map((m) => m.id);
     const [rows, roles, src] = await Promise.all([
@@ -199,8 +192,8 @@ class PersonalStatsService {
     };
   }
 
-  /** 対象ユーザーを見られる/編集できるか(閲覧と編集は同じ範囲) */
-  private async assertAccess(viewer: AuthenticatedUser, userId: string, mode: 'view' | 'edit' = 'edit') {
+  /** 対象ユーザーを見られる/編集できるか(要望: 営業系の役職の人のシートは誰でも変更できる) */
+  private async assertAccess(viewer: AuthenticatedUser, userId: string) {
     const target = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
       select: { id: true, name: true, teamId: true, departmentId: true, roles: { select: { role: { select: { code: true, name: true } } } } },
@@ -212,17 +205,13 @@ class PersonalStatsService {
       scope === 'ALL' ||
       (scope === 'DEPT' && !!viewer.departmentId && target.departmentId === viewer.departmentId) ||
       (scope === 'TEAM' && !!viewer.teamId && target.teamId === viewer.teamId) ||
-      (mode === 'view' && viewsAllSales(viewer) && target.roles.some((r) => SALES_ROLES.includes(r.role.code)));
+      target.roles.some((r) => SALES_ROLES.includes(r.role.code));
     if (!ok) throw new ForbiddenException('このユーザーのシートを見る権限がありません');
     return target;
   }
 
   async sheet(viewer: AuthenticatedUser, userId: string, month: string) {
-    const target = await this.assertAccess(viewer, userId, 'view');
-    const canEdit = await this.assertAccess(viewer, userId, 'edit').then(
-      () => true,
-      () => false,
-    );
+    const target = await this.assertAccess(viewer, userId);
     const days = periodMonthDays(month);
     const [rows, targets, auto] = await Promise.all([
       this.prisma.personalDailyStat.findMany({ where: { userId, date: { gte: days[0], lte: days[days.length - 1] } } }),
@@ -247,7 +236,6 @@ class PersonalStatsService {
       ),
       canEditTargets: isAdmin(viewer),
       /** 他の AP のシートは見るだけ(編集は自分の範囲) */
-      canEdit,
     };
   }
 
@@ -455,8 +443,8 @@ class PersonalStatsController {
   constructor(private readonly service: PersonalStatsService) {}
 
   @Get('users')
-  users(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.users(user);
+  users() {
+    return this.service.users();
   }
 
   @Get()
@@ -465,8 +453,8 @@ class PersonalStatsController {
   }
 
   @Get('department')
-  department(@Query() q: GetDepartmentQuery, @CurrentUser() user: AuthenticatedUser) {
-    return this.service.department(user, q.departmentId, q.month);
+  department(@Query() q: GetDepartmentQuery) {
+    return this.service.department(q.departmentId, q.month);
   }
 
   @Get('story')
