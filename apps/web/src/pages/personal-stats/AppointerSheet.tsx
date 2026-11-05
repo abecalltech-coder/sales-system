@@ -250,10 +250,11 @@ export function AppointerSheet({
         const autoV = actual ? autoOf(d, key) : undefined;
         const cell = (
           <InlineNumber
-            value={numOf(d, key)}
-            placeholder={autoV ? String(autoV) : undefined}
-            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
-            onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
+            // 自動の数字も入力欄に入れて、手入力と同じように直せるようにする(要望: グレーの数字が変更できない)
+            value={numOf(d, key) ?? autoV ?? null}
+            title={autoV ? `システム上の実績: ${autoV}(手入力を消すとこの数字に戻ります)` : undefined}
+            // 自動の数字を消したら0にする(手入力が無いと消しても元の数字が出て、変更できないように見えるため)
+            onSave={(n) => save(d, key, n == null ? (numOf(d, key) == null ? 0 : null) : parseCount(String(n)))}
             align="center"
           />
         );

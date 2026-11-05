@@ -2,11 +2,10 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 /**
  * 全画面共通の「対象月(periodMonth = "YYYY-MM")」。
- * URL の ?month= と localStorage を同期し、どの画面で切り替えても他画面へ引き継がれる。
+ * 開いたとき(再読み込みを含む)は必ず当月(要望)。切り替えた月は開いている間だけ他画面へ引き継ぎ、保存しない。
  * 日本にサマータイムは無いので JST は UTC+9 固定で計算してよい。
  */
 
-const STORAGE_KEY = 'period.month';
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -30,17 +29,18 @@ export function formatPeriodMonth(period: string): string {
   return `${y}年${m}月`;
 }
 
+/** 切り替えた月。当月なら null(開いたまま月が変わっても新しい当月に付いていく) */
+let selected: string | null = null;
+
 function read(): string {
-  if (typeof window === 'undefined') return currentPeriodMonth();
-  const fromUrl = new URLSearchParams(window.location.search).get('month');
-  if (isValidPeriodMonth(fromUrl)) return fromUrl;
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (isValidPeriodMonth(stored)) return stored;
-  } catch {
-    /* private mode 等 */
-  }
-  return currentPeriodMonth();
+  return selected ?? currentPeriodMonth();
+}
+
+// 以前ブラウザに記憶していた月を片付ける
+try {
+  window.localStorage.removeItem('period.month');
+} catch {
+  /* private mode 等 */
 }
 
 const listeners = new Set<() => void>();
@@ -49,10 +49,8 @@ function emit() {
 }
 function subscribe(cb: () => void) {
   listeners.add(cb);
-  window.addEventListener('popstate', cb);
   return () => {
     listeners.delete(cb);
-    window.removeEventListener('popstate', cb);
   };
 }
 
@@ -61,15 +59,7 @@ export function usePeriodMonth(): [string, (next: string) => void] {
 
   const set = useCallback((next: string) => {
     if (!isValidPeriodMonth(next)) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, next);
-    } catch {
-      /* noop */
-    }
-    const url = new URL(window.location.href);
-    if (next === currentPeriodMonth()) url.searchParams.delete('month');
-    else url.searchParams.set('month', next);
-    window.history.replaceState(window.history.state, '', url.toString());
+    selected = next === currentPeriodMonth() ? null : next;
     emit();
   }, []);
 

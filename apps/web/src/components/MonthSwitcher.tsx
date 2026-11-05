@@ -2,7 +2,7 @@ import { currentPeriodMonth, formatPeriodMonth, shiftPeriodMonth, usePeriodMonth
 
 /**
  * 全画面共通の対象月セレクタ。`‹ 2026年9月 ›`。
- * 状態は usePeriodMonth(URL ?month= + localStorage)で共有されるため、
+ * 状態は usePeriodMonth で共有されるため(開いたときは必ず当月)、
  * どの画面に置いても切り替えが他画面へ伝播する。
  */
 export function MonthSwitcher({ compact }: { compact?: boolean }) {

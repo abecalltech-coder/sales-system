@@ -195,7 +195,7 @@ export function PersonalStatsPage() {
           {/* 部署ストーリーはすべて手入力なので出さない */}
           {!showStory && (
             <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
-              薄い数字はシステム上の実績(入力すると上書き・空欄に戻すと実績に戻ります)
+              実績はトス・アポから自動で出ます。入力すると上書きでき、消すと0、0も消すと自動の数字に戻ります
             </span>
           )}
         </div>
