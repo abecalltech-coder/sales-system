@@ -289,10 +289,10 @@ function CbEditor({
   const label = (t: string) => <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)', margin: isPhone ? '14px 0 6px' : '10px 0 4px' }}>{t}</div>;
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={isPhone ? { alignItems: 'flex-end', padding: 0 } : undefined}>
+    // 背景を押しても閉じない(要望: 作成途中で消えないように、閉じるのは「閉じる」か保存だけ)
+    <div className="modal-backdrop" style={isPhone ? { alignItems: 'flex-end', padding: 0 } : undefined}>
       <div
         className="modal"
-        onClick={(e) => e.stopPropagation()}
         style={{
           width: isPhone ? '100%' : 'min(520px, 96vw)',
           maxWidth: isPhone ? 'none' : 520,
