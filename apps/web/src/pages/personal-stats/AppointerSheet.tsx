@@ -5,7 +5,7 @@ import { InlineNumber } from '../../components/InlineEdit';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { fmtRate, rateColor } from './parts';
 import { CumulativeChart } from './charts';
-import { PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
+import { LANDING_HELP, PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
@@ -227,10 +227,10 @@ export function AppointerSheet({
       renderHeader: () => <span style={{ color, fontWeight: actual ? 800 : 700 }}>{label}</span>,
       render: (r) => {
         if (r.kind !== 'day') {
-          // 着地見込みの週計・月合計(要望: 修正予算 → 着地見込み。実績から自動で出し、手入力はしない)
+          // 着地見込みの週計・月合計
           if (key === m.revised) {
             return (
-              <div style={{ textAlign: 'center', fontWeight: 700 }} title="着地見込み = 過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">
+              <div style={{ textAlign: 'center', fontWeight: 700 }} title={LANDING_HELP}>
                 {sum(r.days, (d) => landingOf(getter, d, m, today))}
               </div>
             );
@@ -242,25 +242,24 @@ export function AppointerSheet({
           );
         }
         const d = r.date!;
-        if (key === m.revised) {
-          // 着地見込みは入力欄にしない。実績から来た数字は濃く、月初予算から来た数字(まだ実績の無い今日以降)は薄く
-          const fromActual = d < today || valueOf(d, m.key) > 0;
-          const v = landingOf(getter, d, m, today);
-          return <span style={{ color: fromActual ? 'var(--color-text)' : 'var(--color-text-faint)', fontWeight: fromActual ? 700 : 400 }}>{v || ''}</span>;
+        // 着地見込み: 当日を含む過去日は実績と同じで入力不可、未来日は手打ち(要望)。空欄の未来日は月初予算を薄く出す
+        if (key === m.revised && d <= today) {
+          return <span style={{ color: 'var(--color-text)', fontWeight: 700 }}>{landingOf(getter, d, m, today) || ''}</span>;
         }
         const autoV = actual ? autoOf(d, key) : undefined;
+        const budgetV = key === m.revised ? valueOf(d, m.budget) : 0;
         const cell = (
           <InlineNumber
             value={numOf(d, key)}
-            placeholder={autoV ? String(autoV) : undefined}
-            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : undefined}
+            placeholder={autoV ? String(autoV) : budgetV ? String(budgetV) : undefined}
+            title={autoV ? `システム上の実績: ${autoV}(入力すると上書き)` : key === m.revised ? '未入力の日は月初予算で計算します' : undefined}
             onSave={(n) => save(d, key, n == null ? null : parseCount(String(n)))}
             align="center"
             disabled={readOnly}
           />
         );
         return (
-          <ForwardClick style={actual ? { color, fontWeight: 700 } : { color: 'var(--color-text-muted)' }}>{cell}</ForwardClick>
+          <ForwardClick style={actual ? { color, fontWeight: 700 } : key === m.revised ? { color: 'var(--color-text)', fontWeight: 700 } : { color: 'var(--color-text-muted)' }}>{cell}</ForwardClick>
         );
       },
       copyValue: (r) => {
@@ -268,13 +267,11 @@ export function AppointerSheet({
         if (key === m.revised) return String(landingOf(getter, r.date!, m, today) || '');
         return actual ? String(valueOf(r.date!, key) || '') : textOf(r.date!, key);
       },
-      // 着地見込みは自動計算なので貼り付けもできない
-      pasteValue:
-        key === m.revised
-          ? undefined
-          : (r, text) => {
-              if (r.kind === 'day') save(r.date!, key, parseCount(text));
-            },
+      // 着地見込みへの貼り付けは未来日だけ(今日までは実績と同じ)
+      pasteValue: (r, text) => {
+        if (r.kind !== 'day' || (key === m.revised && r.date! <= today)) return;
+        save(r.date!, key, parseCount(text));
+      },
     });
     return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '着地見込み')];
   };

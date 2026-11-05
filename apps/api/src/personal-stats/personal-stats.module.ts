@@ -40,6 +40,9 @@ const METRIC_KEYS = METRICS.map((m) => m.key) as string[];
  */
 const PLAN_KEYS = ['TOSS_UP_BUDGET', 'TOSS_UP_REVISED', 'APPOINTMENT_BUDGET', 'APPOINTMENT_REVISED', 'WORK_MINUTES'];
 const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
+const todayJst = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/** 着地見込みを手入力できる日か(明日以降) */
+export const isLandingEditable = (date: string, today: string) => date > today;
 /** 人員シートのタブに並べる役職(要望: AP と APリーダーだけ。CL は不要) */
 const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
@@ -381,9 +384,9 @@ class PersonalStatsService {
   /** 日別セルの保存。version で読んだ後の更新を検出し、重なったら 409 にして画面に最新を読み直させる */
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
     await this.assertAccess(viewer, dto.userId);
-    // 旧「修正予算」は着地見込み(実績から自動計算)に変わったため、手入力は受け付けない(要望)
-    if (dto.metricKey.endsWith('_REVISED') && dto.value != null) {
-      throw new BadRequestException('着地見込みは実績から自動で計算されるため入力できません');
+    // 着地見込みの手入力は未来日だけ(要望: 当日を含む過去日は実績と同じ)。消すのはいつでもできる
+    if (dto.metricKey.endsWith('_REVISED') && dto.value != null && !isLandingEditable(dto.date, todayJst())) {
+      throw new BadRequestException('当日までの着地見込みは実績と同じになるため入力できません');
     }
     if (dto.metricKey === 'WORK_MINUTES' && dto.value != null && (dto.value < 60 || dto.value > 480 || dto.value % 15 !== 0)) {
       throw new BadRequestException('稼働時間は1〜8時間を15分刻みで選んでください');

@@ -4,7 +4,7 @@ import { rateOf } from './parts';
 /**
  * アポインターのシートの累計計算(シート上部と部署サマリーで同じ計算を使う)。
  * - 稼働時間は月初に予定として全部入れるため、今日までの日だけ数える(要望)
- * - 予算は月初予算。着地見込みは手入力せず、実績から自動で出す(要望: 修正予算 → 着地見込み)
+ * - 予算は月初予算。着地見込みは今日までは実績、明日以降は手入力(landingOf)
  */
 
 export const SEAT_HOURS = 176;
@@ -16,7 +16,7 @@ export type PlanMetric = (typeof PLAN_METRICS)[number];
 
 export interface DayGetter {
   value: (d: string, key: PersonalDailyKey) => number;
-  /** 手入力があるか(修正予算の優先判定に使う) */
+  /** 手入力があるか(未来日の着地見込みの判定に使う) */
   entered: (d: string, key: PersonalDailyKey) => boolean;
 }
 
@@ -33,14 +33,15 @@ export const isCounted = (d: string, today: string) => d <= today;
 export const planOf = (g: DayGetter, d: string, m: PlanMetric) => g.value(d, m.budget);
 
 /**
- * 1日の着地見込み(要望: 実績に入れた数字がそのまま反映され、手入力はしない)。
- * 過ぎた日は実績(無ければ0)、今日以降は実績があれば実績、まだ無ければ月初予算
+ * 1日の着地見込み(要望: 当日を含む過去日は実績と同じ、未来日は手打ちできる)。
+ * 今日までは実績(無ければ0)、明日以降は手入力があればそれ、無ければ月初予算
  */
 export const landingOf = (g: DayGetter, d: string, m: PlanMetric, today: string) => {
-  const actual = g.value(d, m.key);
-  if (d < today) return actual;
-  return actual > 0 ? actual : g.value(d, m.budget);
+  if (d <= today) return g.value(d, m.key);
+  return g.entered(d, m.revised) ? g.value(d, m.revised) : g.value(d, m.budget);
 };
+
+export const LANDING_HELP = '着地見込み = 今日までは実績、明日以降は手入力(無ければ月初予算)';
 
 const sum = (ds: string[], f: (d: string) => number) => ds.reduce((a, d) => a + f(d), 0);
 

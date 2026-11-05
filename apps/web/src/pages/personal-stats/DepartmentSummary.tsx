@@ -1,7 +1,7 @@
 import { PersonalDailyKey, PersonalMetricKey, usePersonalStatsDepartment } from '../../hooks/useApi';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { MemberBars } from './charts';
-import { PLAN_METRICS, computeApSummary, fmtMinutes, fmtSeats, todayKeyJst } from './apStats';
+import { LANDING_HELP, PLAN_METRICS, computeApSummary, fmtMinutes, fmtSeats, todayKeyJst } from './apStats';
 import { RoleBadge, fmtRate, rateColor, rateOf } from './parts';
 
 /**
@@ -221,11 +221,11 @@ export function DepartmentSummary({ departmentId, month, onOpen }: { departmentI
               <th style={th}>席数</th>
               <th style={th} title="今日までに稼働時間が入っている日数">経過日数</th>
               <th style={{ ...th, ...sep }}>実績 / 予算</th>
-              <th style={th} title="過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">着地見込み</th>
+              <th style={th} title={LANDING_HELP}>着地見込み</th>
               <th style={th}>残</th>
               <th style={th}>平均/日</th>
               <th style={{ ...th, ...sep }}>実績 / 予算</th>
-              <th style={th} title="過ぎた日は実績、今日以降は実績があれば実績・無ければ月初予算">着地見込み</th>
+              <th style={th} title={LANDING_HELP}>着地見込み</th>
               <th style={th}>残</th>
               <th style={th}>平均/日</th>
               <th style={th}>必要/日</th>
