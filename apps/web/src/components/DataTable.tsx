@@ -1181,13 +1181,11 @@ function DataTableGrid<T>({
     if (e.key === 'Enter') {
       e.preventDefault();
       const activated = enterEditedCellRef.current;
-      const isReadonly = (r: number) => !!gridRef.current?.querySelector(`td[data-row="${r}"][data-col="${sel.fc}"] [data-cell-readonly]`);
-      if ((activated && activated.fr === sel.fr && activated.fc === sel.fc) || isReadonly(sel.fr)) {
+      // 入力できないセル(data-cell-readonly。週計など)は入力の段階が無いので、1回で下へ。移るのは常に1行だけ(要望)
+      const isReadonly = !!gridRef.current?.querySelector(`td[data-row="${sel.fr}"][data-col="${sel.fc}"] [data-cell-readonly]`);
+      if ((activated && activated.fr === sel.fr && activated.fc === sel.fc) || isReadonly) {
         enterEditedCellRef.current = null;
-        // 入力できないセル(data-cell-readonly。週計など)は飛ばして、下の入力できるセルへ。下に無ければその場に留まる
-        let next = sel.fr + 1;
-        while (next < rowsRef.current.length && isReadonly(next)) next += 1;
-        if (next < rowsRef.current.length) move(next - sel.fr, 0);
+        move(1, 0);
       } else {
         enterEditedCellRef.current = { fr: sel.fr, fc: sel.fc };
         activateCell(sel.fr, sel.fc);
