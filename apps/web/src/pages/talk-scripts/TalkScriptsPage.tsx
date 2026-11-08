@@ -27,6 +27,8 @@ interface TalkOut {
   id: string;
   /** どのベーストークの項目のアウト返しか(項目ごとに別々に編集する)。null は項目に紐づかない以前のアウト */
   stepId: string | null;
+  /** アウト返しのあとに戻るトーク。null はアウトが出たトーク */
+  returnStepId: string | null;
   /** このアウトを使うランク(項目に紐づくものはその項目のランク) */
   ranks: string[];
   label: string;
@@ -123,6 +125,12 @@ export function TalkScriptsPage() {
   const { data, isLoading } = useQuery({ queryKey: ['talk-scripts'], queryFn: () => api.get<TalkData>('/talk-scripts') });
   const [pickedRank, setPickedRank] = useState<string | null>(null);
   const [tab, setTab] = useState<'talk' | 'outs'>('talk');
+  // アウト返しから戻るトーク(そのトークまで動かして光らせる)
+  const [flash, setFlash] = useState<{ stepId: string; at: number } | null>(null);
+  const goToStep = (stepId: string) => {
+    setTab('talk');
+    setFlash({ stepId, at: Date.now() });
+  };
   const [editMode, setEditMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,6 +243,8 @@ export function TalkScriptsPage() {
             allSteps={data?.steps ?? []}
             outs={outs}
             edit={edit}
+            flash={flash}
+            onGoTo={goToStep}
             onSave={(id, patch) => saveStep.mutate({ id, patch })}
             onAdd={() => addStep.mutate()}
             onRemove={(s) => window.confirm(`「${s.name || 'このトーク'}」を削除しますか？`) && removeStep.mutate(s.id)}
@@ -249,6 +259,7 @@ export function TalkScriptsPage() {
             outs={outs}
             allOuts={data?.outs ?? []}
             edit={edit}
+            onGoTo={goToStep}
             onSave={(id, patch) => saveOut.mutate({ id, patch })}
             onRemove={(o) => {
               const step = data?.steps.find((s) => s.id === o.stepId);
@@ -271,6 +282,8 @@ function TalkTab({
   allSteps,
   outs,
   edit,
+  flash,
+  onGoTo,
   onSave,
   onAdd,
   onRemove,
@@ -281,12 +294,29 @@ function TalkTab({
   allSteps: TalkStep[];
   outs: TalkOut[];
   edit: boolean;
+  flash: { stepId: string; at: number } | null;
+  onGoTo: (stepId: string) => void;
   onSave: (id: string, patch: Partial<TalkStep>) => void;
   onAdd: () => void;
   onRemove: (s: TalkStep) => void;
   onMove: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState<{ stepId: string; outId: string } | null>(null);
+
+  // 戻るトークへ動かして光らせる(押すたびに光り直す)
+  useEffect(() => {
+    if (!flash) return;
+    const el = document.getElementById(`talk-step-${flash.stepId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('talk-flash');
+    void el.offsetWidth;
+    el.classList.add('talk-flash');
+  }, [flash]);
+  const stepTitle = (id: string) => {
+    const i = steps.findIndex((x) => x.id === id);
+    return i < 0 ? 'トーク' : `${i + 1}. ${steps[i].name || '(名前未入力)'}`;
+  };
   const [moreId, setMoreId] = useState<string | null>(null);
   // 複製の画面(開いたときに選んでおく項目)
   const [copying, setCopying] = useState<string[] | null>(null);
@@ -316,7 +346,7 @@ function TalkTab({
         const showRest = moreId === s.id;
         const ret = open?.stepId === s.id ? outs.find((o) => o.id === open.outId) : undefined;
         return (
-          <div key={s.id} className="card" style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div key={s.id} id={`talk-step-${s.id}`} className="card" style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {edit ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
@@ -384,8 +414,16 @@ function TalkTab({
                     ) : (
                       <span style={emptyText}>アウト返しはまだ作成されていません</span>
                     )}
-                    <button type="button" className="btn-primary" onClick={() => setOpen(null)} style={{ alignSelf: 'flex-end', fontSize: 12, padding: '3px 10px' }}>
-                      閉じてトークに戻る
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        setOpen(null);
+                        onGoTo(ret.returnStepId ?? s.id);
+                      }}
+                      style={{ alignSelf: 'flex-end', fontSize: 12, padding: '3px 10px' }}
+                    >
+                      「{stepTitle(ret.returnStepId ?? s.id)}」に戻る
                     </button>
                   </div>
                 )}
@@ -414,6 +452,7 @@ function OutsTab({
   outs,
   allOuts,
   edit,
+  onGoTo,
   onSave,
   onRemove,
   onMove,
@@ -425,12 +464,17 @@ function OutsTab({
   outs: TalkOut[];
   allOuts: TalkOut[];
   edit: boolean;
+  onGoTo: (stepId: string) => void;
   onSave: (id: string, patch: Partial<TalkOut>) => void;
   onRemove: (o: TalkOut) => void;
   onMove: (ids: string[]) => void;
   onError: (e: unknown) => void;
 }) {
   const [q, setQ] = useState('');
+  const stepTitle = (id: string | null) => {
+    const i = steps.findIndex((x) => x.id === id);
+    return i < 0 ? null : `${i + 1}. ${steps[i].name || '(名前未入力)'}`;
+  };
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -541,6 +585,15 @@ function OutsTab({
                               </option>
                             ))}
                           </select>
+                          <span style={fieldLabel}>戻るトーク</span>
+                          <select value={o.returnStepId ?? ''} onChange={(e) => onSave(o.id, { returnStepId: e.target.value })} style={{ fontSize: 12, maxWidth: 200 }}>
+                            <option value="">アウトが出たトーク</option>
+                            {steps.map((st, si) => (
+                              <option key={st.id} value={st.id}>
+                                {si + 1}. {st.name || '(名前未入力)'}
+                              </option>
+                            ))}
+                          </select>
                           <span style={{ flex: 1 }} />
                           <button type="button" aria-label="上へ" disabled={i === 0} onClick={() => move(g.items, i, -1)} style={smallBtn}>
                             ↑
@@ -553,12 +606,26 @@ function OutsTab({
                           </button>
                         </div>
                       </>
-                    ) : o.body ? (
-                      <div style={scriptText}>
-                        <RichView rich={o.bodyRich} plain={o.body} />
-                      </div>
                     ) : (
-                      <span style={emptyText}>アウト返しはまだ作成されていません</span>
+                      <>
+                        {o.body ? (
+                          <div style={scriptText}>
+                            <RichView rich={o.bodyRich} plain={o.body} />
+                          </div>
+                        ) : (
+                          <span style={emptyText}>アウト返しはまだ作成されていません</span>
+                        )}
+                        {stepTitle(o.returnStepId ?? o.stepId) && (
+                          <button
+                            type="button"
+                            className="btn-primary"
+                            onClick={() => onGoTo((o.returnStepId ?? o.stepId)!)}
+                            style={{ alignSelf: 'flex-end', fontSize: 12, padding: '3px 10px' }}
+                          >
+                            「{stepTitle(o.returnStepId ?? o.stepId)}」に戻る
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -591,6 +658,9 @@ function CreateOutForm({
   const [category, setCategory] = useState('');
   const [body, setBody] = useState<{ rich: RichRun[] | null; plain: string }>({ rich: null, plain: '' });
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // 戻るトーク: 'same'=アウトが出たトーク / 'next'=その次のトーク / 表示中のランクのトーク
+  const [returnTo, setReturnTo] = useState('same');
+  const rankSteps = allSteps.filter((s) => s.rank === rank);
   const ranks = [...TALK_RANKS].sort((a, b) => (a.id === rank ? -1 : b.id === rank ? 1 : 0));
   const toggle = (id: string) =>
     setPicked((cur) => {
@@ -609,6 +679,7 @@ function CreateOutForm({
         category,
         body: body.plain,
         bodyRich: body.rich,
+        returnTo,
       }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
@@ -634,6 +705,21 @@ function CreateOutForm({
         <span style={fieldLabel}>アウト返し</span>
         <RichEditor rich={body.rich} plain={body.plain} label="アウト返しの文面" placeholder="お客様に話す内容" onSave={(rich, plain) => setBody({ rich, plain })} />
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={fieldLabel}>アウト返しのあとに戻るトーク</span>
+        <select value={returnTo} onChange={(e) => setReturnTo(e.target.value)} style={{ fontSize: 12, maxWidth: 220 }}>
+          <option value="same">アウトが出たトーク</option>
+          <option value="next">アウトが出たトークの次のトーク</option>
+          {rankSteps.map((s, i) => (
+            <option key={s.id} value={s.id}>
+              {i + 1}. {s.name || '(名前未入力)'}
+            </option>
+          ))}
+        </select>
+      </div>
+      {returnTo !== 'same' && returnTo !== 'next' && (
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>トークを指定したときは、他のランクに作るアウト返しは「アウトが出たトーク」に戻ります</span>
+      )}
       <span style={fieldLabel}>反映するトーク(複数選べます。作成後はトークごとに別々に編集できます)</span>
       {ranks.map((r) => {
         const list = allSteps.filter((s) => s.rank === r.id);

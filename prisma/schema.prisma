@@ -1342,6 +1342,8 @@ model TalkOut {
   id        String    @id @default(uuid())
   // どのベーストークの項目のアウト返しか(要望: 項目ごとに作り、項目ごとに別々に編集する)。null は項目に紐づかない以前のアウト
   stepId    String?
+  // アウト返しのあとに戻るトーク(要望: どこから読めばいいか分かるように)。null はアウトが出たトーク(stepId)に戻る
+  returnStepId String?
   ranks     String[]  @default([]) // このアウトを使うランク(項目に紐づくものはその項目のランク)
   label     String    @default("")
   category  String    @default("")

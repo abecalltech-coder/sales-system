@@ -81,11 +81,18 @@ class CreateOutDto {
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
   @IsOptional() labelRich?: unknown;
   @IsOptional() bodyRich?: unknown;
+  /**
+   * アウト返しのあとに戻るトーク(要望)。'same'=アウトが出たトーク / 'next'=その次のトーク / トークのID(同じランクのアウトにだけ使う)。
+   * 省略時は 'same'
+   */
+  @IsOptional() @IsString() returnTo?: string;
 }
 
 class UpdateOutDto {
   /** 別のベーストークの項目へ移す */
   @IsOptional() @IsString() stepId?: string;
+  /** 戻るトーク。空文字でアウトが出たトークに戻す */
+  @IsOptional() @IsString() returnStepId?: string;
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
@@ -198,6 +205,22 @@ export class TalkScriptsService {
     const stepIds = [...new Set(dto.stepIds)];
     const steps = await this.prisma.talkStep.findMany({ where: { id: { in: stepIds }, deletedAt: null }, select: { id: true, rank: true } });
     if (steps.length !== stepIds.length) throw new NotFoundException('選んだトークが見つかりません。画面を読み直してください');
+    // 戻るトーク: 「次のトーク」はランクごとの並びで決め、トーク指定は同じランクのアウトにだけ使う(他のランクは出たトークに戻る)
+    const returnTo = dto.returnTo ?? 'same';
+    const rankSteps = await this.prisma.talkStep.findMany({
+      where: { rank: { in: [...new Set(steps.map((s) => s.rank))] }, deletedAt: null },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, rank: true },
+    });
+    const returnOf = (step: { id: string; rank: string }): string | null => {
+      if (returnTo === 'same') return null;
+      const list = rankSteps.filter((s) => s.rank === step.rank);
+      if (returnTo === 'next') {
+        const i = list.findIndex((s) => s.id === step.id);
+        return list[i + 1]?.id ?? null;
+      }
+      return list.some((s) => s.id === returnTo) ? returnTo : null;
+    };
     const max = await this.prisma.talkOut.aggregate({ where: { deletedAt: null }, _max: { order: true } });
     const order = (max._max.order ?? -1) + 1;
     const labelRich = cleanRich(dto.labelRich, 100);
@@ -207,6 +230,7 @@ export class TalkScriptsService {
         this.prisma.talkOut.create({
           data: {
             stepId,
+            returnStepId: returnOf(steps.find((s) => s.id === stepId)!),
             ranks: [steps.find((s) => s.id === stepId)!.rank],
             label: plainOf(labelRich) ?? dto.label?.trim() ?? '',
             category: dto.category?.trim() ?? '',
@@ -230,12 +254,15 @@ export class TalkScriptsService {
     if (!existing) throw new NotFoundException('アウトが見つかりません');
     const step = dto.stepId ? await this.prisma.talkStep.findFirst({ where: { id: dto.stepId, deletedAt: null }, select: { id: true, rank: true } }) : null;
     if (dto.stepId && !step) throw new NotFoundException('移す先のトークが見つかりません');
+    const ret = dto.returnStepId ? await this.prisma.talkStep.findFirst({ where: { id: dto.returnStepId, deletedAt: null }, select: { id: true } }) : null;
+    if (dto.returnStepId && !ret) throw new NotFoundException('戻るトークが見つかりません');
     const labelRich = dto.labelRich !== undefined ? cleanRich(dto.labelRich, 100) : undefined;
     const bodyRich = dto.bodyRich !== undefined ? cleanRich(dto.bodyRich) : undefined;
     const updated = await this.prisma.talkOut.update({
       where: { id },
       data: {
         ...(step ? { stepId: step.id, ranks: [step.rank] } : {}),
+        ...(dto.returnStepId !== undefined ? { returnStepId: dto.returnStepId || null } : {}),
         ...(labelRich !== undefined ? { labelRich: richJson(labelRich), ...(labelRich ? { label: plainOf(labelRich)! } : {}) } : {}),
         ...(bodyRich !== undefined ? { bodyRich: richJson(bodyRich), ...(bodyRich ? { body: plainOf(bodyRich)! } : {}) } : {}),
         ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
@@ -273,6 +300,8 @@ export class TalkScriptsService {
       for (const rank of [...new Set(dto.ranks)]) {
         const max = await tx.talkStep.aggregate({ where: { rank, deletedAt: null }, _max: { order: true } });
         let order = (max._max.order ?? -1) + 1;
+        // 先にトークを作ってから、アウト返しを作る(戻るトークが一緒に複製したトークなら、複製後のトークへ付け替えるため)
+        const newIdOf = new Map<string, string>();
         for (const st of steps) {
           const created = await tx.talkStep.create({
             data: {
@@ -286,25 +315,24 @@ export class TalkScriptsService {
               updatedBy: user.id,
             },
           });
-          const own = outs.filter((o) => o.stepId === st.id);
-          if (own.length > 0) {
-            await tx.talkOut.createMany({
-              data: own.map((o) => ({
-                stepId: created.id,
-                ranks: [rank],
-                label: o.label,
-                category: o.category,
-                body: o.body,
-                labelRich: o.labelRich ?? Prisma.DbNull,
-                bodyRich: o.bodyRich ?? Prisma.DbNull,
-                order: o.order,
-                createdBy: user.id,
-                updatedBy: user.id,
-              })),
-            });
-          }
+          newIdOf.set(st.id, created.id);
           copied++;
         }
+        const data = outs.map((o) => ({
+          stepId: newIdOf.get(o.stepId!)!,
+          // 一緒に複製していないトークへ戻るものは、アウトが出たトークに戻す
+          returnStepId: o.returnStepId ? (newIdOf.get(o.returnStepId) ?? null) : null,
+          ranks: [rank],
+          label: o.label,
+          category: o.category,
+          body: o.body,
+          labelRich: o.labelRich ?? Prisma.DbNull,
+          bodyRich: o.bodyRich ?? Prisma.DbNull,
+          order: o.order,
+          createdBy: user.id,
+          updatedBy: user.id,
+        }));
+        if (data.length > 0) await tx.talkOut.createMany({ data });
       }
     });
     this.changed();

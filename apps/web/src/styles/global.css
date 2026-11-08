@@ -537,6 +537,20 @@ main button {
   box-shadow: var(--shadow-lg);
 }
 
+/* トークスクリプト: アウト返しのあとに戻るトークを光らせる(要望: どこから読めばいいか分かるように) */
+.talk-flash {
+  animation: talk-flash 2.4s ease-out;
+}
+@keyframes talk-flash {
+  0%,
+  45% {
+    box-shadow: 0 0 0 3px var(--color-primary);
+    background: var(--color-primary-soft);
+  }
+  100% {
+    box-shadow: var(--shadow-sm);
+  }
+}
 @keyframes fade-in {
   from {
     opacity: 0;
