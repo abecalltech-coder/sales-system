@@ -48,11 +48,29 @@ describe('TalkScriptsService', () => {
     expect(realtime.emitToAll).toHaveBeenCalledWith('talk-scripts.updated', {});
   });
 
-  it('アウトの使うランクは重複を除いて保存する(他のランクへの流用)', async () => {
-    const { service } = setup(true);
-    const created = await service.createOut({ ranks: ['BRONZE', 'SILVER', 'BRONZE'], label: '今忙しい' }, userOf(['AP_LEADER']));
-    expect(created).toMatchObject({ ranks: ['BRONZE', 'SILVER'], order: 0 });
-    const updated = await service.updateOut('o1', { ranks: ['GOLD', 'GOLD'] }, userOf(['AP_LEADER']));
-    expect(updated).toMatchObject({ ranks: ['GOLD'] });
+  it('アウト返しは選んだベーストークの項目ごとに別々に作る(重複は除く・ランクは項目のもの)', async () => {
+    const { prisma, service } = setup(true);
+    prisma.talkStep.findMany.mockResolvedValue([
+      { id: 's1', rank: 'BRONZE' },
+      { id: 's2', rank: 'SILVER' },
+    ]);
+    (prisma as unknown as { $transaction: jest.Mock }).$transaction = jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops));
+    const created = (await service.createOut({ stepIds: ['s1', 's2', 's1'], label: ' 今忙しい ', body: '返し' }, userOf(['AP_LEADER']))) as unknown as {
+      stepId: string;
+      ranks: string[];
+      label: string;
+    }[];
+    expect(created).toHaveLength(2);
+    expect(created.map((c) => [c.stepId, c.ranks, c.label])).toEqual([
+      ['s1', ['BRONZE'], '今忙しい'],
+      ['s2', ['SILVER'], '今忙しい'],
+    ]);
+  });
+
+  it('存在しない項目を選んだら作らない', async () => {
+    const { prisma, service } = setup(true);
+    prisma.talkStep.findMany.mockResolvedValue([{ id: 's1', rank: 'BRONZE' }]);
+    await expect(service.createOut({ stepIds: ['s1', 'gone'] }, userOf(['AP_LEADER']))).rejects.toThrow('見つかりません');
+    expect(prisma.talkOut.create).not.toHaveBeenCalled();
   });
 });

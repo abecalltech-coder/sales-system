@@ -9,7 +9,6 @@ export const TALK_RANKS = [
   { id: 'SILVER', label: 'シルバー', color: 'var(--color-rank-silver)' },
   { id: 'GOLD', label: 'ゴールド', color: 'var(--color-rank-gold)' },
 ];
-const rankLabel = (id: string) => TALK_RANKS.find((r) => r.id === id)?.label ?? id;
 
 interface TalkStep {
   id: string;
@@ -22,7 +21,9 @@ interface TalkStep {
 
 interface TalkOut {
   id: string;
-  /** このアウトを使うランク(複数なら同じ内容を使い回す) */
+  /** どのベーストークの項目のアウト返しか(項目ごとに別々に編集する)。null は項目に紐づかない以前のアウト */
+  stepId: string | null;
+  /** このアウトを使うランク(項目に紐づくものはその項目のランク) */
   ranks: string[];
   label: string;
   category: string;
@@ -123,7 +124,11 @@ export function TalkScriptsPage() {
   const canEdit = !!data?.canEdit;
   const edit = canEdit && editMode;
   const steps = useMemo(() => (data?.steps ?? []).filter((s) => s.rank === rank), [data, rank]);
-  const outs = useMemo(() => (data?.outs ?? []).filter((o) => o.ranks.includes(rank)), [data, rank]);
+  // 項目に紐づくアウトはその項目のランク、紐づかない以前のアウトは使うランクで出す
+  const outs = useMemo(() => {
+    const ids = new Set(steps.map((s) => s.id));
+    return (data?.outs ?? []).filter((o) => (o.stepId ? ids.has(o.stepId) : o.ranks.includes(rank)));
+  }, [data, steps, rank]);
 
   const onError = (e: unknown) => {
     setError(e instanceof ApiError ? e.message : '保存できませんでした');
@@ -231,13 +236,15 @@ export function TalkScriptsPage() {
           <OutsTab
             rank={rank}
             steps={steps}
+            allSteps={data?.steps ?? []}
             outs={outs}
             allOuts={data?.outs ?? []}
             edit={edit}
             onSave={(id, patch) => saveOut.mutate({ id, patch })}
             onRemove={(o) => {
-              const shared = o.ranks.length > 1 ? `\n${o.ranks.map(rankLabel).join('・')}のすべてから消えます。` : '';
-              if (window.confirm(`「${o.label || 'このアウト'}」を削除しますか？${shared}`)) removeOut.mutate(o.id);
+              const step = data?.steps.find((s) => s.id === o.stepId);
+              const where = step ? `(${step.name || 'このトーク'}のアウト返し。他のトークのアウト返しは消えません)` : '';
+              if (window.confirm(`「${o.label || 'このアウト'}」を削除しますか？${where}`)) removeOut.mutate(o.id);
             }}
             onMove={(ids) => reorder.mutate({ kind: 'outs', ids })}
             onError={onError}
@@ -281,8 +288,10 @@ function TalkTab({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {steps.length === 0 && <p style={emptyText}>このランクのトークはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
       {steps.map((s, i) => {
-        const hot = outs.filter((o) => s.outIds.includes(o.id));
-        const rest = outs.filter((o) => !s.outIds.includes(o.id));
+        // この項目のアウト返し(以前の共有アウトは項目に選ばれていたもの)
+        const isHot = (o: TalkOut) => o.stepId === s.id || (!o.stepId && s.outIds.includes(o.id));
+        const hot = outs.filter(isHot);
+        const rest = outs.filter((o) => !isHot(o));
         const showRest = moreId === s.id;
         const ret = open?.stepId === s.id ? outs.find((o) => o.id === open.outId) : undefined;
         return (
@@ -303,17 +312,13 @@ function TalkTab({
                   </button>
                 </div>
                 <BlurText multiline value={s.body} label={`${s.name}のトーク`} placeholder="トークの文面" onSave={(body) => onSave(s.id, { body })} />
-                <span style={fieldLabel}>このトークで出やすいアウト(押して選ぶ)</span>
+                <span style={fieldLabel}>このトークのアウト返し(作成・編集は「アウト返し集」タブ)</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {outs.length === 0 && <span style={emptyText}>「アウト返し集」タブでアウトを作成すると選べます</span>}
-                  {outs.map((o) => (
-                    <OutChip
-                      key={o.id}
-                      label={o.label}
-                      on={s.outIds.includes(o.id)}
-                      muted={!s.outIds.includes(o.id)}
-                      onClick={() => onSave(s.id, { outIds: s.outIds.includes(o.id) ? s.outIds.filter((x) => x !== o.id) : [...s.outIds, o.id] })}
-                    />
+                  {hot.length === 0 && <span style={emptyText}>まだありません</span>}
+                  {hot.map((o) => (
+                    <span key={o.id} style={{ fontSize: 12, padding: '1px 7px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-appo-border)', background: 'var(--color-appo-soft)', color: 'var(--color-appo)' }}>
+                      {o.label || '(名前未入力)'}
+                    </span>
                   ))}
                 </div>
               </>
@@ -328,7 +333,7 @@ function TalkTab({
                     {[...hot, ...(showRest ? rest : [])].map((o) => {
                       const on = open?.stepId === s.id && open.outId === o.id;
                       return (
-                        <OutChip key={o.id} label={o.label} on={on} muted={!s.outIds.includes(o.id)} onClick={() => setOpen(on ? null : { stepId: s.id, outId: o.id })} />
+                        <OutChip key={o.id} label={o.label} on={on} muted={!isHot(o)} onClick={() => setOpen(on ? null : { stepId: s.id, outId: o.id })} />
                       );
                     })}
                     {!showRest && rest.length > 0 && (
@@ -365,10 +370,14 @@ function TalkTab({
   );
 }
 
-/** アウト返し集(要望: アウト返しだけで見られる)。分類ごとの一覧を押すと、その場に文面が開く */
+/**
+ * アウト返し集(要望: アウト返しだけで見られる)。ベーストークの項目ごとに並べ、押すとその場に文面が開く。
+ * 作成時は項目をチェックで複数選べ、選んだ項目ごとに別々のアウト返しを作る(作ったあとは項目ごとに編集する)。
+ */
 function OutsTab({
   rank,
   steps,
+  allSteps,
   outs,
   allOuts,
   edit,
@@ -379,6 +388,7 @@ function OutsTab({
 }: {
   rank: string;
   steps: TalkStep[];
+  allSteps: TalkStep[];
   outs: TalkOut[];
   allOuts: TalkOut[];
   edit: boolean;
@@ -387,27 +397,20 @@ function OutsTab({
   onMove: (ids: string[]) => void;
   onError: (e: unknown) => void;
 }) {
-  const queryClient = useQueryClient();
   const [q, setQ] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const add = useMutation({
-    mutationFn: () => api.post<TalkOut>('/talk-scripts/outs', { ranks: [rank], label: '新しいアウト' }),
-    onSuccess: (o) => {
-      setQ('');
-      setOpenId(o.id);
-      queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
-    },
-    onError,
-  });
+  const [creating, setCreating] = useState(false);
 
   const kw = q.trim().toLowerCase();
   const filtered = outs.filter((o) => !kw || `${o.label} ${o.category} ${o.body}`.toLowerCase().includes(kw));
-  const groupOf = (o: TalkOut) => o.category || 'その他';
-  const groups = [...new Set(filtered.map(groupOf))].map((name) => ({ name, items: filtered.filter((o) => groupOf(o) === name) }));
+  // ベーストークの項目ごと。項目に紐づかない以前のアウトは最後にまとめる
+  const groups = [
+    ...steps.map((st, i) => ({ key: st.id, name: `${i + 1}. ${st.name || '(名前未入力)'}`, items: filtered.filter((o) => o.stepId === st.id) })),
+    { key: 'none', name: 'トーク未設定', items: filtered.filter((o) => !o.stepId) },
+  ].filter((g) => g.items.length > 0 || (!kw && g.key !== 'none' && edit));
   const categories = [...new Set(allOuts.map((o) => o.category).filter(Boolean))];
 
-  // 同じ分類の中で入れ替える
+  // 同じ項目の中で入れ替える
   const move = (group: TalkOut[], i: number, dir: -1 | 1) => {
     const other = group[i + dir];
     if (!other) return;
@@ -423,8 +426,8 @@ function OutsTab({
       <div style={{ display: 'flex', gap: 6 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="アウトを検索" placeholder="アウトを検索(例: 忙しい)" style={{ flex: 1, minWidth: 0, fontSize: 12, padding: '3px 8px' }} />
         {edit && (
-          <button type="button" disabled={add.isPending} onClick={() => add.mutate()} style={{ fontSize: 12, flexShrink: 0 }}>
-            ＋ アウトを追加
+          <button type="button" className={creating ? 'btn-primary' : undefined} onClick={() => setCreating((v) => !v)} style={{ fontSize: 12, flexShrink: 0 }}>
+            ＋ アウト返しを作成
           </button>
         )}
       </div>
@@ -433,15 +436,27 @@ function OutsTab({
           <option key={c} value={c} />
         ))}
       </datalist>
-      {outs.length === 0 && <p style={emptyText}>このランクのアウトはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
+      {creating && (
+        <CreateOutForm
+          rank={rank}
+          allSteps={allSteps}
+          onDone={(firstId) => {
+            setCreating(false);
+            setQ('');
+            if (firstId) setOpenId(firstId);
+          }}
+          onError={onError}
+        />
+      )}
+      {steps.length === 0 && <p style={emptyText}>このランクのベーストークがまだありません。先に「ベーストーク」で項目を作ると、項目ごとにアウト返しを作れます。</p>}
+      {steps.length > 0 && outs.length === 0 && <p style={emptyText}>このランクのアウト返しはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
       {outs.length > 0 && filtered.length === 0 && <p style={emptyText}>該当するアウトがありません</p>}
       {groups.map((g) => (
-        <div key={g.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ ...fieldLabel, marginTop: 4 }}>{g.name}</span>
+        <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ ...fieldLabel, marginTop: 6, fontSize: 12, color: 'var(--color-text)' }}>{g.name}</span>
+          {g.items.length === 0 && <span style={emptyText}>まだありません</span>}
           {g.items.map((o, i) => {
             const open = openId === o.id;
-            const when = steps.filter((s) => s.outIds.includes(o.id)).map((s) => s.name).join('・');
-            const others = o.ranks.filter((r) => r !== rank);
             return (
               <div key={o.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <button
@@ -463,7 +478,7 @@ function OutsTab({
                   }}
                 >
                   <span style={{ flex: 1, minWidth: 0 }}>{o.label || '(名前未入力)'}</span>
-                  {when && <span style={{ fontSize: 11, fontWeight: 400, color: open ? 'inherit' : 'var(--color-text-muted)' }}>{when}</span>}
+                  {o.category && <span style={{ fontSize: 11, fontWeight: 400, color: open ? 'inherit' : 'var(--color-text-muted)' }}>{o.category}</span>}
                 </button>
                 {open && (
                   <div style={{ background: 'var(--color-appo-soft)', border: '1px solid var(--color-appo-border)', borderRadius: 'var(--radius-sm)', padding: '7px 9px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -480,26 +495,19 @@ function OutsTab({
                           </label>
                         </div>
                         <label>
-                          <span style={fieldLabel}>アウト返し</span>
+                          <span style={fieldLabel}>アウト返し(このトークだけに反映)</span>
                           <BlurText multiline value={o.body} label="アウト返しの文面" placeholder="お客様に話す内容" onSave={(body) => onSave(o.id, { body })} />
                         </label>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12 }}>
-                          <span style={fieldLabel}>使うランク</span>
-                          {TALK_RANKS.map((r) => {
-                            const checked = o.ranks.includes(r.id);
-                            return (
-                              <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  // 最低1つのランクには残す(消すときは「削除」)
-                                  disabled={checked && o.ranks.length === 1}
-                                  onChange={() => onSave(o.id, { ranks: checked ? o.ranks.filter((x) => x !== r.id) : [...o.ranks, r.id] })}
-                                />
-                                {r.label}
-                              </label>
-                            );
-                          })}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
+                          <span style={fieldLabel}>トーク</span>
+                          <select value={o.stepId ?? ''} onChange={(e) => e.target.value && onSave(o.id, { stepId: e.target.value })} style={{ fontSize: 12, maxWidth: 200 }}>
+                            {!o.stepId && <option value="">(未設定)</option>}
+                            {steps.map((st, si) => (
+                              <option key={st.id} value={st.id}>
+                                {si + 1}. {st.name || '(名前未入力)'}
+                              </option>
+                            ))}
+                          </select>
                           <span style={{ flex: 1 }} />
                           <button type="button" aria-label="上へ" disabled={i === 0} onClick={() => move(g.items, i, -1)} style={smallBtn}>
                             ↑
@@ -511,15 +519,11 @@ function OutsTab({
                             削除
                           </button>
                         </div>
-                        {others.length > 0 && (
-                          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{others.map(rankLabel).join('・')}と共通です。文面を変えると、そちらにも反映されます。</span>
-                        )}
                       </>
+                    ) : o.body ? (
+                      <div style={scriptText}>{o.body}</div>
                     ) : (
-                      <>
-                        {o.body ? <div style={scriptText}>{o.body}</div> : <span style={emptyText}>アウト返しはまだ作成されていません</span>}
-                        {others.length > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{others.map(rankLabel).join('・')}と共通</span>}
-                      </>
+                      <span style={emptyText}>アウト返しはまだ作成されていません</span>
                     )}
                   </div>
                 )}
@@ -528,6 +532,113 @@ function OutsTab({
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * アウト返しの作成(要望)。反映するベーストークの項目をチェックで複数選ぶと、項目ごとに別々のアウト返しができる。
+ * 他のランクの項目も選べる(今のランクを先頭に表示)。
+ */
+function CreateOutForm({
+  rank,
+  allSteps,
+  onDone,
+  onError,
+}: {
+  rank: string;
+  allSteps: TalkStep[];
+  onDone: (firstId: string | null) => void;
+  onError: (e: unknown) => void;
+}) {
+  const queryClient = useQueryClient();
+  const [label, setLabel] = useState('');
+  const [category, setCategory] = useState('');
+  const [body, setBody] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const ranks = [...TALK_RANKS].sort((a, b) => (a.id === rank ? -1 : b.id === rank ? 1 : 0));
+  const toggle = (id: string) =>
+    setPicked((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const create = useMutation({
+    mutationFn: () => api.post<TalkOut[]>('/talk-scripts/outs', { stepIds: [...picked], label, category, body }),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
+      onDone(created.find((o) => allSteps.find((s) => s.id === o.stepId)?.rank === rank)?.id ?? null);
+    },
+    onError,
+  });
+
+  return (
+    <div className="card" style={{ padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 6, borderColor: 'var(--color-primary-border)' }}>
+      <b style={{ fontSize: 13 }}>アウト返しを作成</b>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <label style={{ flex: 2, minWidth: 0 }}>
+          <span style={fieldLabel}>アウト</span>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="例: 今忙しい" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px' }} />
+        </label>
+        <label style={{ flex: 1, minWidth: 0 }}>
+          <span style={fieldLabel}>分類</span>
+          <input value={category} onChange={(e) => setCategory(e.target.value)} list="talk-out-categories" placeholder="例: 時間・相手" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px' }} />
+        </label>
+      </div>
+      <label>
+        <span style={fieldLabel}>アウト返し</span>
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="お客様に話す内容" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px', lineHeight: 1.55 }} />
+      </label>
+      <span style={fieldLabel}>反映するトーク(複数選べます。作成後はトークごとに別々に編集できます)</span>
+      {ranks.map((r) => {
+        const list = allSteps.filter((s) => s.rank === r.id);
+        if (list.length === 0) return null;
+        const all = list.every((s) => picked.has(s.id));
+        return (
+          <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700 }}>
+              <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+              {r.label}
+              <button
+                type="button"
+                onClick={() =>
+                  setPicked((cur) => {
+                    const next = new Set(cur);
+                    for (const s of list) {
+                      if (all) next.delete(s.id);
+                      else next.add(s.id);
+                    }
+                    return next;
+                  })
+                }
+                style={{ ...smallBtn, fontWeight: 400 }}
+              >
+                {all ? 'すべて外す' : 'すべて選ぶ'}
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', paddingLeft: 14 }}>
+              {list.map((s, i) => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />
+                  {i + 1}. {s.name || '(名前未入力)'}
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {allSteps.length === 0 && <span style={emptyText}>ベーストークの項目がまだありません</span>}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {picked.size > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{picked.size}つのトークに作成します</span>}
+        <button type="button" onClick={() => onDone(null)} style={{ fontSize: 12 }}>
+          やめる
+        </button>
+        <button type="button" className="btn-primary" disabled={picked.size === 0 || create.isPending} onClick={() => create.mutate()} style={{ fontSize: 12 }}>
+          {create.isPending ? '作成中...' : '作成'}
+        </button>
+      </div>
     </div>
   );
 }

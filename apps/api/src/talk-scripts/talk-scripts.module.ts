@@ -39,14 +39,16 @@ class UpdateStepDto {
 }
 
 class CreateOutDto {
-  @IsArray() @ArrayMinSize(1) @IsIn(TALK_RANKS, { each: true }) ranks!: string[];
+  /** アウト返しを作るベーストークの項目(要望: チェックで複数選ぶと、項目ごとに別々のアウト返しを作る) */
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsString({ each: true }) stepIds!: string[];
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
 }
 
 class UpdateOutDto {
-  @IsOptional() @IsArray() @ArrayMinSize(1) @IsIn(TALK_RANKS, { each: true }) ranks?: string[];
+  /** 別のベーストークの項目へ移す */
+  @IsOptional() @IsString() stepId?: string;
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
@@ -69,7 +71,7 @@ class TalkTabGuard implements CanActivate {
 
 /**
  * トークスクリプト(要望: APのランクごとのベーストークとアウト返し集)。
- * トークはランクごと。アウトは「使うランク」を選べて、複数のランクで同じ内容を使い回せる。
+ * トークはランクごと。アウト返しはベーストークの項目ごとに持ち、作成時に複数の項目を選ぶと項目ごとに別々に作る。
  * 閲覧はタブが見える人全員で全ランク。編集はユーザー管理の役職ごとの設定で許可した人(管理者は常に可)。
  */
 @Injectable()
@@ -136,20 +138,33 @@ export class TalkScriptsService {
     return { ok: true };
   }
 
+  /**
+   * アウト返しの作成(要望)。選んだベーストークの項目ごとに、同じ内容の別々のアウト返しを作る。
+   * 作ったあとは項目ごとに編集でき、他の項目には影響しない。
+   */
   async createOut(dto: CreateOutDto, user: AuthenticatedUser) {
     await this.assertCanEdit(user);
+    const stepIds = [...new Set(dto.stepIds)];
+    const steps = await this.prisma.talkStep.findMany({ where: { id: { in: stepIds }, deletedAt: null }, select: { id: true, rank: true } });
+    if (steps.length !== stepIds.length) throw new NotFoundException('選んだトークが見つかりません。画面を読み直してください');
     const max = await this.prisma.talkOut.aggregate({ where: { deletedAt: null }, _max: { order: true } });
-    const created = await this.prisma.talkOut.create({
-      data: {
-        ranks: [...new Set(dto.ranks)],
-        label: dto.label?.trim() ?? '',
-        category: dto.category?.trim() ?? '',
-        body: dto.body ?? '',
-        order: (max._max.order ?? -1) + 1,
-        createdBy: user.id,
-        updatedBy: user.id,
-      },
-    });
+    const order = (max._max.order ?? -1) + 1;
+    const created = await this.prisma.$transaction(
+      stepIds.map((stepId) =>
+        this.prisma.talkOut.create({
+          data: {
+            stepId,
+            ranks: [steps.find((s) => s.id === stepId)!.rank],
+            label: dto.label?.trim() ?? '',
+            category: dto.category?.trim() ?? '',
+            body: dto.body ?? '',
+            order,
+            createdBy: user.id,
+            updatedBy: user.id,
+          },
+        }),
+      ),
+    );
     this.changed();
     return created;
   }
@@ -158,10 +173,12 @@ export class TalkScriptsService {
     await this.assertCanEdit(user);
     const existing = await this.prisma.talkOut.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundException('アウトが見つかりません');
+    const step = dto.stepId ? await this.prisma.talkStep.findFirst({ where: { id: dto.stepId, deletedAt: null }, select: { id: true, rank: true } }) : null;
+    if (dto.stepId && !step) throw new NotFoundException('移す先のトークが見つかりません');
     const updated = await this.prisma.talkOut.update({
       where: { id },
       data: {
-        ...(dto.ranks !== undefined ? { ranks: [...new Set(dto.ranks)] } : {}),
+        ...(step ? { stepId: step.id, ranks: [step.rank] } : {}),
         ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
         ...(dto.category !== undefined ? { category: dto.category.trim() } : {}),
         ...(dto.body !== undefined ? { body: dto.body } : {}),

@@ -1337,7 +1337,9 @@ model TalkStep {
 // トークスクリプトのアウト返し(要望: ランクごとに作成し、使うランクを選んで他のランクにも流用できる)
 model TalkOut {
   id        String    @id @default(uuid())
-  ranks     String[]  @default([]) // このアウトを使うランク
+  // どのベーストークの項目のアウト返しか(要望: 項目ごとに作り、項目ごとに別々に編集する)。null は項目に紐づかない以前のアウト
+  stepId    String?
+  ranks     String[]  @default([]) // このアウトを使うランク(項目に紐づくものはその項目のランク)
   label     String    @default("")
   category  String    @default("")
   body      String    @default("")
@@ -1349,4 +1351,5 @@ model TalkOut {
   deletedAt DateTime?
 
   @@index([order])
+  @@index([stepId])
 }
