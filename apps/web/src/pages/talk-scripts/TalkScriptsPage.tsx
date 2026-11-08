@@ -46,7 +46,7 @@ interface TalkData {
 
 const smallBtn: React.CSSProperties = { fontSize: 11, padding: '1px 7px' };
 const fieldLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' };
-const scriptText: React.CSSProperties = { fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word' };
+const scriptText: React.CSSProperties = { fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word' };
 const emptyText: React.CSSProperties = { fontSize: 12, color: 'var(--color-text-faint)' };
 
 /** 入力欄から離れたときに保存する(他の人の更新は、入力中でなければ反映する) */
@@ -316,11 +316,11 @@ function TalkTab({
         const showRest = moreId === s.id;
         const ret = open?.stepId === s.id ? outs.find((o) => o.id === open.outId) : undefined;
         return (
-          <div key={s.id} className="card" style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5, borderLeft: '4px solid var(--color-primary)' }}>
+          <div key={s.id} className="card" style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {edit ? (
               <>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
-                  <span style={{ fontSize: 16, fontWeight: 900, flexShrink: 0, paddingBottom: 6 }}>{i + 1}.</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, flexShrink: 0, paddingBottom: 6 }}>{i + 1}.</span>
                   <RichEditor singleLine big rich={s.nameRich} plain={s.name} label="トークの名前" placeholder="トークの名前(例: 導入)" onSave={(nameRich, name) => onSave(s.id, { name, nameRich })} />
                   <button type="button" aria-label="上へ" disabled={i === 0} onClick={() => move(i, -1)} style={smallBtn}>
                     ↑
@@ -349,7 +349,7 @@ function TalkTab({
             ) : (
               <>
                 {/* 項目ごとの区切りが分かるよう、題名は大きく太く(要望) */}
-                <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.4, paddingBottom: 4, borderBottom: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.4, paddingBottom: 3, borderBottom: '1px solid var(--color-border)' }}>
                   {i + 1}. <RichView rich={s.nameRich} plain={s.name} />
                 </div>
                 <div style={scriptText}>
@@ -486,7 +486,7 @@ function OutsTab({
       {outs.length > 0 && filtered.length === 0 && <p style={emptyText}>該当するアウトがありません</p>}
       {groups.map((g) => (
         <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ marginTop: 10, fontSize: 16, fontWeight: 900, paddingBottom: 3, borderBottom: '2px solid var(--color-primary)' }}>{g.name}</span>
+          <span style={{ marginTop: 8, fontSize: 14, fontWeight: 800, paddingBottom: 2, borderBottom: '1px solid var(--color-border-strong)' }}>{g.name}</span>
           {g.items.length === 0 && <span style={emptyText}>まだありません</span>}
           {g.items.map((o, i) => {
             const open = openId === o.id;

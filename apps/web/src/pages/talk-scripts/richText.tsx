@@ -210,7 +210,7 @@ export function RichEditor({
           style={{
             minHeight: singleLine ? undefined : (minHeight ?? 70),
             padding: '4px 7px',
-            fontSize: big ? 15 : 13,
+            fontSize: big ? 14 : 13,
             fontWeight: big ? 800 : undefined,
             lineHeight: 1.6,
             border: '1px solid var(--color-border-strong)',
@@ -222,7 +222,7 @@ export function RichEditor({
           }}
         />
         {empty && placeholder && (
-          <span aria-hidden style={{ position: 'absolute', left: 8, top: 5, fontSize: big ? 15 : 13, color: 'var(--color-text-faint)', pointerEvents: 'none' }}>
+          <span aria-hidden style={{ position: 'absolute', left: 8, top: 5, fontSize: big ? 14 : 13, color: 'var(--color-text-faint)', pointerEvents: 'none' }}>
             {placeholder}
           </span>
         )}
