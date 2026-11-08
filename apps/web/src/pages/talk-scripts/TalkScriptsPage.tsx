@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
-import { logCopy } from '../../lib/copyLog';
 
 /** APランク(要望)。ユーザー管理の APランク と同じ値 */
 export const TALK_RANKS = [
@@ -226,6 +225,7 @@ export function TalkScriptsPage() {
           <TalkTab
             rank={rank}
             steps={steps}
+            allSteps={data?.steps ?? []}
             outs={outs}
             edit={edit}
             onSave={(id, patch) => saveStep.mutate({ id, patch })}
@@ -261,6 +261,7 @@ export function TalkScriptsPage() {
 function TalkTab({
   rank,
   steps,
+  allSteps,
   outs,
   edit,
   onSave,
@@ -270,6 +271,7 @@ function TalkTab({
 }: {
   rank: string;
   steps: TalkStep[];
+  allSteps: TalkStep[];
   outs: TalkOut[];
   edit: boolean;
   onSave: (id: string, patch: Partial<TalkStep>) => void;
@@ -281,23 +283,6 @@ function TalkTab({
   const [moreId, setMoreId] = useState<string | null>(null);
   // 複製の画面(開いたときに選んでおく項目)
   const [copying, setCopying] = useState<string[] | null>(null);
-  // コピーした印(押したボタンに「コピーしました」を少し出す)
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const rankName = TALK_RANKS.find((r) => r.id === rank)?.label ?? rank;
-
-  /** トークの文面をコピーする(要望: ランクのトークをまとめて、またはトーク1つずつ) */
-  const copyText = async (key: string, text: string, target: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      logCopy('トークスクリプト', text, { target });
-      setCopiedKey(key);
-      window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
-    } catch {
-      alert('コピーできませんでした');
-    }
-  };
-  const stepText = (s: TalkStep, i: number) => `${i + 1}. ${s.name}\n${s.body}`.trimEnd();
-  const allText = () => `【${rankName}】ベーストーク\n\n${steps.map(stepText).join('\n\n')}`;
 
   const move = (i: number, dir: -1 | 1) => {
     const ids = steps.map((s) => s.id);
@@ -309,19 +294,12 @@ function TalkTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {steps.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-          <button type="button" onClick={() => copyText('all', allText(), `${rankName}のベーストーク`)} style={{ fontSize: 12 }}>
-            {copiedKey === 'all' ? 'コピーしました' : `${rankName}のトークをすべてコピー`}
-          </button>
-          {edit && (
-            <button type="button" className={copying ? 'btn-primary' : undefined} onClick={() => setCopying(copying ? null : [])} style={{ fontSize: 12 }}>
-              他のランクへ複製
-            </button>
-          )}
-        </div>
+      {edit && allSteps.length > 0 && (
+        <button type="button" className={copying ? 'btn-primary' : undefined} onClick={() => setCopying(copying ? null : [])} style={{ alignSelf: 'flex-end', fontSize: 12 }}>
+          ランクのトークを複製して作成
+        </button>
       )}
-      {copying && <CopyStepsForm key={copying.join(',')} rank={rank} steps={steps} initial={copying} onDone={() => setCopying(null)} />}
+      {copying && <CopyStepsForm key={copying.join(',')} rank={rank} allSteps={allSteps} initial={copying} onDone={() => setCopying(null)} />}
       {steps.length === 0 && <p style={emptyText}>このランクのトークはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
       {steps.map((s, i) => {
         // この項目のアウト返し(以前の共有アウトは項目に選ばれていたもの)
@@ -363,14 +341,9 @@ function TalkTab({
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>
-                    {i + 1}. {s.name}
-                  </span>
-                  <button type="button" onClick={() => copyText(s.id, stepText(s, i), `${rankName} ${s.name}`)} style={{ ...smallBtn, flexShrink: 0 }}>
-                    {copiedKey === s.id ? 'コピーしました' : 'コピー'}
-                  </button>
-                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                  {i + 1}. {s.name}
+                </span>
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{s.body}</div>
                 {outs.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
@@ -688,14 +661,22 @@ function CreateOutForm({
 }
 
 /**
- * ベーストークの複製(要望: ブロンズ・シルバー・ゴールドへチェック式で複製)。
- * 複製する項目と複製先のランクをチェックで選ぶ。項目のアウト返しも一緒に複製し、複製後はそれぞれ別々に編集できる。
+ * ベーストークの複製(要望: ブロンズ・シルバー・ゴールドのトークを、他のランクにそのまま作成する。編集画面で)。
+ * 複製元のランクとトーク、複製先のランクをチェックで選ぶ。アウト返しも一緒に複製し、複製後はそれぞれ別々に編集できる。
  */
-function CopyStepsForm({ rank, steps, initial, onDone }: { rank: string; steps: TalkStep[]; initial: string[]; onDone: () => void }) {
+function CopyStepsForm({ rank, allSteps, initial, onDone }: { rank: string; allSteps: TalkStep[]; initial: string[]; onDone: () => void }) {
   const queryClient = useQueryClient();
+  // 項目の「複製」から開いたときはそのトークのランク、それ以外は表示中のランク以外でトークがあるランクから始める
+  const firstSource =
+    allSteps.find((s) => initial.includes(s.id))?.rank ??
+    TALK_RANKS.find((r) => r.id !== rank && allSteps.some((s) => s.rank === r.id))?.id ??
+    rank;
+  const [source, setSource] = useState(firstSource);
   const [picked, setPicked] = useState<Set<string>>(new Set(initial));
-  const [targets, setTargets] = useState<Set<string>>(new Set());
+  // 複製先: 他のランクから持ってくるときは表示中のランクを最初から選んでおく
+  const [targets, setTargets] = useState<Set<string>>(new Set(firstSource !== rank ? [rank] : []));
   const [error, setError] = useState<string | null>(null);
+  const steps = allSteps.filter((s) => s.rank === source);
   const toggle = (set: Set<string>, id: string) => {
     const next = new Set(set);
     if (next.has(id)) next.delete(id);
@@ -703,9 +684,11 @@ function CopyStepsForm({ rank, steps, initial, onDone }: { rank: string; steps: 
     return next;
   };
   const allPicked = steps.length > 0 && steps.every((s) => picked.has(s.id));
+  const pickedIds = steps.filter((s) => picked.has(s.id)).map((s) => s.id);
+  const label = (id: string) => TALK_RANKS.find((r) => r.id === id)?.label ?? id;
 
   const copy = useMutation({
-    mutationFn: () => api.post<{ copied: number }>('/talk-scripts/steps/copy', { stepIds: steps.filter((s) => picked.has(s.id)).map((s) => s.id), ranks: [...targets] }),
+    mutationFn: () => api.post<{ copied: number }>('/talk-scripts/steps/copy', { stepIds: pickedIds, ranks: [...targets] }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
       onDone();
@@ -713,16 +696,42 @@ function CopyStepsForm({ rank, steps, initial, onDone }: { rank: string; steps: 
     onError: (e) => setError(e instanceof ApiError ? e.message : '複製できませんでした'),
   });
 
+  const rankDot = (id: string) => <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: TALK_RANKS.find((r) => r.id === id)?.color }} />;
+
   return (
     <div className="card" style={{ padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 6, borderColor: 'var(--color-primary-border)' }}>
-      <b style={{ fontSize: 13 }}>他のランクへ複製</b>
+      <b style={{ fontSize: 13 }}>ランクのトークを複製して作成</b>
+      <span style={fieldLabel}>複製元のランク</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', paddingLeft: 4 }}>
+        {TALK_RANKS.map((r) => {
+          const count = allSteps.filter((s) => s.rank === r.id).length;
+          return (
+            <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: count ? 'pointer' : 'default', color: count ? undefined : 'var(--color-text-faint)' }}>
+              <input
+                type="radio"
+                name="talk-copy-source"
+                checked={source === r.id}
+                disabled={count === 0}
+                onChange={() => {
+                  setSource(r.id);
+                  setPicked(new Set());
+                }}
+              />
+              {rankDot(r.id)}
+              {r.label}
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>({count}件)</span>
+            </label>
+          );
+        })}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={fieldLabel}>複製するトーク</span>
+        <span style={fieldLabel}>{label(source)}の複製するトーク</span>
         <button type="button" onClick={() => setPicked(allPicked ? new Set() : new Set(steps.map((s) => s.id)))} style={smallBtn}>
           {allPicked ? 'すべて外す' : 'すべて選ぶ'}
         </button>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', paddingLeft: 4 }}>
+        {steps.length === 0 && <span style={emptyText}>このランクのトークはまだありません</span>}
         {steps.map((s, i) => (
           <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
             <input type="checkbox" checked={picked.has(s.id)} onChange={() => setPicked((cur) => toggle(cur, s.id))} />
@@ -730,30 +739,30 @@ function CopyStepsForm({ rank, steps, initial, onDone }: { rank: string; steps: 
           </label>
         ))}
       </div>
-      <span style={fieldLabel}>複製先のランク(複数選べます)</span>
+      <span style={fieldLabel}>作成するランク(複数選べます)</span>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', paddingLeft: 4 }}>
         {TALK_RANKS.map((r) => (
           <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
             <input type="checkbox" checked={targets.has(r.id)} onChange={() => setTargets((cur) => toggle(cur, r.id))} />
-            <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+            {rankDot(r.id)}
             {r.label}
-            {r.id === rank && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>(このランクに追加)</span>}
+            {r.id === rank && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>(表示中)</span>}
           </label>
         ))}
       </div>
-      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>アウト返しも一緒に複製します。複製先では最後に追加され、元のトークとは別々に編集できます。</span>
+      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>トークの名前・文面とアウト返しをそのまま作成します。作成先では最後に追加され、元のトークとは別々に編集できます。</span>
       {error && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-        {picked.size > 0 && targets.size > 0 && (
+        {pickedIds.length > 0 && targets.size > 0 && (
           <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-            {picked.size}件 × {targets.size}ランクに複製します
+            {label(source)}の{pickedIds.length}件を{[...targets].map(label).join('・')}に作成します
           </span>
         )}
         <button type="button" onClick={onDone} style={{ fontSize: 12 }}>
           やめる
         </button>
-        <button type="button" className="btn-primary" disabled={picked.size === 0 || targets.size === 0 || copy.isPending} onClick={() => copy.mutate()} style={{ fontSize: 12 }}>
-          {copy.isPending ? '複製中...' : '複製'}
+        <button type="button" className="btn-primary" disabled={pickedIds.length === 0 || targets.size === 0 || copy.isPending} onClick={() => copy.mutate()} style={{ fontSize: 12 }}>
+          {copy.isPending ? '作成中...' : '作成'}
         </button>
       </div>
     </div>
