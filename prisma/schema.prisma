@@ -1323,6 +1323,9 @@ model TalkStep {
   rank      String    // BRONZE / SILVER / GOLD
   name      String    @default("")
   body      String    @default("")
+  // 文字色・塗りつぶし付きの題名・文面(要望)。[{ t: 文字, c?: 文字色, b?: 塗りつぶし }]。null は色なし(name/body をそのまま表示)
+  nameRich  Json?
+  bodyRich  Json?
   outIds    String[]  @default([]) // このトークで出やすいアウト(TalkOut.id)
   order     Int       @default(0)
   createdBy String?
@@ -1343,6 +1346,9 @@ model TalkOut {
   label     String    @default("")
   category  String    @default("")
   body      String    @default("")
+  // 文字色・塗りつぶし付きのアウト名・アウト返し(要望)。null は色なし
+  labelRich Json?
+  bodyRich  Json?
   order     Int       @default(0)
   createdBy String?
   updatedBy String?

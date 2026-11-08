@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
+import { RichEditor, RichRun, RichView } from './richText';
 
 /** APランク(要望)。ユーザー管理の APランク と同じ値 */
 export const TALK_RANKS = [
@@ -15,6 +16,9 @@ interface TalkStep {
   rank: string;
   name: string;
   body: string;
+  /** 文字色・塗りつぶし付き(null は色なし) */
+  nameRich: RichRun[] | null;
+  bodyRich: RichRun[] | null;
   /** このトークで出やすいアウト */
   outIds: string[];
 }
@@ -28,6 +32,9 @@ interface TalkOut {
   label: string;
   category: string;
   body: string;
+  /** 文字色・塗りつぶし付き(null は色なし) */
+  labelRich: RichRun[] | null;
+  bodyRich: RichRun[] | null;
 }
 
 interface TalkData {
@@ -309,12 +316,12 @@ function TalkTab({
         const showRest = moreId === s.id;
         const ret = open?.stepId === s.id ? outs.find((o) => o.id === open.outId) : undefined;
         return (
-          <div key={s.id} className="card" style={{ padding: '6px 9px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div key={s.id} className="card" style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5, borderLeft: '4px solid var(--color-primary)' }}>
             {edit ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ ...fieldLabel, flexShrink: 0 }}>{i + 1}.</span>
-                  <BlurText value={s.name} label="トークの名前" placeholder="トークの名前(例: 導入)" onSave={(name) => onSave(s.id, { name })} />
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+                  <span style={{ fontSize: 16, fontWeight: 900, flexShrink: 0, paddingBottom: 6 }}>{i + 1}.</span>
+                  <RichEditor singleLine big rich={s.nameRich} plain={s.name} label="トークの名前" placeholder="トークの名前(例: 導入)" onSave={(nameRich, name) => onSave(s.id, { name, nameRich })} />
                   <button type="button" aria-label="上へ" disabled={i === 0} onClick={() => move(i, -1)} style={smallBtn}>
                     ↑
                   </button>
@@ -328,7 +335,7 @@ function TalkTab({
                     削除
                   </button>
                 </div>
-                <BlurText multiline value={s.body} label={`${s.name}のトーク`} placeholder="トークの文面" onSave={(body) => onSave(s.id, { body })} />
+                <RichEditor rich={s.bodyRich} plain={s.body} label={`${s.name}のトーク`} placeholder="トークの文面" onSave={(bodyRich, body) => onSave(s.id, { body, bodyRich })} />
                 <span style={fieldLabel}>このトークのアウト返し(作成・編集は「アウト返し集」タブ)</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {hot.length === 0 && <span style={emptyText}>まだありません</span>}
@@ -341,10 +348,13 @@ function TalkTab({
               </>
             ) : (
               <>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>
-                  {i + 1}. {s.name}
-                </span>
-                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{s.body}</div>
+                {/* 項目ごとの区切りが分かるよう、題名は大きく太く(要望) */}
+                <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1.4, paddingBottom: 4, borderBottom: '1px solid var(--color-border)' }}>
+                  {i + 1}. <RichView rich={s.nameRich} plain={s.name} />
+                </div>
+                <div style={scriptText}>
+                  <RichView rich={s.bodyRich} plain={s.body} />
+                </div>
                 {outs.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                     {[...hot, ...(showRest ? rest : [])].map((o) => {
@@ -367,7 +377,13 @@ function TalkTab({
                 {ret && (
                   <div style={{ background: 'var(--color-appo-soft)', border: '1px solid var(--color-appo-border)', borderRadius: 'var(--radius-sm)', padding: '7px 9px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <b style={{ fontSize: 12, color: 'var(--color-appo)' }}>アウト返し: {ret.label}</b>
-                    {ret.body ? <div style={scriptText}>{ret.body}</div> : <span style={emptyText}>アウト返しはまだ作成されていません</span>}
+                    {ret.body ? (
+                      <div style={scriptText}>
+                        <RichView rich={ret.bodyRich} plain={ret.body} />
+                      </div>
+                    ) : (
+                      <span style={emptyText}>アウト返しはまだ作成されていません</span>
+                    )}
                     <button type="button" className="btn-primary" onClick={() => setOpen(null)} style={{ alignSelf: 'flex-end', fontSize: 12, padding: '3px 10px' }}>
                       閉じてトークに戻る
                     </button>
@@ -470,7 +486,7 @@ function OutsTab({
       {outs.length > 0 && filtered.length === 0 && <p style={emptyText}>該当するアウトがありません</p>}
       {groups.map((g) => (
         <div key={g.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ ...fieldLabel, marginTop: 6, fontSize: 12, color: 'var(--color-text)' }}>{g.name}</span>
+          <span style={{ marginTop: 10, fontSize: 16, fontWeight: 900, paddingBottom: 3, borderBottom: '2px solid var(--color-primary)' }}>{g.name}</span>
           {g.items.length === 0 && <span style={emptyText}>まだありません</span>}
           {g.items.map((o, i) => {
             const open = openId === o.id;
@@ -502,19 +518,19 @@ function OutsTab({
                     {edit ? (
                       <>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <label style={{ flex: 2, minWidth: 0 }}>
+                          <div style={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                             <span style={fieldLabel}>アウト</span>
-                            <BlurText value={o.label} label="アウトの名前" placeholder="例: 今忙しい" onSave={(label) => onSave(o.id, { label })} />
-                          </label>
+                            <RichEditor singleLine rich={o.labelRich} plain={o.label} label="アウトの名前" placeholder="例: 今忙しい" onSave={(labelRich, label) => onSave(o.id, { label, labelRich })} />
+                          </div>
                           <label style={{ flex: 1, minWidth: 0 }}>
                             <span style={fieldLabel}>分類</span>
                             <BlurText value={o.category} label="分類" placeholder="例: 時間・相手" list="talk-out-categories" onSave={(category) => onSave(o.id, { category })} />
                           </label>
                         </div>
-                        <label>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
                           <span style={fieldLabel}>アウト返し(このトークだけに反映)</span>
-                          <BlurText multiline value={o.body} label="アウト返しの文面" placeholder="お客様に話す内容" onSave={(body) => onSave(o.id, { body })} />
-                        </label>
+                          <RichEditor rich={o.bodyRich} plain={o.body} label="アウト返しの文面" placeholder="お客様に話す内容" onSave={(bodyRich, body) => onSave(o.id, { body, bodyRich })} />
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
                           <span style={fieldLabel}>トーク</span>
                           <select value={o.stepId ?? ''} onChange={(e) => e.target.value && onSave(o.id, { stepId: e.target.value })} style={{ fontSize: 12, maxWidth: 200 }}>
@@ -538,7 +554,9 @@ function OutsTab({
                         </div>
                       </>
                     ) : o.body ? (
-                      <div style={scriptText}>{o.body}</div>
+                      <div style={scriptText}>
+                        <RichView rich={o.bodyRich} plain={o.body} />
+                      </div>
                     ) : (
                       <span style={emptyText}>アウト返しはまだ作成されていません</span>
                     )}
@@ -569,9 +587,9 @@ function CreateOutForm({
   onError: (e: unknown) => void;
 }) {
   const queryClient = useQueryClient();
-  const [label, setLabel] = useState('');
+  const [label, setLabel] = useState<{ rich: RichRun[] | null; plain: string }>({ rich: null, plain: '' });
   const [category, setCategory] = useState('');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState<{ rich: RichRun[] | null; plain: string }>({ rich: null, plain: '' });
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const ranks = [...TALK_RANKS].sort((a, b) => (a.id === rank ? -1 : b.id === rank ? 1 : 0));
   const toggle = (id: string) =>
@@ -583,7 +601,15 @@ function CreateOutForm({
     });
 
   const create = useMutation({
-    mutationFn: () => api.post<TalkOut[]>('/talk-scripts/outs', { stepIds: [...picked], label, category, body }),
+    mutationFn: () =>
+      api.post<TalkOut[]>('/talk-scripts/outs', {
+        stepIds: [...picked],
+        label: label.plain,
+        labelRich: label.rich,
+        category,
+        body: body.plain,
+        bodyRich: body.rich,
+      }),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
       onDone(created.find((o) => allSteps.find((s) => s.id === o.stepId)?.rank === rank)?.id ?? null);
@@ -595,19 +621,19 @@ function CreateOutForm({
     <div className="card" style={{ padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 6, borderColor: 'var(--color-primary-border)' }}>
       <b style={{ fontSize: 13 }}>アウト返しを作成</b>
       <div style={{ display: 'flex', gap: 6 }}>
-        <label style={{ flex: 2, minWidth: 0 }}>
+        <div style={{ flex: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <span style={fieldLabel}>アウト</span>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="例: 今忙しい" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px' }} />
-        </label>
+          <RichEditor singleLine rich={label.rich} plain={label.plain} label="アウトの名前" placeholder="例: 今忙しい" onSave={(rich, plain) => setLabel({ rich, plain })} />
+        </div>
         <label style={{ flex: 1, minWidth: 0 }}>
           <span style={fieldLabel}>分類</span>
           <input value={category} onChange={(e) => setCategory(e.target.value)} list="talk-out-categories" placeholder="例: 時間・相手" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px' }} />
         </label>
       </div>
-      <label>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         <span style={fieldLabel}>アウト返し</span>
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="お客様に話す内容" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '3px 6px', lineHeight: 1.55 }} />
-      </label>
+        <RichEditor rich={body.rich} plain={body.plain} label="アウト返しの文面" placeholder="お客様に話す内容" onSave={(rich, plain) => setBody({ rich, plain })} />
+      </div>
       <span style={fieldLabel}>反映するトーク(複数選べます。作成後はトークごとに別々に編集できます)</span>
       {ranks.map((r) => {
         const list = allSteps.filter((s) => s.rank === r.id);

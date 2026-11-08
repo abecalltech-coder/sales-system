@@ -1,5 +1,6 @@
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import {
+  BadRequestException,
   Body,
   CanActivate,
   Controller,
@@ -15,6 +16,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -26,6 +28,36 @@ const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 /** APランク(要望)。ユーザー管理の User.talkRank と同じ値 */
 export const TALK_RANKS = ['BRONZE', 'SILVER', 'GOLD'];
 
+/** 文字色・塗りつぶし付きの文字(要望)。t=文字(改行は \n)、c=文字色、b=塗りつぶし(#rrggbb) */
+type RichRun = { t: string; c?: string; b?: string };
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * 画面から来た色付きの文字を検証して整える。色は #rrggbb だけ受け付け、同じ色が続く部分はまとめる。
+ * 色が1つも無ければ null(= 色なし。プレーンの文字をそのまま表示)
+ */
+export function cleanRich(raw: unknown, max = 20_000): RichRun[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw) || raw.length > 5000) throw new BadRequestException('文字の形式が正しくありません');
+  const out: RichRun[] = [];
+  let total = 0;
+  for (const r of raw) {
+    if (!r || typeof r !== 'object' || typeof (r as RichRun).t !== 'string') throw new BadRequestException('文字の形式が正しくありません');
+    const run = r as RichRun;
+    const c = typeof run.c === 'string' && COLOR_RE.test(run.c) ? run.c.toLowerCase() : undefined;
+    const b = typeof run.b === 'string' && COLOR_RE.test(run.b) ? run.b.toLowerCase() : undefined;
+    if (!run.t) continue;
+    total += run.t.length;
+    const last = out[out.length - 1];
+    if (last && last.c === c && last.b === b) last.t += run.t;
+    else out.push({ t: run.t, ...(c ? { c } : {}), ...(b ? { b } : {}) });
+  }
+  if (total > max) throw new BadRequestException('文字が長すぎます');
+  return out.some((r) => r.c || r.b) ? out : null;
+}
+const plainOf = (runs: RichRun[] | null) => (runs ? runs.map((r) => r.t).join('') : null);
+const richJson = (runs: RichRun[] | null) => (runs ? (runs as unknown as Prisma.InputJsonValue) : Prisma.DbNull);
+
 class CreateStepDto {
   @IsIn(TALK_RANKS) rank!: string;
   @IsOptional() @IsString() @MaxLength(100) name?: string;
@@ -35,6 +67,9 @@ class CreateStepDto {
 class UpdateStepDto {
   @IsOptional() @IsString() @MaxLength(100) name?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
+  /** 色付きの題名・文面(name/body も同じ文字で送る)。null で色を外す */
+  @IsOptional() nameRich?: unknown;
+  @IsOptional() bodyRich?: unknown;
   @IsOptional() @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) outIds?: string[];
 }
 
@@ -44,6 +79,8 @@ class CreateOutDto {
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
+  @IsOptional() labelRich?: unknown;
+  @IsOptional() bodyRich?: unknown;
 }
 
 class UpdateOutDto {
@@ -52,6 +89,8 @@ class UpdateOutDto {
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
+  @IsOptional() labelRich?: unknown;
+  @IsOptional() bodyRich?: unknown;
 }
 
 class CopyStepsDto {
@@ -125,11 +164,16 @@ export class TalkScriptsService {
     await this.assertCanEdit(user);
     const existing = await this.prisma.talkStep.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw new NotFoundException('トークが見つかりません');
+    // 色付きで送られたときは、検索などに使うプレーンの文字も同じ内容にそろえる
+    const nameRich = dto.nameRich !== undefined ? cleanRich(dto.nameRich, 100) : undefined;
+    const bodyRich = dto.bodyRich !== undefined ? cleanRich(dto.bodyRich) : undefined;
     const updated = await this.prisma.talkStep.update({
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.body !== undefined ? { body: dto.body } : {}),
+        ...(nameRich !== undefined ? { nameRich: richJson(nameRich), ...(nameRich ? { name: plainOf(nameRich)! } : {}) } : {}),
+        ...(bodyRich !== undefined ? { bodyRich: richJson(bodyRich), ...(bodyRich ? { body: plainOf(bodyRich)! } : {}) } : {}),
         ...(dto.outIds !== undefined ? { outIds: [...new Set(dto.outIds)] } : {}),
         updatedBy: user.id,
       },
@@ -156,15 +200,19 @@ export class TalkScriptsService {
     if (steps.length !== stepIds.length) throw new NotFoundException('選んだトークが見つかりません。画面を読み直してください');
     const max = await this.prisma.talkOut.aggregate({ where: { deletedAt: null }, _max: { order: true } });
     const order = (max._max.order ?? -1) + 1;
+    const labelRich = cleanRich(dto.labelRich, 100);
+    const bodyRich = cleanRich(dto.bodyRich);
     const created = await this.prisma.$transaction(
       stepIds.map((stepId) =>
         this.prisma.talkOut.create({
           data: {
             stepId,
             ranks: [steps.find((s) => s.id === stepId)!.rank],
-            label: dto.label?.trim() ?? '',
+            label: plainOf(labelRich) ?? dto.label?.trim() ?? '',
             category: dto.category?.trim() ?? '',
-            body: dto.body ?? '',
+            body: plainOf(bodyRich) ?? dto.body ?? '',
+            labelRich: richJson(labelRich),
+            bodyRich: richJson(bodyRich),
             order,
             createdBy: user.id,
             updatedBy: user.id,
@@ -182,10 +230,14 @@ export class TalkScriptsService {
     if (!existing) throw new NotFoundException('アウトが見つかりません');
     const step = dto.stepId ? await this.prisma.talkStep.findFirst({ where: { id: dto.stepId, deletedAt: null }, select: { id: true, rank: true } }) : null;
     if (dto.stepId && !step) throw new NotFoundException('移す先のトークが見つかりません');
+    const labelRich = dto.labelRich !== undefined ? cleanRich(dto.labelRich, 100) : undefined;
+    const bodyRich = dto.bodyRich !== undefined ? cleanRich(dto.bodyRich) : undefined;
     const updated = await this.prisma.talkOut.update({
       where: { id },
       data: {
         ...(step ? { stepId: step.id, ranks: [step.rank] } : {}),
+        ...(labelRich !== undefined ? { labelRich: richJson(labelRich), ...(labelRich ? { label: plainOf(labelRich)! } : {}) } : {}),
+        ...(bodyRich !== undefined ? { bodyRich: richJson(bodyRich), ...(bodyRich ? { body: plainOf(bodyRich)! } : {}) } : {}),
         ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
         ...(dto.category !== undefined ? { category: dto.category.trim() } : {}),
         ...(dto.body !== undefined ? { body: dto.body } : {}),
@@ -223,7 +275,16 @@ export class TalkScriptsService {
         let order = (max._max.order ?? -1) + 1;
         for (const st of steps) {
           const created = await tx.talkStep.create({
-            data: { rank, name: st.name, body: st.body, order: order++, createdBy: user.id, updatedBy: user.id },
+            data: {
+              rank,
+              name: st.name,
+              body: st.body,
+              nameRich: st.nameRich ?? Prisma.DbNull,
+              bodyRich: st.bodyRich ?? Prisma.DbNull,
+              order: order++,
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
           });
           const own = outs.filter((o) => o.stepId === st.id);
           if (own.length > 0) {
@@ -234,6 +295,8 @@ export class TalkScriptsService {
                 label: o.label,
                 category: o.category,
                 body: o.body,
+                labelRich: o.labelRich ?? Prisma.DbNull,
+                bodyRich: o.bodyRich ?? Prisma.DbNull,
                 order: o.order,
                 createdBy: user.id,
                 updatedBy: user.id,

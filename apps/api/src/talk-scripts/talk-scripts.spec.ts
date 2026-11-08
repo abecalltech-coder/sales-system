@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { TalkScriptsService } from './talk-scripts.module';
+import { TalkScriptsService, cleanRich } from './talk-scripts.module';
 import { AuthenticatedUser } from '../auth/types';
 
 const userOf = (roles: string[]) => ({ id: 'u1', roles, visibleTabs: null }) as unknown as AuthenticatedUser;
@@ -72,5 +72,27 @@ describe('TalkScriptsService', () => {
     prisma.talkStep.findMany.mockResolvedValue([{ id: 's1', rank: 'BRONZE' }]);
     await expect(service.createOut({ stepIds: ['s1', 'gone'] }, userOf(['AP_LEADER']))).rejects.toThrow('見つかりません');
     expect(prisma.talkOut.create).not.toHaveBeenCalled();
+  });
+
+  describe('文字色・塗りつぶし(cleanRich)', () => {
+    it('同じ色の続きはまとめ、#rrggbb 以外の色は外す', () => {
+      expect(
+        cleanRich([
+          { t: 'あ', c: '#D23B3B' },
+          { t: 'い', c: '#d23b3b' },
+          { t: 'う', c: 'red', b: 'url(x)' },
+          { t: '', c: '#000000' },
+        ]),
+      ).toEqual([{ t: 'あい', c: '#d23b3b' }, { t: 'う' }]);
+    });
+    it('色が1つも無ければ null(プレーンの文字として扱う)', () => {
+      expect(cleanRich([{ t: 'あ' }, { t: 'い' }])).toBeNull();
+      expect(cleanRich(null)).toBeNull();
+    });
+    it('形がおかしい・長すぎるものは受け付けない', () => {
+      expect(() => cleanRich('x')).toThrow();
+      expect(() => cleanRich([{ c: '#ffffff' }])).toThrow();
+      expect(() => cleanRich([{ t: 'a'.repeat(101), c: '#ffffff' }], 100)).toThrow('長すぎ');
+    });
   });
 });
