@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
 import { RichEditor, RichRun, RichView } from './richText';
+import { useIsPhone } from '../../lib/useIsPhone';
 
 /** APランク(要望)。ユーザー管理の APランク と同じ値 */
 export const TALK_RANKS = [
@@ -29,6 +30,8 @@ interface TalkOut {
   stepId: string | null;
   /** アウト返しのあとに戻るトーク。null はアウトが出たトーク */
   returnStepId: string | null;
+  /** よく出るアウト(トークの下に表示する) */
+  pinned: boolean;
   /** このアウトを使うランク(項目に紐づくものはその項目のランク) */
   ranks: string[];
   label: string;
@@ -45,6 +48,9 @@ interface TalkData {
   steps: TalkStep[];
   outs: TalkOut[];
 }
+
+/** トークの下に出す「よく出るアウト」の上限(要望: 多すぎて見づらいので絞る) */
+const PIN_MAX = 5;
 
 const smallBtn: React.CSSProperties = { fontSize: 11, padding: '1px 7px' };
 const fieldLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)' };
@@ -93,11 +99,12 @@ function BlurText({
 }
 
 /** アウトのボタン。選択中は濃い色、出やすいアウト以外は薄い色 */
-function OutChip({ label, on, muted, onClick }: { label: string; on?: boolean; muted?: boolean; onClick: () => void }) {
+function OutChip({ label, on, muted, disabled, onClick }: { label: string; on?: boolean; muted?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={on}
       style={{
         fontSize: 12,
@@ -245,6 +252,7 @@ export function TalkScriptsPage() {
             edit={edit}
             flash={flash}
             onGoTo={goToStep}
+            onPinOut={(id, pinned) => saveOut.mutate({ id, patch: { pinned } })}
             onSave={(id, patch) => saveStep.mutate({ id, patch })}
             onAdd={() => addStep.mutate()}
             onRemove={(s) => window.confirm(`「${s.name || 'このトーク'}」を削除しますか？`) && removeStep.mutate(s.id)}
@@ -284,6 +292,7 @@ function TalkTab({
   edit,
   flash,
   onGoTo,
+  onPinOut,
   onSave,
   onAdd,
   onRemove,
@@ -296,6 +305,7 @@ function TalkTab({
   edit: boolean;
   flash: { stepId: string; at: number } | null;
   onGoTo: (stepId: string) => void;
+  onPinOut: (id: string, pinned: boolean) => void;
   onSave: (id: string, patch: Partial<TalkStep>) => void;
   onAdd: () => void;
   onRemove: (s: TalkStep) => void;
@@ -317,7 +327,8 @@ function TalkTab({
     const i = steps.findIndex((x) => x.id === id);
     return i < 0 ? 'トーク' : `${i + 1}. ${steps[i].name || '(名前未入力)'}`;
   };
-  const [moreId, setMoreId] = useState<string | null>(null);
+  // 「アウトを探す」を開いているトーク
+  const [findStepId, setFindStepId] = useState<string | null>(null);
   // 複製の画面(開いたときに選んでおく項目)
   const [copying, setCopying] = useState<string[] | null>(null);
 
@@ -342,8 +353,8 @@ function TalkTab({
         // この項目のアウト返し(以前の共有アウトは項目に選ばれていたもの)
         const isHot = (o: TalkOut) => o.stepId === s.id || (!o.stepId && s.outIds.includes(o.id));
         const hot = outs.filter(isHot);
-        const rest = outs.filter((o) => !isHot(o));
-        const showRest = moreId === s.id;
+        const pinned = hot.filter((o) => o.pinned).slice(0, PIN_MAX);
+        const pinnedCount = hot.filter((o) => o.pinned).length;
         const ret = open?.stepId === s.id ? outs.find((o) => o.id === open.outId) : undefined;
         return (
           <div key={s.id} id={`talk-step-${s.id}`} className="card" style={{ padding: '7px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -366,13 +377,20 @@ function TalkTab({
                   </button>
                 </div>
                 <RichEditor rich={s.bodyRich} plain={s.body} label={`${s.name}のトーク`} placeholder="トークの文面" onSave={(bodyRich, body) => onSave(s.id, { body, bodyRich })} />
-                <span style={fieldLabel}>このトークのアウト返し(作成・編集は「アウト返し集」タブ)</span>
+                <span style={fieldLabel}>
+                  よく出るアウト(押して切り替え。トークの下に最大{PIN_MAX}つ表示、他は「アウトを探す」の中。作成・編集は「アウト返し集」タブ)
+                </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                   {hot.length === 0 && <span style={emptyText}>まだありません</span>}
                   {hot.map((o) => (
-                    <span key={o.id} style={{ fontSize: 12, padding: '1px 7px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-appo-border)', background: 'var(--color-appo-soft)', color: 'var(--color-appo)' }}>
-                      {o.label || '(名前未入力)'}
-                    </span>
+                    <OutChip
+                      key={o.id}
+                      label={o.label}
+                      on={o.pinned}
+                      muted={!o.pinned}
+                      disabled={!o.pinned && pinnedCount >= PIN_MAX}
+                      onClick={() => onPinOut(o.id, !o.pinned)}
+                    />
                   ))}
                 </div>
               </>
@@ -385,23 +403,23 @@ function TalkTab({
                 <div style={scriptText}>
                   <RichView rich={s.bodyRich} plain={s.body} />
                 </div>
+                {/* よく出るアウトだけトークの下に出し、他は「アウトを探す」にまとめる(要望: アウトが多すぎて見づらい) */}
                 {outs.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                    {[...hot, ...(showRest ? rest : [])].map((o) => {
-                      const on = open?.stepId === s.id && open.outId === o.id;
-                      return (
-                        <OutChip key={o.id} label={o.label} on={on} muted={!isHot(o)} onClick={() => setOpen(on ? null : { stepId: s.id, outId: o.id })} />
-                      );
-                    })}
-                    {!showRest && rest.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {pinned.length > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>よく出るアウト</span>}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                      {pinned.map((o) => {
+                        const on = open?.stepId === s.id && open.outId === o.id;
+                        return <OutChip key={o.id} label={o.label} on={on} onClick={() => setOpen(on ? null : { stepId: s.id, outId: o.id })} />;
+                      })}
                       <button
                         type="button"
-                        onClick={() => setMoreId(s.id)}
-                        style={{ background: 'none', border: 'none', boxShadow: 'none', color: 'var(--color-primary)', fontSize: 12, padding: '1px 4px' }}
+                        onClick={() => setFindStepId(s.id)}
+                        style={{ fontSize: 12, padding: '1px 8px', borderStyle: 'dashed', borderColor: 'var(--color-primary)', color: 'var(--color-primary)', boxShadow: 'none' }}
                       >
-                        その他のアウト
+                        アウトを探す({hot.length})
                       </button>
-                    )}
+                    </div>
                   </div>
                 )}
                 {ret && (
@@ -436,6 +454,19 @@ function TalkTab({
         <button type="button" onClick={onAdd} style={{ alignSelf: 'flex-start', fontSize: 12 }}>
           ＋ トークを追加
         </button>
+      )}
+      {findStepId && (
+        <OutFinder
+          step={steps.find((x) => x.id === findStepId)!}
+          stepTitle={stepTitle}
+          stepOuts={outs.filter((o) => o.stepId === findStepId || (!o.stepId && steps.find((x) => x.id === findStepId)?.outIds.includes(o.id)))}
+          rankOuts={outs}
+          onClose={() => setFindStepId(null)}
+          onGoTo={(id) => {
+            setFindStepId(null);
+            onGoTo(id);
+          }}
+        />
       )}
     </div>
   );
@@ -477,14 +508,21 @@ function OutsTab({
   };
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // 分類で絞り込む(要望: アウトが多すぎて見づらい)
+  const [cat, setCat] = useState<string | null>(null);
 
   const kw = q.trim().toLowerCase();
-  const filtered = outs.filter((o) => !kw || `${o.label} ${o.category} ${o.body}`.toLowerCase().includes(kw));
+  const catOf = (o: TalkOut) => o.category || 'その他';
+  const cats = [...new Set(outs.map(catOf))];
+  // よく出るを各トークの先頭に
+  const filtered = outs
+    .filter((o) => (!kw || `${o.label} ${o.category} ${o.body}`.toLowerCase().includes(kw)) && (!cat || catOf(o) === cat))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned));
   // ベーストークの項目ごと。項目に紐づかない以前のアウトは最後にまとめる
   const groups = [
     ...steps.map((st, i) => ({ key: st.id, name: `${i + 1}. ${st.name || '(名前未入力)'}`, items: filtered.filter((o) => o.stepId === st.id) })),
     { key: 'none', name: 'トーク未設定', items: filtered.filter((o) => !o.stepId) },
-  ].filter((g) => g.items.length > 0 || (!kw && g.key !== 'none' && edit));
+  ].filter((g) => g.items.length > 0 || (!kw && !cat && g.key !== 'none' && edit));
   const categories = [...new Set(allOuts.map((o) => o.category).filter(Boolean))];
 
   // 同じ項目の中で入れ替える
@@ -508,6 +546,29 @@ function OutsTab({
           </button>
         )}
       </div>
+      {cats.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {[null, ...cats].map((c) => {
+            const on = cat === c;
+            return (
+              <button
+                key={c ?? 'all'}
+                type="button"
+                onClick={() => setCat(c)}
+                style={{
+                  flexShrink: 0,
+                  fontSize: 12,
+                  padding: '2px 10px',
+                  borderRadius: 14,
+                  ...(on ? { background: 'var(--color-primary)', color: 'var(--color-surface)', borderColor: 'var(--color-primary)', fontWeight: 700 } : {}),
+                }}
+              >
+                {c ?? 'すべて'}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <datalist id="talk-out-categories">
         {categories.map((c) => (
           <option key={c} value={c} />
@@ -555,6 +616,7 @@ function OutsTab({
                   }}
                 >
                   <span style={{ flex: 1, minWidth: 0 }}>{o.label || '(名前未入力)'}</span>
+                  {o.pinned && <span style={{ fontSize: 10, fontWeight: 700, color: open ? 'inherit' : 'var(--color-appo)' }}>よく出る</span>}
                   {o.category && <span style={{ fontSize: 11, fontWeight: 400, color: open ? 'inherit' : 'var(--color-text-muted)' }}>{o.category}</span>}
                 </button>
                 {open && (
@@ -876,6 +938,178 @@ function CopyStepsForm({ rank, allSteps, initial, onDone }: { rank: string; allS
         <button type="button" className="btn-primary" disabled={pickedIds.length === 0 || targets.size === 0 || copy.isPending} onClick={() => copy.mutate()} style={{ fontSize: 12 }}>
           {copy.isPending ? '作成中...' : '作成'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * アウトを探す(要望: アウトが多すぎて見づらいので、よく出る以外はここにまとめる)。
+ * 検索と分類で絞り込み、押すとその場でアウト返しが開く。検索したときは同じランクの他のトークのアウトも探す。
+ */
+function OutFinder({
+  step,
+  stepTitle,
+  stepOuts,
+  rankOuts,
+  onClose,
+  onGoTo,
+}: {
+  step: TalkStep;
+  stepTitle: (id: string) => string;
+  stepOuts: TalkOut[];
+  rankOuts: TalkOut[];
+  onClose: () => void;
+  onGoTo: (stepId: string) => void;
+}) {
+  const isPhone = useIsPhone();
+  const [q, setQ] = useState('');
+  const [cat, setCat] = useState<string | null>(null);
+  const [openOut, setOpenOut] = useState<TalkOut | null>(null);
+  const kw = q.trim().toLowerCase();
+  const base = kw ? rankOuts.filter((o) => `${o.label} ${o.category} ${o.body}`.toLowerCase().includes(kw)) : stepOuts;
+  const catOf = (o: TalkOut) => o.category || 'その他';
+  const cats = [...new Set(base.map(catOf))];
+  const items = base.filter((o) => !cat || catOf(o) === cat);
+  // よく出るを先頭、その後は分類ごと(この トークのものを先に)
+  const pinned = items.filter((o) => o.pinned && o.stepId === step.id);
+  const others = items.filter((o) => !pinned.includes(o));
+  const groups = [...new Set(others.map(catOf))].map((name) => ({ name, list: others.filter((o) => catOf(o) === name) }));
+
+  const row = (o: TalkOut) => (
+    <button
+      key={o.id}
+      type="button"
+      onClick={() => setOpenOut(o)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        width: '100%',
+        textAlign: 'left',
+        padding: isPhone ? '9px 6px' : '6px 6px',
+        fontSize: 13,
+        border: 'none',
+        borderBottom: '1px solid var(--color-sunken)',
+        borderRadius: 0,
+        background: 'transparent',
+        boxShadow: 'none',
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0 }}>{o.label || '(名前未入力)'}</span>
+      {o.stepId !== step.id && o.stepId && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{stepTitle(o.stepId)}</span>}
+      {kw && o.category && <span style={{ fontSize: 10, color: 'var(--color-text-faint)' }}>{o.category}</span>}
+      <span style={{ color: 'var(--color-text-faint)' }}>›</span>
+    </button>
+  );
+  const heading = (t: string) => <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-muted)', margin: '8px 0 2px' }}>{t}</div>;
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={isPhone ? { alignItems: 'flex-end', padding: 0 } : undefined}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: isPhone ? '100%' : 'min(520px, 96vw)',
+          maxWidth: isPhone ? 'none' : 520,
+          height: isPhone ? '80vh' : 'min(640px, calc(100vh - 48px))',
+          padding: isPhone ? '12px 12px calc(14px + env(safe-area-inset-bottom))' : '14px 16px',
+          borderRadius: isPhone ? '16px 16px 0 0' : undefined,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {openOut ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <button type="button" onClick={() => setOpenOut(null)} style={{ fontSize: 12 }}>
+                ‹ 一覧へ
+              </button>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+                閉じる
+              </button>
+            </div>
+            <div style={{ background: 'var(--color-appo-soft)', border: '1px solid var(--color-appo-border)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6, overflow: 'auto' }}>
+              <b style={{ fontSize: 12, color: 'var(--color-appo)' }}>アウト返し: {openOut.label}</b>
+              {openOut.body ? (
+                <div style={scriptText}>
+                  <RichView rich={openOut.bodyRich} plain={openOut.body} />
+                </div>
+              ) : (
+                <span style={emptyText}>アウト返しはまだ作成されていません</span>
+              )}
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => onGoTo(openOut.returnStepId ?? openOut.stepId ?? step.id)}
+                style={{ alignSelf: 'flex-end', fontSize: 12, padding: '3px 10px' }}
+              >
+                「{stepTitle(openOut.returnStepId ?? openOut.stepId ?? step.id)}」に戻る
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <b style={{ flex: 1, fontSize: 14 }}>
+                {stepTitle(step.id)} のアウト({stepOuts.length})
+              </b>
+              <button type="button" onClick={onClose} style={{ fontSize: 12 }}>
+                閉じる
+              </button>
+            </div>
+            <input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setCat(null);
+              }}
+              aria-label="アウトを検索"
+              placeholder="アウトを検索(例: 忙しい)"
+              style={{ fontSize: 13, padding: '6px 9px', borderRadius: 8 }}
+            />
+            {cats.length > 1 && (
+              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '8px 0 2px', flexShrink: 0 }}>
+                {[null, ...cats].map((c) => {
+                  const on = cat === c;
+                  return (
+                    <button
+                      key={c ?? 'all'}
+                      type="button"
+                      onClick={() => setCat(c)}
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 12,
+                        padding: '3px 10px',
+                        borderRadius: 14,
+                        ...(on ? { background: 'var(--color-primary)', color: 'var(--color-surface)', borderColor: 'var(--color-primary)', fontWeight: 700 } : {}),
+                      }}
+                    >
+                      {c ?? 'すべて'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+              {items.length === 0 && <p style={{ ...emptyText, marginTop: 10 }}>{kw ? '該当するアウトがありません' : 'このトークのアウトはまだありません'}</p>}
+              {kw && items.length > 0 && <div style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 6 }}>このランクのすべてのトークから探しています</div>}
+              {pinned.length > 0 && (
+                <>
+                  {heading('よく出る')}
+                  {pinned.map(row)}
+                </>
+              )}
+              {groups.map((g) => (
+                <div key={g.name}>
+                  {heading(g.name)}
+                  {g.list.map(row)}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

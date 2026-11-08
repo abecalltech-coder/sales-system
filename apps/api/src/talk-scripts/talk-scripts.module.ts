@@ -1,4 +1,4 @@
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import {
   BadRequestException,
   Body,
@@ -93,6 +93,8 @@ class UpdateOutDto {
   @IsOptional() @IsString() stepId?: string;
   /** 戻るトーク。空文字でアウトが出たトークに戻す */
   @IsOptional() @IsString() returnStepId?: string;
+  /** よく出るアウト(トークの下に表示する) */
+  @IsOptional() @IsBoolean() pinned?: boolean;
   @IsOptional() @IsString() @MaxLength(100) label?: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
@@ -263,6 +265,7 @@ export class TalkScriptsService {
       data: {
         ...(step ? { stepId: step.id, ranks: [step.rank] } : {}),
         ...(dto.returnStepId !== undefined ? { returnStepId: dto.returnStepId || null } : {}),
+        ...(dto.pinned !== undefined ? { pinned: dto.pinned } : {}),
         ...(labelRich !== undefined ? { labelRich: richJson(labelRich), ...(labelRich ? { label: plainOf(labelRich)! } : {}) } : {}),
         ...(bodyRich !== undefined ? { bodyRich: richJson(bodyRich), ...(bodyRich ? { body: plainOf(bodyRich)! } : {}) } : {}),
         ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
@@ -322,6 +325,7 @@ export class TalkScriptsService {
           stepId: newIdOf.get(o.stepId!)!,
           // 一緒に複製していないトークへ戻るものは、アウトが出たトークに戻す
           returnStepId: o.returnStepId ? (newIdOf.get(o.returnStepId) ?? null) : null,
+          pinned: o.pinned,
           ranks: [rank],
           label: o.label,
           category: o.category,

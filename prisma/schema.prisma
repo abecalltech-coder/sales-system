@@ -1344,6 +1344,8 @@ model TalkOut {
   stepId    String?
   // アウト返しのあとに戻るトーク(要望: どこから読めばいいか分かるように)。null はアウトが出たトーク(stepId)に戻る
   returnStepId String?
+  // よく出るアウト(要望: トークの下にはこれだけ表示し、他は「アウトを探す」にまとめる)
+  pinned       Boolean   @default(false)
   ranks     String[]  @default([]) // このアウトを使うランク(項目に紐づくものはその項目のランク)
   label     String    @default("")
   category  String    @default("")
