@@ -223,6 +223,7 @@ export function TalkScriptsPage() {
 
         {!isLoading && tab === 'talk' && (
           <TalkTab
+            rank={rank}
             steps={steps}
             outs={outs}
             edit={edit}
@@ -257,6 +258,7 @@ export function TalkScriptsPage() {
 
 /** ベーストーク。各トークの下のアウトを押すと、その場にアウト返しが開く */
 function TalkTab({
+  rank,
   steps,
   outs,
   edit,
@@ -265,6 +267,7 @@ function TalkTab({
   onRemove,
   onMove,
 }: {
+  rank: string;
   steps: TalkStep[];
   outs: TalkOut[];
   edit: boolean;
@@ -275,6 +278,8 @@ function TalkTab({
 }) {
   const [open, setOpen] = useState<{ stepId: string; outId: string } | null>(null);
   const [moreId, setMoreId] = useState<string | null>(null);
+  // 複製の画面(開いたときに選んでおく項目)
+  const [copying, setCopying] = useState<string[] | null>(null);
 
   const move = (i: number, dir: -1 | 1) => {
     const ids = steps.map((s) => s.id);
@@ -286,6 +291,12 @@ function TalkTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {edit && steps.length > 0 && (
+        <button type="button" className={copying ? 'btn-primary' : undefined} onClick={() => setCopying(copying ? null : [])} style={{ alignSelf: 'flex-end', fontSize: 12 }}>
+          他のランクへ複製
+        </button>
+      )}
+      {copying && <CopyStepsForm key={copying.join(',')} rank={rank} steps={steps} initial={copying} onDone={() => setCopying(null)} />}
       {steps.length === 0 && <p style={emptyText}>このランクのトークはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
       {steps.map((s, i) => {
         // この項目のアウト返し(以前の共有アウトは項目に選ばれていたもの)
@@ -306,6 +317,9 @@ function TalkTab({
                   </button>
                   <button type="button" aria-label="下へ" disabled={i === steps.length - 1} onClick={() => move(i, 1)} style={smallBtn}>
                     ↓
+                  </button>
+                  <button type="button" onClick={() => setCopying([s.id])} style={{ ...smallBtn, flexShrink: 0 }}>
+                    複製
                   </button>
                   <button type="button" onClick={() => onRemove(s)} style={{ ...smallBtn, color: 'var(--color-danger)', flexShrink: 0 }}>
                     削除
@@ -637,6 +651,79 @@ function CreateOutForm({
         </button>
         <button type="button" className="btn-primary" disabled={picked.size === 0 || create.isPending} onClick={() => create.mutate()} style={{ fontSize: 12 }}>
           {create.isPending ? '作成中...' : '作成'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ベーストークの複製(要望: ブロンズ・シルバー・ゴールドへチェック式で複製)。
+ * 複製する項目と複製先のランクをチェックで選ぶ。項目のアウト返しも一緒に複製し、複製後はそれぞれ別々に編集できる。
+ */
+function CopyStepsForm({ rank, steps, initial, onDone }: { rank: string; steps: TalkStep[]; initial: string[]; onDone: () => void }) {
+  const queryClient = useQueryClient();
+  const [picked, setPicked] = useState<Set<string>>(new Set(initial));
+  const [targets, setTargets] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const toggle = (set: Set<string>, id: string) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  };
+  const allPicked = steps.length > 0 && steps.every((s) => picked.has(s.id));
+
+  const copy = useMutation({
+    mutationFn: () => api.post<{ copied: number }>('/talk-scripts/steps/copy', { stepIds: steps.filter((s) => picked.has(s.id)).map((s) => s.id), ranks: [...targets] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['talk-scripts'] });
+      onDone();
+    },
+    onError: (e) => setError(e instanceof ApiError ? e.message : '複製できませんでした'),
+  });
+
+  return (
+    <div className="card" style={{ padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 6, borderColor: 'var(--color-primary-border)' }}>
+      <b style={{ fontSize: 13 }}>他のランクへ複製</b>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={fieldLabel}>複製するトーク</span>
+        <button type="button" onClick={() => setPicked(allPicked ? new Set() : new Set(steps.map((s) => s.id)))} style={smallBtn}>
+          {allPicked ? 'すべて外す' : 'すべて選ぶ'}
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', paddingLeft: 4 }}>
+        {steps.map((s, i) => (
+          <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={picked.has(s.id)} onChange={() => setPicked((cur) => toggle(cur, s.id))} />
+            {i + 1}. {s.name || '(名前未入力)'}
+          </label>
+        ))}
+      </div>
+      <span style={fieldLabel}>複製先のランク(複数選べます)</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', paddingLeft: 4 }}>
+        {TALK_RANKS.map((r) => (
+          <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={targets.has(r.id)} onChange={() => setTargets((cur) => toggle(cur, r.id))} />
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: r.color }} />
+            {r.label}
+            {r.id === rank && <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>(このランクに追加)</span>}
+          </label>
+        ))}
+      </div>
+      <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>アウト返しも一緒に複製します。複製先では最後に追加され、元のトークとは別々に編集できます。</span>
+      {error && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {picked.size > 0 && targets.size > 0 && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+            {picked.size}件 × {targets.size}ランクに複製します
+          </span>
+        )}
+        <button type="button" onClick={onDone} style={{ fontSize: 12 }}>
+          やめる
+        </button>
+        <button type="button" className="btn-primary" disabled={picked.size === 0 || targets.size === 0 || copy.isPending} onClick={() => copy.mutate()} style={{ fontSize: 12 }}>
+          {copy.isPending ? '複製中...' : '複製'}
         </button>
       </div>
     </div>

@@ -54,6 +54,13 @@ class UpdateOutDto {
   @IsOptional() @IsString() @MaxLength(20_000) body?: string;
 }
 
+class CopyStepsDto {
+  /** 複製するベーストークの項目(要望: チェックで選んで他のランクへ複製) */
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsString({ each: true }) stepIds!: string[];
+  /** 複製先のランク */
+  @IsArray() @ArrayMinSize(1) @IsIn(TALK_RANKS, { each: true }) ranks!: string[];
+}
+
 class ReorderDto {
   @IsArray() @ArrayMaxSize(1000) @IsString({ each: true }) ids!: string[];
 }
@@ -196,6 +203,51 @@ export class TalkScriptsService {
     return { ok: true };
   }
 
+  /**
+   * ベーストークの項目を、選んだランクへ複製する(要望)。項目のアウト返しも一緒に複製する。
+   * 複製したものは元とは別のデータで、それぞれ編集しても互いに影響しない。複製先では最後に並ぶ。
+   */
+  async copySteps(dto: CopyStepsDto, user: AuthenticatedUser) {
+    await this.assertCanEdit(user);
+    const stepIds = [...new Set(dto.stepIds)];
+    const steps = await this.prisma.talkStep.findMany({
+      where: { id: { in: stepIds }, deletedAt: null },
+      orderBy: [{ rank: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (steps.length !== stepIds.length) throw new NotFoundException('選んだトークが見つかりません。画面を読み直してください');
+    const outs = await this.prisma.talkOut.findMany({ where: { stepId: { in: stepIds }, deletedAt: null }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] });
+    let copied = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const rank of [...new Set(dto.ranks)]) {
+        const max = await tx.talkStep.aggregate({ where: { rank, deletedAt: null }, _max: { order: true } });
+        let order = (max._max.order ?? -1) + 1;
+        for (const st of steps) {
+          const created = await tx.talkStep.create({
+            data: { rank, name: st.name, body: st.body, order: order++, createdBy: user.id, updatedBy: user.id },
+          });
+          const own = outs.filter((o) => o.stepId === st.id);
+          if (own.length > 0) {
+            await tx.talkOut.createMany({
+              data: own.map((o) => ({
+                stepId: created.id,
+                ranks: [rank],
+                label: o.label,
+                category: o.category,
+                body: o.body,
+                order: o.order,
+                createdBy: user.id,
+                updatedBy: user.id,
+              })),
+            });
+          }
+          copied++;
+        }
+      }
+    });
+    this.changed();
+    return { ok: true, copied };
+  }
+
   /** 並び替え。受け取った順に order を振り直す */
   async reorder(kind: 'step' | 'out', ids: string[], user: AuthenticatedUser) {
     await this.assertCanEdit(user);
@@ -222,6 +274,11 @@ class TalkScriptsController {
   @Post('steps')
   createStep(@Body() dto: CreateStepDto, @CurrentUser() user: AuthenticatedUser) {
     return this.service.createStep(dto, user);
+  }
+
+  @Post('steps/copy')
+  copySteps(@Body() dto: CopyStepsDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.copySteps(dto, user);
   }
 
   @Post('steps/reorder')
