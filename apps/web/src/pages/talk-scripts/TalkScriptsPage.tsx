@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { api, ApiError } from '../../lib/api';
+import { logCopy } from '../../lib/copyLog';
 
 /** APランク(要望)。ユーザー管理の APランク と同じ値 */
 export const TALK_RANKS = [
@@ -280,6 +281,23 @@ function TalkTab({
   const [moreId, setMoreId] = useState<string | null>(null);
   // 複製の画面(開いたときに選んでおく項目)
   const [copying, setCopying] = useState<string[] | null>(null);
+  // コピーした印(押したボタンに「コピーしました」を少し出す)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const rankName = TALK_RANKS.find((r) => r.id === rank)?.label ?? rank;
+
+  /** トークの文面をコピーする(要望: ランクのトークをまとめて、またはトーク1つずつ) */
+  const copyText = async (key: string, text: string, target: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      logCopy('トークスクリプト', text, { target });
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
+    } catch {
+      alert('コピーできませんでした');
+    }
+  };
+  const stepText = (s: TalkStep, i: number) => `${i + 1}. ${s.name}\n${s.body}`.trimEnd();
+  const allText = () => `【${rankName}】ベーストーク\n\n${steps.map(stepText).join('\n\n')}`;
 
   const move = (i: number, dir: -1 | 1) => {
     const ids = steps.map((s) => s.id);
@@ -291,10 +309,17 @@ function TalkTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {edit && steps.length > 0 && (
-        <button type="button" className={copying ? 'btn-primary' : undefined} onClick={() => setCopying(copying ? null : [])} style={{ alignSelf: 'flex-end', fontSize: 12 }}>
-          他のランクへ複製
-        </button>
+      {steps.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={() => copyText('all', allText(), `${rankName}のベーストーク`)} style={{ fontSize: 12 }}>
+            {copiedKey === 'all' ? 'コピーしました' : `${rankName}のトークをすべてコピー`}
+          </button>
+          {edit && (
+            <button type="button" className={copying ? 'btn-primary' : undefined} onClick={() => setCopying(copying ? null : [])} style={{ fontSize: 12 }}>
+              他のランクへ複製
+            </button>
+          )}
+        </div>
       )}
       {copying && <CopyStepsForm key={copying.join(',')} rank={rank} steps={steps} initial={copying} onDone={() => setCopying(null)} />}
       {steps.length === 0 && <p style={emptyText}>このランクのトークはまだありません。{edit ? '' : '編集できる人が作成すると表示されます。'}</p>}
@@ -338,9 +363,14 @@ function TalkTab({
               </>
             ) : (
               <>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>
-                  {i + 1}. {s.name}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, color: 'var(--color-text-muted)' }}>
+                    {i + 1}. {s.name}
+                  </span>
+                  <button type="button" onClick={() => copyText(s.id, stepText(s, i), `${rankName} ${s.name}`)} style={{ ...smallBtn, flexShrink: 0 }}>
+                    {copiedKey === s.id ? 'コピーしました' : 'コピー'}
+                  </button>
+                </div>
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{s.body}</div>
                 {outs.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
