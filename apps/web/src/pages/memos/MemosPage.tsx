@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { api, ApiError } from '../../lib/api';
+import { ImageAddButtons, NoteImageList, uploadNoteImages, useImageDrop } from '../../components/NoteImages';
 
 interface Memo {
   id: string;
@@ -11,6 +12,8 @@ interface Memo {
   pinned: boolean;
   createdAt: string;
   updatedAt: string;
+  /** 貼った画像(要望) */
+  imageIds: string[];
 }
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -140,7 +143,8 @@ function MemoEditor({ memo, showBack, onBack, onDeleted }: { memo: Memo; showBac
     setStatus('saving');
     try {
       const m = await api.patch<Memo>(`/memos/${memo.id}`, patch);
-      queryClient.setQueryData<Memo[]>(['memos'], (cur) => (cur ?? []).map((x) => (x.id === m.id ? m : x)));
+      // 保存の返り値には画像が無いので、画像は手元のものを残す
+      queryClient.setQueryData<Memo[]>(['memos'], (cur) => (cur ?? []).map((x) => (x.id === m.id ? { ...m, imageIds: x.imageIds } : x)));
       setStatus('saved');
     } catch {
       setStatus('error');
@@ -165,6 +169,26 @@ function MemoEditor({ memo, showBack, onBack, onDeleted }: { memo: Memo; showBac
     [],
   );
 
+  // 画像(要望: PCはファイル・ドロップ、携帯は撮影・写真・ファイルから)
+  const [uploading, setUploading] = useState(false);
+  const addImages = async (files: File[]) => {
+    setUploading(true);
+    const { error } = await uploadNoteImages('MEMO', memo.id, files);
+    setUploading(false);
+    await queryClient.invalidateQueries({ queryKey: ['memos'] });
+    if (error) alert(error);
+  };
+  const removeImage = async (id: string) => {
+    try {
+      await api.delete(`/note-images/${id}`);
+    } catch {
+      alert('画像を削除できませんでした');
+    }
+    await queryClient.invalidateQueries({ queryKey: ['memos'] });
+  };
+  const drop = useImageDrop((files) => void addImages(files));
+  const imageIds = memo.imageIds ?? [];
+
   const remove = useMutation({
     mutationFn: () => api.delete(`/memos/${memo.id}`),
     onSuccess: () => {
@@ -178,7 +202,20 @@ function MemoEditor({ memo, showBack, onBack, onDeleted }: { memo: Memo; showBac
   const statusText = { saved: '保存済み', saving: '保存中...', dirty: '入力中', error: '保存に失敗しました(通信を確認してください)' }[status];
 
   return (
-    <section aria-label="メモの内容" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--color-surface)', minHeight: 0 }}>
+    <section
+      aria-label="メモの内容"
+      {...drop.handlers}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: drop.over ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+        outline: drop.over ? '2px dashed var(--color-primary)' : undefined,
+        outlineOffset: -4,
+        minHeight: 0,
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
         {showBack && (
           <button
@@ -208,7 +245,7 @@ function MemoEditor({ memo, showBack, onBack, onDeleted }: { memo: Memo; showBac
           削除
         </button>
       </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 14px', gap: 8, minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 14px', gap: 8, minHeight: 0, overflowY: 'auto' }}>
         <input
           value={title}
           onChange={(e) => {
@@ -230,8 +267,20 @@ function MemoEditor({ memo, showBack, onBack, onDeleted }: { memo: Memo; showBac
           }}
           placeholder="内容を入力(自動で保存されます)"
           aria-label="内容"
-          style={{ flex: 1, minHeight: 200, fontSize: 14, lineHeight: 1.7, resize: 'none', border: '1px solid var(--color-border)', borderRadius: 8, padding: '10px 12px' }}
+          style={{
+            // 画像があるときは本文欄を固定の高さにして、下の画像まで続けて見られるように
+            flex: imageIds.length ? '0 0 auto' : 1,
+            minHeight: imageIds.length ? 220 : 200,
+            fontSize: 14,
+            lineHeight: 1.7,
+            resize: imageIds.length ? 'vertical' : 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: 8,
+            padding: '10px 12px',
+          }}
         />
+        <NoteImageList ids={imageIds} onRemove={(id) => void removeImage(id)} />
+        <ImageAddButtons busy={uploading} onFiles={(files) => void addImages(files)} />
       </div>
     </section>
   );

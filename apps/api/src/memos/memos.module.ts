@@ -15,11 +15,18 @@ class SaveMemoDto {
 class MemosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(userId: string) {
-    return this.prisma.memo.findMany({
+  async list(userId: string) {
+    const memos = await this.prisma.memo.findMany({
       where: { userId, deletedAt: null },
       orderBy: [{ pinned: 'desc' }, { updatedAt: 'desc' }],
     });
+    // 貼った画像(要望)。中身は <img> で note-images から読むので、ここでは ID だけ返す
+    const images = await this.prisma.noteImage.findMany({
+      where: { ownerType: 'MEMO', ownerId: { in: memos.map((m) => m.id) } },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, ownerId: true },
+    });
+    return memos.map((m) => ({ ...m, imageIds: images.filter((i) => i.ownerId === m.id).map((i) => i.id) }));
   }
 
   create(userId: string, dto: SaveMemoDto) {

@@ -53,11 +53,22 @@ class WorkRulesService {
     // 作成者・最終編集者の名前(退職者も名前は出す)
     const ids = [...new Set(rules.flatMap((r) => [r.createdBy, r.updatedBy]).filter((x): x is string => !!x))];
     const users = ids.length ? await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }) : [];
+    // 貼った画像(要望)。中身は <img> で note-images から読むので ID だけ
+    const images = await this.prisma.noteImage.findMany({
+      where: { ownerType: 'WORK_RULE', ownerId: { in: rules.map((r) => r.id) } },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, ownerId: true },
+    });
     const nameOf = (id: string | null) => (id ? (users.find((u) => u.id === id)?.name ?? null) : null);
     return {
       canEdit,
       groups: groups.map((g) => ({ id: g.id, name: g.name, order: g.order, count: rules.filter((r) => r.groupId === g.id).length })),
-      rules: rules.map((r) => ({ ...r, createdByName: nameOf(r.createdBy), updatedByName: nameOf(r.updatedBy) })),
+      rules: rules.map((r) => ({
+        ...r,
+        createdByName: nameOf(r.createdBy),
+        updatedByName: nameOf(r.updatedBy),
+        imageIds: images.filter((i) => i.ownerId === r.id).map((i) => i.id),
+      })),
     };
   }
 

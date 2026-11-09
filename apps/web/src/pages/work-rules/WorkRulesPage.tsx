@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { api, ApiError } from '../../lib/api';
+import { ImageAddButtons, NoteImageList, postNoteImages, shrinkImages, useImageDrop } from '../../components/NoteImages';
 
 interface RuleGroup {
   id: string;
@@ -21,6 +22,8 @@ interface Rule {
   updatedAt: string;
   createdByName: string | null;
   updatedByName: string | null;
+  /** 貼った画像(要望) */
+  imageIds: string[];
 }
 
 interface RulesData {
@@ -242,6 +245,11 @@ export function WorkRulesPage() {
                             {r.body}
                           </div>
                         )}
+                        {(r.imageIds ?? []).length > 0 && (
+                          <div style={{ marginTop: isPhone ? 10 : 6 }}>
+                            <NoteImageList ids={r.imageIds} />
+                          </div>
+                        )}
                         {long && (
                           <button
                             type="button"
@@ -324,10 +332,46 @@ function RuleEditor({
   const [error, setError] = useState<string | null>(null);
   const onErr = (e: unknown) => setError(e instanceof ApiError ? e.message : '保存に失敗しました');
 
+  // 画像(要望)。作成済みのルールはすぐ貼り、新しいルールは保存したあとに貼る
+  const [imageIds, setImageIds] = useState<string[]>(rule?.imageIds ?? []);
+  const [pending, setPending] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const addImages = async (files: File[]) => {
+    setUploading(true);
+    const shrunk = await shrinkImages(files);
+    if (rule) {
+      const posted = await postNoteImages('WORK_RULE', rule.id, shrunk.images);
+      setImageIds((cur) => [...cur, ...posted.ids]);
+      queryClient.invalidateQueries({ queryKey: ['work-rules'] });
+      const err = [shrunk.error, posted.error].filter(Boolean).join('\n');
+      setError(err || null);
+    } else {
+      setPending((cur) => [...cur, ...shrunk.images]);
+      setError(shrunk.error);
+    }
+    setUploading(false);
+  };
+  const removeImage = async (id: string) => {
+    try {
+      await api.delete(`/note-images/${id}`);
+      setImageIds((cur) => cur.filter((x) => x !== id));
+      queryClient.invalidateQueries({ queryKey: ['work-rules'] });
+    } catch (e) {
+      onErr(e);
+    }
+  };
+  const drop = useImageDrop((files) => void addImages(files));
+
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const payload = { groupId, title, body, pinned };
-      return rule ? api.patch(`/work-rules/${rule.id}`, payload) : api.post('/work-rules', payload);
+      if (rule) return api.patch(`/work-rules/${rule.id}`, payload);
+      const created = await api.post<{ id: string }>('/work-rules', payload);
+      if (pending.length) {
+        const posted = await postNoteImages('WORK_RULE', created.id, pending);
+        if (posted.error) alert(`ルールは保存しましたが、画像の一部を貼れませんでした\n${posted.error}`);
+      }
+      return created;
     },
     onSuccess: onSaved,
     onError: onErr,
@@ -357,7 +401,12 @@ function RuleEditor({
 
   return (
     <div className="modal-backdrop" onClick={onClose} style={isPhone ? { padding: 12 } : undefined}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={modalStyle(isPhone, 620)}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        {...drop.handlers}
+        style={{ ...modalStyle(isPhone, 620), ...(drop.over ? { outline: '2px dashed var(--color-primary)', outlineOffset: -6 } : {}) }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid var(--color-border)' }}>
           <h3 style={{ margin: 0, fontSize: isPhone ? 16 : 15, flex: 1 }}>{rule ? 'ルールを編集' : 'ルールを作成'}</h3>
           <button type="button" onClick={onClose}>
@@ -407,6 +456,24 @@ function RuleEditor({
           onChange={(e) => setBody(e.target.value)}
           style={{ width: '100%', boxSizing: 'border-box', minHeight: '36vh', lineHeight: 1.8, fontSize: isPhone ? 14 : 13, padding: isPhone ? '12px 14px' : '10px 12px', borderRadius: 8 }}
         />
+        {label('画像')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <NoteImageList ids={imageIds} onRemove={(id) => void removeImage(id)} />
+          {pending.map((src, i) => (
+            <div key={i} style={{ position: 'relative', alignSelf: 'flex-start', maxWidth: '100%' }}>
+              <img src={src} alt="貼り付ける画像" style={{ display: 'block', maxWidth: '100%', maxHeight: '50vh', borderRadius: 6, border: '1px solid var(--color-border)' }} />
+              <button
+                type="button"
+                onClick={() => setPending((cur) => cur.filter((_, j) => j !== i))}
+                style={{ position: 'absolute', top: 6, right: 6, fontSize: 11, padding: '2px 8px', color: 'var(--color-danger)' }}
+              >
+                外す
+              </button>
+            </div>
+          ))}
+          {pending.length > 0 && <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>保存すると画像も貼り付けます</span>}
+          <ImageAddButtons busy={uploading} onFiles={(files) => void addImages(files)} />
+        </div>
         <label style={{ fontSize: isPhone ? 13 : 12, display: 'flex', gap: 6, alignItems: 'center', marginTop: isPhone ? 14 : 10, cursor: 'pointer' }}>
           <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
           グループ内で上に固定

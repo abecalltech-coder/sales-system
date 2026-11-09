@@ -1363,3 +1363,17 @@ model TalkOut {
   @@index([order])
   @@index([stepId])
 }
+
+// メモ・稼働ルールに貼る画像(要望: 画像も入れて、そのまま見えるように)。
+// ownerType: MEMO(本人だけ) / WORK_RULE(閲覧は全員、追加・削除は稼働ルールを編集できる人)。画像は長辺1800px程度に縮めた data URL
+model NoteImage {
+  id        String   @id @default(uuid())
+  ownerType String
+  ownerId   String
+  image     String
+  order     Int      @default(0)
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@index([ownerType, ownerId])
+}
