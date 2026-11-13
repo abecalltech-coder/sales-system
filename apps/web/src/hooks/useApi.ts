@@ -528,7 +528,9 @@ export function useMonthlySummary(period: string, departmentId: string | undefin
 export type PersonalMetricKey = 'TOSS_UP' | 'APPOINTMENT' | 'MEETING' | 'JUSETSU_OK' | 'ET';
 /** アポインターのシートの予算・稼働時間(分) */
 export type PersonalPlanKey = 'TOSS_UP_BUDGET' | 'TOSS_UP_REVISED' | 'APPOINTMENT_BUDGET' | 'APPOINTMENT_REVISED' | 'WORK_MINUTES';
-export type PersonalDailyKey = PersonalMetricKey | PersonalPlanKey;
+/** アポインターの流れの入力(コール数・有効数・オーナー接触数・主旨NG・クロージングNG。その段階まで進んだ数) */
+export type PersonalFunnelKey = 'CALLS' | 'VALID' | 'CONTACT' | 'SHUSHI_NG' | 'CLOSING_NG';
+export type PersonalDailyKey = PersonalMetricKey | PersonalPlanKey | PersonalFunnelKey;
 
 export interface PersonalStatTarget {
   weeklyStory: number | null;
@@ -550,6 +552,15 @@ export interface PersonalStatsSheet {
   isAppointer: boolean;
   /** 名前の横に出す役職名(AP / APリーダー) */
   roleLabel: string;
+}
+
+/** 率の指標(%。全員共通・管理者が入力)。有効率・接触率・主旨NG率・クロージングNG率・トスアップ率・アポイント率の順 */
+export function usePersonalBenchmarks() {
+  return useQuery({
+    queryKey: ['personal-stats', 'benchmarks'],
+    queryFn: () => api.get<(number | null)[]>('/personal-stats/benchmarks'),
+    staleTime: 60_000,
+  });
 }
 
 export function usePersonalStatsUsers() {

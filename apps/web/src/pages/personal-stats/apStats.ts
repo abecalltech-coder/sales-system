@@ -76,3 +76,66 @@ export function computeApSummary(days: string[], today: string, g: DayGetter) {
   });
   return { workMin, workedDays, restDays, stats };
 }
+
+// ---- 流れ(コール数 → 有効 → 接触 → 主旨NG → クロージングNG → トスアップ → アポイント) ----
+// 各項目は「その段階まで進んだ数」。率は一つ前の項目に対する割合。
+
+export const FUNNEL = [
+  { key: 'CALLS', label: 'コール数', short: 'コール' },
+  { key: 'VALID', label: '有効数', short: '有効' },
+  { key: 'CONTACT', label: 'オーナー接触数', short: '接触' },
+  { key: 'SHUSHI_NG', label: '主旨NG', short: '主旨NG' },
+  { key: 'CLOSING_NG', label: 'クロージングNG', short: 'CLNG' },
+  { key: 'TOSS_UP', label: 'トスアップ', short: 'トス' },
+  { key: 'APPOINTMENT', label: 'アポイント', short: 'アポ' },
+] as const;
+/** i 番目の率 = FUNNEL[i+1] ÷ FUNNEL[i] */
+export const FUNNEL_RATE_LABELS = ['有効率', 'オーナー接触率', '主旨NG率', 'クロージングNG率', 'トスアップ率', 'アポイント率'];
+export const FUNNEL_RATE_SHORT = ['有効率', '接触率', '主旨率', 'CL率', 'トス率', 'アポ率'];
+
+/** 必要件数の見方: 1日 / 今日まで累計 / 月末まで残り */
+export type NeedMode = 'day' | 'cum' | 'rest';
+/** 逆算のもとにする予算 */
+export type NeedBase = 'toss' | 'appo';
+
+/** 割合(0〜1)。分母が0なら null */
+export const ratioOf = (num: number, den: number) => (den > 0 ? num / den : null);
+
+/** 率(%)が指標(%)に届いているか。どちらかが無ければ null */
+export function reachedBenchmark(rate: number | null, benchmark: number | null | undefined): boolean | null {
+  if (rate == null || benchmark == null) return null;
+  return rate * 100 >= benchmark;
+}
+
+/**
+ * 流れの累計と、予算からの逆算(要望)。
+ * 累計は今日までの日だけ。必要件数は、予算の件数を今の率(月初〜今日の累計)でさかのぼって出す:
+ * 例) アポ予算1件 ÷ アポイント率 = 必要なトスアップ数 → ÷ トスアップ率 = 必要なクロージングNG … コール数まで。
+ */
+export function computeFunnel(days: string[], today: string, g: DayGetter, mode: NeedMode, base: NeedBase) {
+  const counted = days.filter((d) => isCounted(d, today));
+  const ref = days.includes(today) ? today : days[days.length - 1];
+  const cum = FUNNEL.map((f) => sum(counted, (d) => g.value(d, f.key)));
+  const refVals = FUNNEL.map((f) => (ref ? g.value(ref, f.key) : 0));
+  const rates = cum.map((v, i) => (i === 0 ? null : ratioOf(v, cum[i - 1])));
+
+  const startIdx = base === 'toss' ? 5 : 6;
+  const metric = PLAN_METRICS[base === 'toss' ? 0 : 1];
+  const monthPlan = sum(days, (d) => planOf(g, d, metric));
+  const budget =
+    mode === 'day'
+      ? ref
+        ? planOf(g, ref, metric)
+        : 0
+      : mode === 'cum'
+        ? sum(counted, (d) => planOf(g, d, metric))
+        : Math.max(0, monthPlan - cum[startIdx]);
+
+  const need: (number | null)[] = FUNNEL.map(() => null);
+  need[startIdx] = budget;
+  for (let i = startIdx; i >= 1; i--) {
+    const r = rates[i];
+    need[i - 1] = r ? (need[i] as number) / r : null;
+  }
+  return { cum, refVals, rates, need, budget, monthPlan, startIdx };
+}

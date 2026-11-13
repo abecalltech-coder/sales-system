@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  ForbiddenException,
   Get,
   Injectable,
   Module,
@@ -11,7 +12,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -39,14 +40,24 @@ const METRIC_KEYS = METRICS.map((m) => m.key) as string[];
  * 実績と同じ PersonalDailyStat に入れる。
  */
 const PLAN_KEYS = ['TOSS_UP_BUDGET', 'TOSS_UP_REVISED', 'APPOINTMENT_BUDGET', 'APPOINTMENT_REVISED', 'WORK_MINUTES'];
-const DAILY_KEYS = [...METRIC_KEYS, ...PLAN_KEYS];
+/**
+ * アポインターの流れの入力(要望): コール数・有効数・オーナー接触数・主旨NG・クロージングNG(すべて「その段階まで進んだ数」)。
+ * トスアップ・アポイントは既存の実績(TOSS_UP / APPOINTMENT)を使う。実績と同じく今日までだけ入力できる。
+ */
+export const FUNNEL_KEYS = ['CALLS', 'VALID', 'CONTACT', 'SHUSHI_NG', 'CLOSING_NG'];
+const ACTUAL_KEYS = [...METRIC_KEYS, ...FUNNEL_KEYS];
+const DAILY_KEYS = [...METRIC_KEYS, ...FUNNEL_KEYS, ...PLAN_KEYS];
+/** 率の指標(管理者が入力。全員共通): 有効率・オーナー接触率・主旨NG率・クロージングNG率・トスアップ率・アポイント率 */
+export const BENCHMARK_SETTING_KEY = 'personalStatsBenchmarks';
+const BENCHMARK_COUNT = 6;
+const ADMIN_ROLES = ['SUPER_ADMIN', 'ADMIN'];
 const todayJst = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 /** 着地見込みを手入力できる日か(明日以降) */
 export const isLandingEditable = (date: string, today: string) => date > today;
 /** 実績を入力できる日か(今日まで) */
 export const isActualEditable = (date: string, today: string) => date <= today;
 /** 画面へ返す日別の値: 未来日の実績は出さない(要望: 残っていても週計・月合計・カードに数えない) */
-const isVisibleStat = (r: { date: string; metricKey: string }, today: string) => !METRIC_KEYS.includes(r.metricKey) || isActualEditable(r.date, today);
+const isVisibleStat = (r: { date: string; metricKey: string }, today: string) => !ACTUAL_KEYS.includes(r.metricKey) || isActualEditable(r.date, today);
 /** 人員シートのタブに並べる役職(要望: AP と APリーダーだけ。CL は不要) */
 const SALES_ROLES = ['AP', 'AP_LEADER'];
 /** アポインター(トス・アポを予算管理する人)の役職 */
@@ -83,6 +94,11 @@ class SaveDailyDto {
   @ValidateIf((_o, v) => v !== null) @IsInt() @Min(0) @Max(100000) value!: number | null;
   /** 読んだときの version。まだ行が無ければ null */
   @ValidateIf((_o, v) => v !== null) @IsInt() version!: number | null;
+}
+
+class SaveBenchmarksDto {
+  /** 6つの率の指標(%)。空は null */
+  @IsArray() @ArrayMinSize(BENCHMARK_COUNT) @ArrayMaxSize(BENCHMARK_COUNT) @ValidateIf((_o, v) => Array.isArray(v)) values!: (number | null)[];
 }
 
 class SaveTargetDto {
@@ -126,6 +142,25 @@ export class PersonalStatsService {
   ) {}
 
   /** 人員シートのタブ: 有効なユーザーのうち営業系の役職の人(要望: 誰でも全員のシートを見て変更できる) */
+  /** 率の指標(全員共通)。未設定は null */
+  async benchmarks(): Promise<(number | null)[]> {
+    const row = await this.prisma.systemSetting.findUnique({ where: { key: BENCHMARK_SETTING_KEY } });
+    const v = row?.value;
+    return Array.from({ length: BENCHMARK_COUNT }, (_, i) => (Array.isArray(v) && typeof v[i] === 'number' ? (v[i] as number) : null));
+  }
+
+  /** 指標は管理者だけが入力できる(要望: 管理者が手打ちして全員の指標欄に反映) */
+  async saveBenchmarks(user: AuthenticatedUser, dto: SaveBenchmarksDto) {
+    if (!user.roles.some((r) => ADMIN_ROLES.includes(r))) throw new ForbiddenException('指標は管理者だけが入力できます');
+    const values = dto.values.map((v) => (v == null || !Number.isFinite(Number(v)) ? null : Math.min(100, Math.max(0, Math.round(Number(v) * 10) / 10))));
+    await this.prisma.systemSetting.upsert({
+      where: { key: BENCHMARK_SETTING_KEY },
+      update: { value: values as never },
+      create: { key: BENCHMARK_SETTING_KEY, value: values as never },
+    });
+    return values;
+  }
+
   async users() {
     const where: Prisma.UserWhereInput = {
       status: 'ACTIVE',
@@ -349,7 +384,7 @@ export class PersonalStatsService {
   async saveDaily(viewer: AuthenticatedUser, dto: SaveDailyDto) {
     await this.targetUser(dto.userId);
     // 実績の入力は今日までだけ(要望)。消すのはいつでもできる
-    if (METRIC_KEYS.includes(dto.metricKey) && dto.value != null && !isActualEditable(dto.date, todayJst())) {
+    if (ACTUAL_KEYS.includes(dto.metricKey) && dto.value != null && !isActualEditable(dto.date, todayJst())) {
       throw new BadRequestException('実績は今日までの日にだけ入力できます');
     }
     // 着地見込みの手入力は未来日だけ(要望: 当日を含む過去日は実績と同じ)。消すのはいつでもできる
@@ -429,6 +464,16 @@ class PersonalStatsController {
   @Get()
   sheet(@Query() q: GetSheetQuery) {
     return this.service.sheet(q.userId, q.month);
+  }
+
+  @Get('benchmarks')
+  benchmarks() {
+    return this.service.benchmarks();
+  }
+
+  @Put('benchmarks')
+  saveBenchmarks(@Body() dto: SaveBenchmarksDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.saveBenchmarks(user, dto);
   }
 
   @Get('department')

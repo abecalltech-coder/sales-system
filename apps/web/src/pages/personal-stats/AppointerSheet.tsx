@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { PersonalDailyKey, PersonalStatsSheet } from '../../hooks/useApi';
+import { PersonalDailyKey, PersonalStatsSheet, useMe, usePersonalBenchmarks } from '../../hooks/useApi';
 import { Column, DataTable } from '../../components/DataTable';
 import { InlineNumber } from '../../components/InlineEdit';
 import { useIsPhone } from '../../lib/useIsPhone';
-import { fmtRate, rateColor } from './parts';
+import { SegButtons, benchmarkColors, fmtPct1, fmtRate, rateColor } from './parts';
+import { FunnelTable } from './FunnelTable';
 import { CumulativeChart } from './charts';
-import { LANDING_HELP, PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fmtMinutes, fmtSeats, isCounted, todayKeyJst } from './apStats';
+import { FUNNEL, FUNNEL_RATE_LABELS, FUNNEL_RATE_SHORT, LANDING_HELP, PLAN_METRICS, PlanMetric, computeApSummary, landingOf, fmtMinutes, fmtSeats, isCounted, ratioOf, todayKeyJst } from './apStats';
 
 /**
  * アポインターのシート(要望): 日ごとの行に 稼働時間(1〜8hを15分刻み)・席数(稼働時間/176)と、
@@ -74,6 +75,11 @@ export function AppointerSheet({
 }) {
   const isPhone = useIsPhone();
   const [phoneMetric, setPhoneMetric] = useState<PlanMetric['key']>('TOSS_UP');
+  // 表の切り替え: 実績の入力 / 率の一覧 / 予算の入力(要望: 項目が増えたので画面を分ける)
+  const [tab, setTab] = useState<'entry' | 'rate' | 'budget'>('entry');
+  const { data: me } = useMe();
+  const { data: benchmarks = [] } = usePersonalBenchmarks();
+  const canEditBenchmarks = !!me?.roles.some((r) => r === 'SUPER_ADMIN' || r === 'ADMIN');
   const days = sheet.days;
   const today = todayKeyJst();
 
@@ -117,7 +123,7 @@ export function AppointerSheet({
   const dateCol: Column<SheetRow> = {
     key: 'date',
     label: '日付',
-    width: isPhone ? 64 : 56,
+    width: isPhone ? (tab === 'budget' ? 64 : 50) : 56,
     locked: true,
     render: (r) => {
       if (r.kind !== 'day') return <b style={{ fontSize: 11 }}>{r.label}</b>;
@@ -125,7 +131,7 @@ export function AppointerSheet({
       return (
         <span style={{ fontWeight: 600 }}>
           {mdOf(r.date!)}
-          {isPhone && (
+          {isPhone && tab === 'budget' && (
             <span style={{ marginLeft: 3, fontSize: 10, fontWeight: 400, color: dow === 0 || dow === 6 ? 'var(--color-danger)' : 'var(--color-text-faint)' }}>
               {WEEKDAYS[dow]}
             </span>
@@ -280,9 +286,78 @@ export function AppointerSheet({
     return [numberCol(m.budget, '月初予算'), numberCol(m.key, '実績', true), numberCol(m.revised, '着地見込み')];
   };
 
-  const columns: Column<SheetRow>[] = isPhone
-    ? [dateCol, workCol, ...metricCols(PLAN_METRICS.find((m) => m.key === phoneMetric)!)]
-    : [dateCol, dowCol, workCol, seatCol, ...PLAN_METRICS.flatMap(metricCols)];
+  /** 流れの入力列(コール数〜クロージングNG): その段階まで進んだ数。実績と同じく今日までの日だけ入力(要望) */
+  const funnelCol = (f: (typeof FUNNEL)[number]): Column<SheetRow> => ({
+    key: f.key,
+    label: f.label,
+    width: isPhone ? 42 : 78,
+    locked: true,
+    group: isPhone ? undefined : { key: 'funnel', label: 'その段階まで進んだ数', background: 'var(--color-subtle)' },
+    renderHeader: () => <span style={{ fontWeight: 700 }}>{isPhone ? f.short : f.label}</span>,
+    render: (r) => {
+      if (r.kind !== 'day') {
+        if (r.days.every((d) => d > today)) return <span data-cell-readonly />;
+        return <div data-cell-readonly style={{ textAlign: 'center', fontWeight: 700 }}>{sum(r.days, (d) => valueOf(d, f.key))}</div>;
+      }
+      const d = r.date!;
+      if (d > today) return <span data-cell-readonly />;
+      return (
+        <ForwardClick style={{ fontWeight: 600 }}>
+          <InlineNumber value={numOf(d, f.key)} onSave={(n) => save(d, f.key, n == null ? null : parseCount(String(n)))} align="center" />
+        </ForwardClick>
+      );
+    },
+    copyValue: (r) => (r.kind === 'day' ? textOf(r.date!, f.key) : ''),
+    pasteValue: (r, text) => {
+      if (r.kind === 'day' && r.date! <= today) save(r.date!, f.key, parseCount(text));
+    },
+  });
+  /** トス・アポの実績列を「実績の入力」でも使う(携帯は幅を詰める) */
+  const resultCol = (m: PlanMetric): Column<SheetRow> => {
+    const col = metricCols(m)[1];
+    const toss = m.key === 'TOSS_UP';
+    return isPhone
+      ? { ...col, width: 42, group: undefined, renderHeader: () => <span style={{ fontWeight: 700, color: toss ? 'var(--color-primary)' : 'var(--color-appo)' }}>{toss ? 'トス' : 'アポ'}</span> }
+      : col;
+  };
+  /** 率の列(自動): 一つ前の項目に対する割合。指標以上は緑、未満は赤 */
+  const rateOfRow = (r: SheetRow, i: number) =>
+    ratioOf(sum(r.days, (d) => valueOf(d, FUNNEL[i + 1].key)), sum(r.days, (d) => valueOf(d, FUNNEL[i].key)));
+  const rateCol = (i: number): Column<SheetRow> => ({
+    key: `rate-${i}`,
+    label: FUNNEL_RATE_SHORT[i],
+    width: isPhone ? 48 : 96,
+    locked: true,
+    renderHeader: () => <span style={{ fontWeight: 700 }}>{isPhone ? FUNNEL_RATE_SHORT[i] : FUNNEL_RATE_LABELS[i]}</span>,
+    render: (r) => {
+      const rate = rateOfRow(r, i);
+      const c = benchmarkColors(rate, benchmarks[i]);
+      return (
+        <div data-cell-readonly style={{ margin: '-3px -8px', padding: '3px 8px', background: c.bg, textAlign: 'center', fontWeight: 700, color: c.color }}>
+          {rate == null ? ' ' : fmtPct1(rate)}
+        </div>
+      );
+    },
+    copyValue: (r) => {
+      const rate = rateOfRow(r, i);
+      return rate == null ? '' : fmtPct1(rate);
+    },
+  });
+
+  const entryCols = [...FUNNEL.slice(0, 5).map(funnelCol), ...PLAN_METRICS.map(resultCol)];
+  const rateCols = FUNNEL_RATE_LABELS.map((_, i) => rateCol(i));
+  const columns: Column<SheetRow>[] =
+    tab === 'entry'
+      ? isPhone
+        ? [dateCol, ...entryCols]
+        : [dateCol, dowCol, workCol, seatCol, ...entryCols]
+      : tab === 'rate'
+        ? isPhone
+          ? [dateCol, ...rateCols]
+          : [dateCol, dowCol, ...rateCols]
+        : isPhone
+          ? [dateCol, workCol, ...metricCols(PLAN_METRICS.find((m) => m.key === phoneMetric)!)]
+          : [dateCol, dowCol, workCol, seatCol, ...PLAN_METRICS.flatMap(metricCols)];
 
   // 縞模様(1行おきの色)も消すため、色を付けない行も透明を明示する
   const rowStyle = (r: SheetRow): React.CSSProperties => {
@@ -311,47 +386,80 @@ export function AppointerSheet({
 
   const panel = <SummaryPanel summary={summary} compact={isPhone} />;
   const chartOf = (m: PlanMetric) => <CumulativeChart key={m.key} days={days} today={today} getter={getter} metric={m} />;
+  const funnel = <FunnelTable days={days} today={today} getter={getter} benchmarks={benchmarks} canEditBenchmarks={canEditBenchmarks} />;
+  const tabBar = (
+    <SegButtons
+      options={[
+        { value: 'entry' as const, label: '実績の入力' },
+        { value: 'rate' as const, label: '率の一覧' },
+        { value: 'budget' as const, label: '予算の入力' },
+      ]}
+      value={tab}
+      onChange={setTab}
+    />
+  );
+  const tabNote = (
+    <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
+      {tab === 'entry' ? '各項目は「その段階まで進んだ数」を入力' : tab === 'rate' ? '指標以上は緑、未満は赤' : LANDING_HELP}
+    </span>
+  );
 
   if (isPhone) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {funnel}
         {panel}
         {chartOf(PLAN_METRICS.find((m) => m.key === phoneMetric)!)}
-        <div style={{ display: 'flex', gap: 4 }}>
-          {PLAN_METRICS.map((m) => {
-            const on = phoneMetric === m.key;
-            const color = m.key === 'TOSS_UP' ? 'var(--color-primary)' : 'var(--color-appo)';
-            return (
-              <button
-                key={m.key}
-                onClick={() => setPhoneMetric(m.key)}
-                style={{
-                  flex: 1,
-                  height: 32,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  borderRadius: 8,
-                  border: `1px solid ${on ? color : 'var(--color-border-strong)'}`,
-                  background: on ? color : 'var(--color-surface)',
-                  color: on ? 'var(--color-surface)' : 'var(--color-text-muted)',
-                  boxShadow: 'none',
-                }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {tabBar}
+          {tabNote}
         </div>
+        {tab === 'budget' && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {PLAN_METRICS.map((m) => {
+              const on = phoneMetric === m.key;
+              const color = m.key === 'TOSS_UP' ? 'var(--color-primary)' : 'var(--color-appo)';
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => setPhoneMetric(m.key)}
+                  style={{
+                    flex: 1,
+                    height: 32,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    borderRadius: 8,
+                    border: `1px solid ${on ? color : 'var(--color-border-strong)'}`,
+                    background: on ? color : 'var(--color-surface)',
+                    color: on ? 'var(--color-surface)' : 'var(--color-text-muted)',
+                    boxShadow: 'none',
+                  }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {table}
       </div>
     );
   }
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-      <div style={{ flex: '0 1 auto', minWidth: 0 }}>{table}</div>
-      <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {panel}
-        {PLAN_METRICS.map(chartOf)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {funnel}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div style={{ flex: '0 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {tabBar}
+            {tabNote}
+          </div>
+          {table}
+        </div>
+        <div style={{ width: 300, flexShrink: 0, position: 'sticky', top: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {panel}
+          {PLAN_METRICS.map(chartOf)}
+        </div>
       </div>
     </div>
   );
