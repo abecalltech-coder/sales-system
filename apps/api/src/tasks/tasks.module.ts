@@ -18,7 +18,9 @@ export const REMIND_NONE = -1;
 export const REMIND_OPTIONS = [1440, 720, 360, 180, 120, 60, 30, 15, 10, 5];
 /** タスク閲覧範囲「AP全員」の対象になる役職 */
 const AP_ROLE_CODES = ['AP', 'AP_LEADER'];
-const SNOOZE_MS = 5 * 60_000;
+const SNOOZE_MS = 10 * 60_000;
+/** 端末へ届かなかった通知を再送し続ける期間(これより古い回は諦める。購読が無い人の古い通知が後から一斉に鳴らないように) */
+const RETRY_WINDOW_MS = 24 * 60 * 60_000;
 /**
  * 通知の取りこぼしを後から送る起点(system-settings。マイグレーションで反映した時刻を入れる)。
  * これより前に過ぎた回は、反映直後に一斉に鳴らないよう送らない。これ以降はサーバーが止まっていても
@@ -343,7 +345,25 @@ export class TasksService {
     return { ok: true };
   }
 
-  /** 5分後に再通知 */
+  /**
+   * 未完了(要望: 通知のボタン)。完了にはせず、この回の通知を閉じる。
+   * タスクは未完了のまま一覧に残り(期日を過ぎていれば赤)、この回はこれ以上通知しない
+   */
+  async notDone(id: string, user: AuthenticatedUser) {
+    const t = await this.get(id);
+    await this.assertTarget(t, user);
+    const current = this.currentFor(t, (await this.prisma.taskProgress.findUnique({ where: { taskId_userId: { taskId: id, userId: user.id } } })) ?? undefined);
+    if (!current) return { ok: true };
+    await this.prisma.taskProgress.upsert({
+      where: { taskId_userId: { taskId: id, userId: user.id } },
+      update: { lastNotifiedOccurrence: current, lastNotifiedAt: new Date(), snoozeUntil: null },
+      create: { taskId: id, userId: user.id, lastNotifiedOccurrence: current, lastNotifiedAt: new Date() },
+    });
+    this.realtime.emitToUser(user.id, 'tasks.updated', {});
+    return { ok: true };
+  }
+
+  /** 10分後に再通知 */
   async snooze(id: string, user: AuthenticatedUser) {
     const t = await this.get(id);
     await this.assertTarget(t, user);
@@ -362,7 +382,7 @@ export class TasksService {
     return new Date(occurrence.getTime() - (t.remindMinutes ?? 0) * 60_000);
   }
 
-  /** 今出しておくべきアプリ内の通知(期日を過ぎた未完了。対応完了・編集・5分後再通知のいずれかを押すまで消えない) */
+  /** 今出しておくべきアプリ内の通知(期日を過ぎた未完了。完了・10分後通知・未完了のいずれかを押すまで消えない) */
   async alerts(user: AuthenticatedUser) {
     const tasks = await this.prisma.task.findMany({
       where: { deletedAt: null, dueAt: { not: null } },
@@ -384,7 +404,7 @@ export class TasksService {
     return out.sort((a, b) => a.occurrence.getTime() - b.occurrence.getTime());
   }
 
-  /** 毎分: 通知の時刻になったタスクを担当者の端末へ送る(同じ回は1度。5分後再通知のあとは再送) */
+  /** 毎分: 通知の時刻になったタスクを担当者の端末へ送る(同じ回は1度。10分後通知のあとは再送) */
   @Cron(CronExpression.EVERY_MINUTE)
   async sendDue() {
     try {
@@ -413,13 +433,8 @@ export class TasksService {
           const alertMs = this.alertAt(t, current).getTime();
           if (!sameOccurrence && !afterSnooze && alertMs < catchupFrom && t.updatedAt.getTime() < alertMs) continue;
 
-          await this.prisma.taskProgress.upsert({
-            where: { taskId_userId: { taskId: t.id, userId: uid } },
-            update: { lastNotifiedOccurrence: current, lastNotifiedAt: new Date(), snoozeUntil: null },
-            create: { taskId: t.id, userId: uid, lastNotifiedOccurrence: current, lastNotifiedAt: new Date() },
-          });
           const when = current.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-          await this.push.sendToUser(uid, {
+          const sent = await this.push.sendToUser(uid, {
             title: isDue ? `【タスク期日】${t.title}` : `【タスク】${t.title}`,
             body: `${isDue ? `期日になりました ${when}` : `期日 ${when}`}${t.detail ? `\n${t.detail.slice(0, 80)}` : ''}`,
             url: `/tasks?edit=${t.id}`,
@@ -427,12 +442,22 @@ export class TasksService {
             // 常時表示にしない(要望)。端末の通常の通知と同じく時間が経てば通知欄へ下がる
             requireInteraction: false,
             actions: [
-              { action: 'task-done', title: '対応完了' },
-              { action: 'task-snooze', title: '5分後再通知' },
-              { action: 'task-edit', title: '編集' },
+              { action: 'task-done', title: '完了' },
+              { action: 'task-snooze', title: '10分後通知' },
+              { action: 'task-not-done', title: '未完了' },
             ],
             data: { taskId: t.id },
+            urgency: 'high',
           });
+          // 要望: 通知が来ないことがある。端末へ送れなかったときは「通知済み」にせず、次の分(1分後)にもう一度送る。
+          // ただし古い回(24時間より前)は諦めて通知済みにする(購読の無い人に後から一斉に鳴らさない)
+          if (sent > 0 || Date.now() - alertMs > RETRY_WINDOW_MS) {
+            await this.prisma.taskProgress.upsert({
+              where: { taskId_userId: { taskId: t.id, userId: uid } },
+              update: { lastNotifiedOccurrence: current, lastNotifiedAt: new Date(), snoozeUntil: null },
+              create: { taskId: t.id, userId: uid, lastNotifiedOccurrence: current, lastNotifiedAt: new Date() },
+            });
+          }
           this.realtime.emitToUser(uid, 'tasks.updated', {});
         }
       }
@@ -491,6 +516,11 @@ class TasksController {
   @Post(':id/reopen')
   reopen(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.tasks.reopen(id, user);
+  }
+
+  @Post(':id/not-done')
+  notDone(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.tasks.notDone(id, user);
   }
 
   @Post(':id/snooze')

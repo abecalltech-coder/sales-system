@@ -10,11 +10,13 @@ export interface PushPayload {
   url?: string;
   /** 同種の通知をまとめて上書きするためのタグ(例: `reminder:<appointmentId>`) */
   tag?: string;
-  /** 押すまで消えない通知にする(タスク: 対応完了・編集・5分後再通知のいずれかを押すまで) */
+  /** 押すまで消えない通知にする(タスク: 完了・10分後通知・未完了のいずれかを押すまで) */
   requireInteraction?: boolean;
   /** 通知内のボタン(対応端末のみ) */
   actions?: { action: string; title: string }[];
   data?: Record<string, unknown>;
+  /** 端末が省電力でも早く届けたい通知(タスク)。Android のスリープ中は normal だと遅れることがある */
+  urgency?: 'high' | 'normal';
 }
 
 @Injectable()
@@ -77,10 +79,12 @@ export class PushNotificationsService {
   }
 
   /** 指定ユーザーの全購読先へ送信する。期限切れ購読(410/404)は自動的に削除する */
-  async sendToUser(userId: string, payload: PushPayload) {
-    if (!this.enabled) return;
+  /** 送れた端末の数を返す(0 なら届いていない。タスク通知は届くまで次の分も再送するため) */
+  async sendToUser(userId: string, payload: PushPayload): Promise<number> {
+    if (!this.enabled) return 0;
     const subscriptions = await this.prisma.pushSubscription.findMany({ where: { userId } });
-    await Promise.all(subscriptions.map((sub) => this.sendToSubscription(sub, payload)));
+    const results = await Promise.all(subscriptions.map((sub) => this.sendToSubscription(sub, payload)));
+    return results.filter(Boolean).length;
   }
 
   async sendToUsers(userIds: string[], payload: PushPayload) {
@@ -110,12 +114,15 @@ export class PushNotificationsService {
   private async sendToSubscription(
     sub: { id: string; endpoint: string; p256dh: string; auth: string },
     payload: PushPayload,
-  ) {
+  ): Promise<boolean> {
     try {
+      const { urgency, ...body } = payload;
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        JSON.stringify(payload),
+        JSON.stringify(body),
+        urgency ? { urgency } : undefined,
       );
+      return true;
     } catch (err) {
       const statusCode = (err as { statusCode?: number }).statusCode;
       if (statusCode === 404 || statusCode === 410) {
@@ -124,6 +131,7 @@ export class PushNotificationsService {
       } else {
         this.logger.warn(`push send failed: ${(err as Error).message}`);
       }
+      return false;
     }
   }
 }

@@ -92,10 +92,11 @@ async function callApi(path: string, body: unknown = {}): Promise<boolean> {
 // 通知クリックで該当画面(CLカレンダー等)を開く/前面化する
 self.addEventListener('notificationclick', (event) => {
   const data = (event.notification.data ?? {}) as { url?: string; taskId?: string };
-  // タスクの通知のボタン(要望: 対応完了・5分後再通知はその場で処理、編集はタスク画面を開く)
-  if (data.taskId && (event.action === 'task-done' || event.action === 'task-snooze')) {
+  // タスクの通知のボタン(要望: 完了・10分後通知・未完了はアプリを開かずその場で処理)
+  if (data.taskId && (event.action === 'task-done' || event.action === 'task-snooze' || event.action === 'task-not-done')) {
     event.notification.close();
-    const path = event.action === 'task-done' ? `/tasks/${data.taskId}/complete` : `/tasks/${data.taskId}/snooze`;
+    const path =
+      event.action === 'task-done' ? `/tasks/${data.taskId}/complete` : event.action === 'task-snooze' ? `/tasks/${data.taskId}/snooze` : `/tasks/${data.taskId}/not-done`;
     event.waitUntil(
       callApi(path).then((ok) => {
         // 失敗したら(ログイン切れ等)アプリを開いて処理してもらう

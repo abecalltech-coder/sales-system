@@ -146,6 +146,16 @@ export function useRealtimeSync() {
     const handleTasks = () =>
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     s.on("tasks.updated", handleTasks);
+    // 要望: PCで完了したタスクがスマホでは未完了のまま。スリープ中・圏外の間に届かなかった更新を取りこぼさないよう、
+    // つながり直したとき・画面に戻ったとき・通信が戻ったときに、タスクは必ず取り直す
+    const refreshTasks = () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshTasks();
+    };
+    s.on("connect", refreshTasks);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", refreshTasks);
+    window.addEventListener("pageshow", refreshTasks);
     // 稼働ルール(全員で閲覧)
     const handleWorkRules = () =>
       queryClient.invalidateQueries({ queryKey: ["work-rules"] });
@@ -175,6 +185,10 @@ export function useRealtimeSync() {
       s.off("application-sheets.updated", handleSheets);
       s.off("department-summary.updated", handleSummary);
       s.off("tasks.updated", handleTasks);
+      s.off("connect", refreshTasks);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", refreshTasks);
+      window.removeEventListener("pageshow", refreshTasks);
       s.off("work-rules.updated", handleWorkRules);
       s.off("close-report-config.updated", handleCloseConfig);
       s.off("cb-cases.updated", handleCbCases);
