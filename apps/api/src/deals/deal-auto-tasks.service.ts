@@ -12,6 +12,7 @@ import {
   SW_DATE_KEY,
   dayAt10Jst,
   factorTaskKey,
+  shopSupportDueAt,
   shopSupportTaskKey,
 } from './deal-auto-tasks';
 
@@ -56,8 +57,8 @@ export class DealAutoTasksService implements OnModuleInit {
       {
         name: '店サポ解約誘導',
         keyOf: shopSupportTaskKey,
-        // 店サポ解約誘導有無=有 かつ SW日あり → SW日の 10:00(要望で MC日の4ヶ月後の1日 から変更)
-        dueOf: (v) => (yesId && v[SHOP_SUPPORT_GUIDANCE_KEY] === yesId ? dayAt10Jst(v[SW_DATE_KEY]) : null),
+        // 店サポ解約誘導有無=有 かつ SW日あり → SW日の4ヶ月目の1日 10:00(要望: 11月なら2月1日)
+        dueOf: (v) => (yesId && v[SHOP_SUPPORT_GUIDANCE_KEY] === yesId ? shopSupportDueAt(v[SW_DATE_KEY]) : null),
         task: SHOP_SUPPORT_TASK,
       },
       {

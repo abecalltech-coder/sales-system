@@ -1,7 +1,7 @@
 /**
  * 案件から自動で作るタスク(要望)の決まり。
  * 店サポ解約誘導: 「店サポ解約誘導有無」が有 かつ SW日が入ったら、CLのタスクを
- * SW日の 10:00(日本時間)に作る(要望で MC日の4ヶ月後の1日 から変更)。
+ * SW日の月を1ヶ月目と数えた4ヶ月目の1日 10:00(日本時間)に作る(要望: 11月なら2月1日。MC日 から SW日 に変更)。
  */
 
 export const SHOP_SUPPORT_GUIDANCE_KEY = 'shop_support_cancel_guidance';
@@ -49,4 +49,11 @@ export function dayAt10Jst(value: unknown, now = new Date()): Date | null {
   }
   const out = new Date(Date.UTC(y, m - 1, d, 10 - 9, 0, 0));
   return out.getUTCMonth() === m - 1 ? out : null;
+}
+
+/** SW日(日本時間の日付)の月を1ヶ月目とした4ヶ月目の1日 10:00(日本時間)。11月→2月1日。読めなければ null */
+export function shopSupportDueAt(sw: unknown, now = new Date()): Date | null {
+  const day = dayAt10Jst(sw, now); // 日本時間のその日 10:00(= UTC の同じ日付)。日付の読み方は他の自動タスクとそろえる
+  if (!day) return null;
+  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 3, 1, 10 - 9, 0, 0));
 }

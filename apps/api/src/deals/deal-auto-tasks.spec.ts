@@ -1,4 +1,4 @@
-import { dayAt10Jst } from './deal-auto-tasks';
+import { dayAt10Jst, shopSupportDueAt } from './deal-auto-tasks';
 
 describe('店サポ解約誘導のタスク期日', () => {
   it('SW日(日付列は日本時間0時)→ その日の 10:00(日本時間)', () => {
@@ -23,5 +23,18 @@ describe('ファクタ回収のタスク期日', () => {
     expect(dayAt10Jst('10/20', now)?.toISOString()).toBe('2026-10-20T01:00:00.000Z');
     expect(dayAt10Jst('未定', now)).toBeNull();
     expect(dayAt10Jst('', now)).toBeNull();
+  });
+});
+
+describe('shopSupportDueAt', () => {
+  it('SW日の月を1ヶ月目とした4ヶ月目の1日 10:00(11月→2月1日)', () => {
+    expect(shopSupportDueAt('2026-11-01T15:00:00.000Z')?.toISOString()).toBe('2027-02-01T01:00:00.000Z');
+    expect(shopSupportDueAt('2026-10-31T15:00:00.000Z')?.toISOString()).toBe('2027-02-01T01:00:00.000Z'); // 日本時間 11/1
+    expect(shopSupportDueAt('2026-11-29T15:00:00.000Z')?.toISOString()).toBe('2027-02-01T01:00:00.000Z'); // 日本時間 11/30
+    expect(shopSupportDueAt('2026-11-30T15:00:00.000Z')?.toISOString()).toBe('2027-03-01T01:00:00.000Z'); // 日本時間 12/1
+  });
+  it('SW日が無い・読めない時は作らない', () => {
+    expect(shopSupportDueAt(null)).toBeNull();
+    expect(shopSupportDueAt('')).toBeNull();
   });
 });
