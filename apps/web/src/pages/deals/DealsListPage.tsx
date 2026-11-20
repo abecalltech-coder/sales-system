@@ -12,6 +12,7 @@ import { isoToDateInput, parseDateText } from '../../lib/dateInput';
 import { DealFieldsPanel } from './DealFieldsPanel';
 import { QuickAddDealModal } from './QuickAddDealModal';
 import { BulkImportDealsModal } from './BulkImportDealsModal';
+import { BulkSwDateModal } from './BulkSwDateModal';
 import { DEAL_USER_OTHER, DEAL_USER_OTHER_LABEL } from '../../lib/dealUsers';
 import { PresenceBar } from '../../components/PresenceBar';
 import { usePresence } from '../../lib/usePresence';
@@ -62,6 +63,7 @@ export function DealsListPage() {
   const [focusFieldId, setFocusFieldId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
+  const [swImportOpen, setSwImportOpen] = useState(false);
   // 列の絞り込みの中の昇順・降順(要望)。自分の画面だけ(保存・共有しない)
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [filters, setFilters] = useState<Record<string, Set<string> | null>>({});
@@ -414,6 +416,9 @@ export function DealsListPage() {
             <button onClick={() => setBulkImportOpen(true)} style={{ fontSize: 13 }}>
               一括投入
             </button>
+            <button onClick={() => setSwImportOpen(true)} style={{ fontSize: 13 }}>
+              SW日を反映
+            </button>
             <button className="btn-primary" onClick={() => setAddOpen(true)} style={{ fontSize: 13 }}>
               ＋ 案件追加
             </button>
@@ -512,6 +517,10 @@ export function DealsListPage() {
           onCancel={() => setAddOpen(false)}
           onSubmit={(values) => createMutation.mutate(values)}
         />
+      )}
+
+      {swImportOpen && (
+        <BulkSwDateModal fields={fields ?? []} onClose={() => setSwImportOpen(false)} onImported={invalidate} />
       )}
 
       {bulkImportOpen && (
