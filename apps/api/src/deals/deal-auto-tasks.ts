@@ -1,11 +1,11 @@
 /**
  * 案件から自動で作るタスク(要望)の決まり。
- * 店サポ解約誘導: 「店サポ解約誘導有無」が有 かつ MC日が入ったら、CLのタスクを
- * MC日の月の4ヶ月後の1日 10:00(日本時間)に作る。
+ * 店サポ解約誘導: 「店サポ解約誘導有無」が有 かつ SW日が入ったら、CLのタスクを
+ * SW日の 10:00(日本時間)に作る(要望で MC日の4ヶ月後の1日 から変更)。
  */
 
 export const SHOP_SUPPORT_GUIDANCE_KEY = 'shop_support_cancel_guidance';
-export const MC_DATE_KEY = 'mc_date';
+export const SW_DATE_KEY = 'sw_date';
 export const CL_KEY = 'assignee_user_id';
 export const APPLICATION_NAME_KEY = 'application_name';
 export const CASE_NAME_KEY = 'case_name';
@@ -49,13 +49,4 @@ export function dayAt10Jst(value: unknown, now = new Date()): Date | null {
   }
   const out = new Date(Date.UTC(y, m - 1, d, 10 - 9, 0, 0));
   return out.getUTCMonth() === m - 1 ? out : null;
-}
-
-/** MC日(日本時間の日付)の月の4ヶ月後の1日 10:00(日本時間)。読めなければ null */
-export function shopSupportDueAt(mcIso: unknown): Date | null {
-  if (typeof mcIso !== 'string' || !mcIso) return null;
-  const d = new Date(mcIso);
-  if (Number.isNaN(d.getTime())) return null;
-  const jst = new Date(d.getTime() + 9 * 3600_000); // 日本時間の年月で数える
-  return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth() + 4, 1, 10 - 9, 0, 0));
 }

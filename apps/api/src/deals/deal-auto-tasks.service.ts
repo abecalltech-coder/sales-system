@@ -7,12 +7,11 @@ import {
   CL_KEY,
   FACTOR_DUE_LABEL,
   FACTOR_TASK,
-  MC_DATE_KEY,
   SHOP_SUPPORT_GUIDANCE_KEY,
   SHOP_SUPPORT_TASK,
+  SW_DATE_KEY,
   dayAt10Jst,
   factorTaskKey,
-  shopSupportDueAt,
   shopSupportTaskKey,
 } from './deal-auto-tasks';
 
@@ -57,8 +56,8 @@ export class DealAutoTasksService implements OnModuleInit {
       {
         name: '店サポ解約誘導',
         keyOf: shopSupportTaskKey,
-        // 店サポ解約誘導有無=有 かつ MC日あり → MC日の月の4ヶ月後の1日 10:00
-        dueOf: (v) => (yesId && v[SHOP_SUPPORT_GUIDANCE_KEY] === yesId ? shopSupportDueAt(v[MC_DATE_KEY]) : null),
+        // 店サポ解約誘導有無=有 かつ SW日あり → SW日の 10:00(要望で MC日の4ヶ月後の1日 から変更)
+        dueOf: (v) => (yesId && v[SHOP_SUPPORT_GUIDANCE_KEY] === yesId ? dayAt10Jst(v[SW_DATE_KEY]) : null),
         task: SHOP_SUPPORT_TASK,
       },
       {
@@ -95,9 +94,10 @@ export class DealAutoTasksService implements OnModuleInit {
         const want = !!dueAt && !!cl;
 
         if (!want) {
-          // 条件から外れた(無に変更・日付を消した・CLなし・案件を削除)ら自動のタスクも消す
+          // 条件から外れた(無に変更・日付を消した・CLなし・案件を削除)ら自動のタスクも消す。
+          // 自動で消した分は残さない(残すと「人が削除した」扱いになり、日付を入れ直しても作られなくなるため)
           if (task && !task.deletedAt) {
-            await this.prisma.task.update({ where: { id: task.id }, data: { deletedAt: new Date() } });
+            await this.prisma.task.delete({ where: { id: task.id } });
             changed++;
           }
           continue;
