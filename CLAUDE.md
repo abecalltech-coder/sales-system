@@ -46,7 +46,7 @@
 - **申込情報/明細**(`/application-sheets`): 作成したアカウント本人だけが見られる(管理者も他の人の分は見られない。API も `createdBy` で判定)。全体コピーの書式は `lib/applicationSheet.ts` の `sheetText`(ユーザー指定の書式を厳守)。明細写真の OCR はブラウザ内 Tesseract(完全無料方針、有料 API は使わない)。作成画面は背景を押しても閉じず、入力中の内容は端末の下書き(`applicationSheet.draft:<ユーザーID>`)に残して、画面を開くと復元する。
 - **案件管理の自動タスク**(`apps/api/src/deals/deal-auto-tasks*.ts`、担当はCL、1案件1種類 `Task.sourceKey`): 店サポ解約誘導=有 かつ SW日あり → SW日の月から4ヶ月目の1日10:00(11月→2月1日)/ ファクタ回収期日 → その日の10:00。条件から外れたら自動のタスクは物理削除(人が削除したものは作り直さない)。
 - **案件管理**の一括投入は、手打ちの値を絶対に上書きしない(`Deal.importedKeys`、`apps/api/src/deals/import-merge.ts`)。
-- 案件管理の「SW日を反映」(`BulkSwDateModal.tsx`): 「申込番号」「SW日」列の表を貼ると、申込番号(NFKC・空白除去・大文字化)が一致する案件の SW日 へ反映。新規作成なし、`POST /deals/bulk-create` の updates のみ使うので手打ちは上書きしない。
+- 案件管理の「SW日を反映」(`BulkSwDateModal.tsx`): 「申込番号」「SW日」列の表を貼ると、申込番号(NFKC・空白除去・大文字化)が一致する案件の SW日 へ反映。新規作成なし、`POST /deals/bulk-create` の updates のみ使うので手打ちは上書きしない。反映と同時に店サポ解約誘導タスク(解約連絡月の1日=SW日の月から4ヶ月目)の有無を確認して無ければ作成し、結果は `bulk-create` の `taskCheck` で返す。
 - 一覧表は共通の `components/DataTable.tsx`(範囲選択・コピー/貼り付け・手動並び替え・行の非表示)。セル選択中の Enter は 入力 → 確定 → 下へ の順(押して開いたセルも同じ)。移るのは常に1行だけ。入力できないセルは `data-cell-readonly` を付けると、そのセルでの Enter は1回で下へ移る。
 - 通知は Web Push(VAPID)。開くたびに購読をサーバーへ登録し直す(`usePushNotifications`)、SW の `pushsubscriptionchange` でも登録し直す。タスク通知は取りこぼしても後から必ず送る(起点は system-settings `taskNotifyCatchupFrom`、それより前の回は送らない)。
 - ログインはリフレッシュトークン(ローテーション式)で 1 年保持。端末ごとの系列 `RefreshToken.familyId` で管理し、交換直後(5分以内)の古いトークンは出し直し、それ以外の異常もその端末の系列だけ失効(他の端末はログインしたまま)。更新はタブ間で Web Locks により順番待ち。

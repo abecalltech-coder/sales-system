@@ -71,6 +71,37 @@ export class DealAutoTasksService implements OnModuleInit {
     ];
   }
 
+  /**
+   * 店サポ解約誘導のタスクの状態を案件ごとに調べる(要望: SW日の反映と同時に、解約連絡月の1日のタスクがあるか確認する)。
+   * hasTask=今ある(自動で作られた)タスク、reason=無いときの理由
+   */
+  async shopSupportStatus(dealIds: string[]) {
+    const out = new Map<string, { dueAt: Date | null; hasTask: boolean; reason: string | null }>();
+    if (dealIds.length === 0) return out;
+    const fields = await this.prisma.dealField.findMany({ where: { fieldKey: SHOP_SUPPORT_GUIDANCE_KEY }, include: { options: true } });
+    const yesId = fields[0]?.options.find((o) => o.label.trim().startsWith('有'))?.id ?? null;
+    const deals = await this.prisma.deal.findMany({ where: { id: { in: dealIds } } });
+    const tasks = await this.prisma.task.findMany({ where: { sourceKey: { in: dealIds.map(shopSupportTaskKey) } } });
+    const clIds = deals.map((d) => (d.values as Record<string, unknown>)?.[CL_KEY]).filter((x): x is string => typeof x === 'string');
+    const active = new Set((await this.prisma.user.findMany({ where: { id: { in: clIds }, deletedAt: null }, select: { id: true } })).map((u) => u.id));
+    for (const d of deals) {
+      const v = (d.values ?? {}) as Record<string, unknown>;
+      const task = tasks.find((t) => t.sourceKey === shopSupportTaskKey(d.id));
+      const dueAt = shopSupportDueAt(v[SW_DATE_KEY]);
+      const hasTask = !!task && !task.deletedAt;
+      let reason: string | null = null;
+      if (!hasTask) {
+        if (v[SHOP_SUPPORT_GUIDANCE_KEY] !== yesId || !yesId) reason = '店サポ解約誘導有無が「有」ではない';
+        else if (!dueAt) reason = 'SW日が未入力';
+        else if (typeof v[CL_KEY] !== 'string' || !active.has(v[CL_KEY] as string)) reason = 'CLが未設定';
+        else if (task?.deletedAt) reason = 'タスクが人の手で削除済み';
+        else reason = '作成できませんでした';
+      }
+      out.set(d.id, { dueAt, hasTask, reason });
+    }
+    return out;
+  }
+
   async sync(dealIds: string[], actorId?: string) {
     if (dealIds.length === 0) return;
     const rules = await this.rules();

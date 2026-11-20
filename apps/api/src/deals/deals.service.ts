@@ -212,9 +212,22 @@ export class DealsService {
       });
       updated += r.count;
     }
-    await this.autoTasks.sync([...createdIds, ...updates.map((u) => u.id)], userId);
+    // 反映した案件の店サポ解約誘導タスク(解約連絡月の1日)の有無を確認し、無ければ作る(要望)
+    const updateIds = [...new Set(updates.map((u) => u.id))];
+    const before = await this.autoTasks.shopSupportStatus(updateIds);
+    await this.autoTasks.sync([...createdIds, ...updateIds], userId);
+    const after = await this.autoTasks.shopSupportStatus(updateIds);
+    const taskCheck = updateIds.map((id) => {
+      const a2 = after.get(id);
+      return {
+        dealId: id,
+        dueAt: a2?.dueAt ? a2.dueAt.toISOString() : null,
+        state: a2?.hasTask ? (before.get(id)?.hasTask ? 'exists' : 'created') : 'none',
+        reason: a2?.reason ?? null,
+      };
+    });
     this.notifyChanged();
-    return { ok: true, count, updated, protectedFields };
+    return { ok: true, count, updated, protectedFields, taskCheck };
   }
 
   /**
