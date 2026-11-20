@@ -51,13 +51,14 @@ export function BulkSwDateModal({
     }
     const appNoField = fields.find((f) => f.fieldKey === 'application_number') ?? fields.find((f) => f.label === '申込番号');
     const swField = fields.find((f) => f.fieldKey === 'sw_date') ?? fields.find((f) => f.label === 'SW日');
+    const guideField = fields.find((f) => f.fieldKey === 'shop_support_cancel_date') ?? fields.find((f) => f.label === '店サポ解約誘導日');
     if (!appNoField || !swField) {
       setError('案件管理に「申込番号」「SW日」の列がありません');
       return;
     }
 
     // 申込番号 → SW日(同じ申込番号が複数行なら、日付がある行のうち後の行を使う)
-    const swByNo = new Map<string, { raw: string; iso: string; cancelMonth: string }>();
+    const swByNo = new Map<string, { raw: string; iso: string; cancelMonth: string; guideIso: string | null }>();
     const cancelIdx = header.indexOf('解約連絡月');
     let rowsRead = 0;
     let noDate = 0;
@@ -70,7 +71,11 @@ export function BulkSwDateModal({
         noDate += 1;
         continue;
       }
+      // 解約連絡月(202508・2025/08 など)→ その月の1日(店サポ解約誘導日に入れる)
+      const cm = (cancelIdx >= 0 ? (line[cancelIdx] ?? '') : '').normalize('NFKC').replace(/\D/g, '');
+      const guide = /^(\d{4})(\d{2})/.test(cm) && Number(cm.slice(4, 6)) >= 1 && Number(cm.slice(4, 6)) <= 12 ? `${cm.slice(0, 4)}-${cm.slice(4, 6)}-01` : null;
       swByNo.set(no, {
+        guideIso: guide ? new Date(`${guide}T00:00:00`).toISOString() : null,
         raw: (line[noIdx] ?? '').trim(),
         iso: new Date(`${p}T00:00:00`).toISOString(),
         cancelMonth: cancelIdx >= 0 ? (line[cancelIdx] ?? '').normalize('NFKC').replace(/\D/g, '') : '',
@@ -93,7 +98,11 @@ export function BulkSwDateModal({
         const hit = no ? swByNo.get(no) : undefined;
         if (!hit) continue;
         found.add(no);
-        updates.push({ id: d.id, values: { [swField.fieldKey]: hit.iso } });
+        updates.push({
+          id: d.id,
+          // 店サポ解約誘導日: 表の解約連絡月の1日(要望)。列が無い・解約連絡月が読めない時は SW日 だけ
+          values: { [swField.fieldKey]: hit.iso, ...(guideField && hit.guideIso ? { [guideField.fieldKey]: hit.guideIso } : {}) },
+        });
         const nm = caseNameField ? d.values[caseNameField.fieldKey] : '';
         infoById.set(d.id, { label: `${hit.raw}${typeof nm === 'string' && nm ? ` ${nm}` : ''}`, cancelMonth: hit.cancelMonth });
       }
@@ -140,7 +149,8 @@ export function BulkSwDateModal({
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             見出し行を含む表をそのまま貼り付けてください(「申込番号」「SW日」の列を使い、他の列は無視します)。
             申込番号が一致する案件の SW日 に反映します(全角/半角・空白・英字の大小は無視して照合)。案件の新規作成はしません。
-            手打ちで入れた SW日 は上書きせず、空欄と前回の一括投入で入った SW日 だけを記載します。
+            同じ表の「解約連絡月」の月の1日を、店サポ解約誘導日にも入れます。
+            手打ちで入れた日付は上書きせず、空欄と前回の一括投入で入った日付だけを記載します。
             あわせて、一致した案件の「解約連絡月の1日(SW日の月から4ヶ月目)」のタスクがあるか確認し、無ければ作成します(店サポ解約誘導=有・CLありの案件)。表に「解約連絡月」の列があれば、タスクの月と合っているかも確認します。
           </p>
           {error && <p style={{ color: 'var(--color-danger)', fontSize: 12 }}>{error}</p>}
