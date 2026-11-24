@@ -210,7 +210,7 @@ export function CbCasesPage() {
           getRowId={(r) => r.id}
           onRowClick={isPhone ? (r) => setEditing(r) : undefined}
           // 要望: 申請済みの行は行ごとグレーアウト
-          rowStyle={(r) => (r.status === '申請済み' ? { background: 'var(--color-sunken)', opacity: 0.55 } : undefined)}
+          rowStyle={(r) => (r.status === '申請済み' ? { opacity: 0.8, filter: 'grayscale(0.85)' } : undefined)}
           onDeleteRows={(ids) => {
             if (window.confirm(`選択した ${ids.length} 件を削除しますか？`)) remove.mutate(ids);
           }}
