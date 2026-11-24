@@ -21,6 +21,8 @@
 - 高密度: 文字小さめ・余白を詰め、1画面に多くの情報を出す(基準 `body` 13px、一覧は `DataTable` のセル 12px)。大きな見出しや広い padding を足さない。ただしユーザーが特定の画面で「余白を増やして」と言った場合はそれに従う。
 - 色・影・ボタン・モーダルは `apps/web/src/styles/global.css` のトークン/クラスを使う(`--color-*`、`.btn-primary`、`.modal-backdrop` + `.modal`、`.popover`)。色の直書きはしない。
 - サイドバーのアイコンは `components/NavIcon.tsx` の SVG。
+- タブは大ジャンル(営業 / 顧客管理 / 数値管理)にまとめる。タスクは一番上(スマホは右端)に固定、チャット・メモ・稼働ルールはジャンルに入れず独立したタブ。ジャンルの定義は `AppLayout.tsx` の `NAV_GENRES`。最終報告は削除済み(画面・API・19時の未入力アラート。DB のテーブルは部署サマリーの集計が読むため残している)。
+- アプリを開いたときの最初の画面は、前回開いていた画面(`navTabs.ts` の `rememberLastPath` / `landingPath`)。無い・見られない場合はタスク。
 - 新しいタブは `apps/web/src/lib/navTabs.ts`(役職ごとのタブ表示設定の唯一の正)と `components/AppLayout.tsx` の両方に追加する。
   さらに、タブを絞っている役職(`Role.visibleTabs` が配列)には新しいタブが出ないため、既存の配列へタブを足すマイグレーションも追加する(例: `20261027090000_close_reports_tab`)。
 

@@ -15,7 +15,6 @@ import { PersonalStatsPage } from './pages/personal-stats/PersonalStatsPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
 import { TossFormAdminPage } from './pages/admin/TossFormAdminPage';
-import { FinalReportPage } from './pages/FinalReportPage';
 import { ChatPage } from './pages/chat/ChatPage';
 import { ApplicationSheetsPage } from './pages/application/ApplicationSheetsPage';
 import { TasksPage } from './pages/tasks/TasksPage';
@@ -24,7 +23,6 @@ import { WorkRulesPage } from './pages/work-rules/WorkRulesPage';
 import { CloseReportPage } from './pages/close-reports/CloseReportPage';
 import { CbCasesPage } from './pages/cb-cases/CbCasesPage';
 import { TalkScriptsPage } from './pages/talk-scripts/TalkScriptsPage';
-import { FinalReportFieldsAdminPage } from './pages/admin/FinalReportFieldsAdminPage';
 import { HomeRedirect, RequireAuth } from './components/RequireAuth';
 import { RequireAdmin } from './components/RequireAdmin';
 
@@ -54,7 +52,6 @@ export function App() {
         <Route path="/deals" element={protect(<DealsListPage />)} />
         <Route path="/summary" element={protect(<SummarySheetsPage />)} />
         <Route path="/personal-stats" element={protect(<PersonalStatsPage />)} />
-        <Route path="/final-report" element={protect(<FinalReportPage />)} />
         <Route path="/chat" element={protect(<ChatPage />)} />
         <Route path="/application-sheets" element={protect(<ApplicationSheetsPage />)} />
         <Route path="/tasks" element={protect(<TasksPage />)} />
@@ -69,7 +66,6 @@ export function App() {
         <Route path="/admin/masters" element={protectAdmin(<MastersAdminPage />)} />
         <Route path="/admin/toss-form" element={protectAdmin(<TossFormAdminPage />)} />
         <Route path="/admin/apo-form" element={protectAdmin(<TossFormAdminPage kind="APPOINTMENT" />)} />
-        <Route path="/admin/final-report-fields" element={protectAdmin(<FinalReportFieldsAdminPage />)} />
         <Route path="/admin/audit-logs" element={protectAdmin(<AuditLogsPage />)} />
         <Route path="/admin/integrations" element={protectAdmin(<IntegrationsPage />)} />
         <Route path="/" element={<HomeRedirect />} />

@@ -33,7 +33,6 @@ import { TossFormModule } from './toss-form/toss-form.module';
 import { MonthlySummaryModule } from './monthly-summary/monthly-summary.module';
 import { PersonalStatsModule } from './personal-stats/personal-stats.module';
 import { MonthlyRolloverModule } from './monthly-rollover/monthly-rollover.module';
-import { FinalReportsModule } from './final-reports/final-reports.module';
 import { DealsModule } from './deals/deals.module';
 import { CustomReportsModule } from './custom-reports/custom-reports.module';
 import { CellStylesModule } from './cell-styles/cell-styles.module';
@@ -81,7 +80,6 @@ import { TalkScriptsModule } from './talk-scripts/talk-scripts.module';
     MonthlySummaryModule,
     PersonalStatsModule,
     MonthlyRolloverModule,
-    FinalReportsModule,
     DealsModule,
     CustomReportsModule,
     CellStylesModule,

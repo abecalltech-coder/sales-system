@@ -274,7 +274,7 @@ export function ContractsListPage() {
       <div className="page">
         <div className="page-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 className="page-title">エントリー管理</h1>
+            <h1 className="page-title">ET実績</h1>
             <MonthSwitcher />
           </div>
           <a href="/api/contracts/export" style={{ fontSize: 13 }}>

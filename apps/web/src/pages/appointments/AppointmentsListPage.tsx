@@ -480,7 +480,7 @@ export function AppointmentsListPage() {
       <div className="page">
         <div className="page-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h1 className="page-title">アポ実績管理</h1>
+            <h1 className="page-title">アポ実績</h1>
             <MonthSwitcher />
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
