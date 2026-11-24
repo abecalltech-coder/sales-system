@@ -42,7 +42,7 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   const config = new DocumentBuilder()
-    .setTitle('CH partners実績管理 API')
+    .setTitle('CH system API')
     .setDescription('トス/アポ/訪問/エントリー管理API')
     .setVersion('0.1')
     .addCookieAuth('access_token')

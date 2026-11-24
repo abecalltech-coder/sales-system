@@ -361,13 +361,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
               <img
                 src="/icons/icon-512.png"
-                alt="CH partners"
+                alt="CH system"
                 width={26}
                 height={26}
                 style={{ flexShrink: 0, borderRadius: 7, boxShadow: '0 2px 6px rgba(44, 68, 180, 0.35)' }}
               />
               <div style={{ fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-                CH partners実績管理
+                CH system
               </div>
             </div>
           )}

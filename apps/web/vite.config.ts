@@ -22,8 +22,8 @@ export default defineConfig({
         globIgnores: ['**/ocr/**'],
       },
       manifest: {
-        name: 'CH partners実績管理',
-        short_name: 'CH実績管理',
+        name: 'CH system',
+        short_name: 'CH system',
         start_url: '/',
         display: 'standalone',
         background_color: '#eef0f4',
