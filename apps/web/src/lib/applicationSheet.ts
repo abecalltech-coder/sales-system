@@ -39,6 +39,7 @@ export const APPLICATION_FIELDS: FieldDef[] = [
   { key: 'repBirth', label: '代表生年月日', bullet: true, format: 'date', placeholder: '例: 1980/01/23' },
   { key: 'repPhone', label: '代表者電話番号', bullet: true },
   { key: 'storePhone', label: '店舗番号（あれば）', bullet: true },
+  { key: 'email', label: 'メールアドレス', bullet: true },
   { key: 'callbackTime', label: '後確希望時間', bullet: true },
   { key: 'callbackContact', label: '後確連絡先', gapBefore: true },
   { key: 'smsTo', label: 'SMS送付先' },
