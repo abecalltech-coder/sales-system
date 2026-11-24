@@ -10,7 +10,7 @@ import { api, ApiError } from '../../lib/api';
 /** ステータスの選択肢(要望) */
 const CB_STATUSES = ['MC待ち', 'MC済み', '情報回収中', '申請済み'];
 /** 区分の選択肢(要望) */
-const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム'];
+const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム', '紹介CB'];
 
 interface CbCase {
   id: string;
@@ -209,6 +209,8 @@ export function CbCasesPage() {
           onPageChange={() => undefined}
           getRowId={(r) => r.id}
           onRowClick={isPhone ? (r) => setEditing(r) : undefined}
+          // 要望: 申請済みの行は行ごとグレーアウト
+          rowStyle={(r) => (r.status === '申請済み' ? { background: 'var(--color-sunken)', opacity: 0.55 } : undefined)}
           onDeleteRows={(ids) => {
             if (window.confirm(`選択した ${ids.length} 件を削除しますか？`)) remove.mutate(ids);
           }}

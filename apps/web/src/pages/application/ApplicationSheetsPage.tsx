@@ -322,7 +322,6 @@ function SheetEditor({
               </label>
             </span>
           </div>
-          {!d.hasJuryo && !d.hasDoryoku && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-warning)' }}>従量・動力のどちらか(両方でも可)を選んでください。</p>}
 
           <SectionBox
             title="申込情報"
@@ -412,7 +411,6 @@ function SheetEditor({
           <span style={{ flex: 1 }} />
           <button
             type="button"
-            disabled={!d.hasJuryo && !d.hasDoryoku}
             onClick={() =>
               copyText(sheetText({ inputCode: d.inputCode, hasJuryo: d.hasJuryo, hasDoryoku: d.hasDoryoku, data: d.data }), '申込情報(全体コピー)', d.data.application?.name)
                 .then(onCopied)
@@ -422,7 +420,7 @@ function SheetEditor({
           >
             全体コピー
           </button>
-          <button type="button" className="btn-primary" disabled={save.isPending || (!d.hasJuryo && !d.hasDoryoku)} onClick={() => save.mutate()} style={{ fontSize: 12 }}>
+          <button type="button" className="btn-primary" disabled={save.isPending} onClick={() => save.mutate()} style={{ fontSize: 12 }}>
             {save.isPending ? '保存中...' : isNew ? '作成' : '保存'}
           </button>
         </div>

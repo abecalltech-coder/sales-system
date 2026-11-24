@@ -37,7 +37,7 @@ const CB_TAB = '/cb-cases';
 /** ステータスの選択肢(要望) */
 export const CB_STATUSES = ['MC待ち', 'MC済み', '情報回収中', '申請済み'];
 /** 区分の選択肢(要望) */
-export const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム'];
+export const CB_CATEGORIES = ['社販', 'エネパル違約金', '既契約違約金', 'クレーム', '紹介CB'];
 const DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 class SaveCbCaseDto {

@@ -70,7 +70,6 @@ export class ApplicationSheetsService {
   }
 
   async create(dto: SaveSheetDto, userId: string) {
-    if (!dto.hasJuryo && !dto.hasDoryoku) throw new BadRequestException('従量・動力のどちらか(または両方)を選んでください');
     const row = await this.prisma.applicationSheet.create({
       data: {
         inputCode: dto.inputCode || null,
@@ -89,7 +88,6 @@ export class ApplicationSheetsService {
     const existing = await this.ownSheet(id, userId);
     const hasJuryo = dto.hasJuryo ?? existing.hasJuryo;
     const hasDoryoku = dto.hasDoryoku ?? existing.hasDoryoku;
-    if (!hasJuryo && !hasDoryoku) throw new BadRequestException('従量・動力のどちらか(または両方)を選んでください');
     const row = await this.prisma.applicationSheet.update({
       where: { id },
       data: {
