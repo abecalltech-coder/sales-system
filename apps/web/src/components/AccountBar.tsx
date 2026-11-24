@@ -85,7 +85,11 @@ function AccountSettings({ onClose }: { onClose: () => void }) {
   const pushOn = push.permission === 'granted' && push.subscribed;
   const [error, setError] = useState<string | null>(null);
   const [testMsg, setTestMsg] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  // 写真の変更メニュー(要望: 写真を撮る / 写真ライブラリから選択 / 削除)と、アイコンを大きく見る表示
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [zoom, setZoom] = useState(false);
 
   const saveIcon = useMutation({
     mutationFn: (iconUrl: string | null) => api.put('/me/profile', { iconUrl }),
@@ -100,7 +104,7 @@ function AccountSettings({ onClose }: { onClose: () => void }) {
   const pick = async (file: File | undefined) => {
     if (!file) return;
     try {
-      saveIcon.mutate(await resizeImage(file, 192, { square: true }));
+      saveIcon.mutate(await resizeImage(file, 384, { square: true }));
     } catch (e) {
       setError(e instanceof Error ? e.message : '画像を読み込めませんでした');
     }
@@ -129,22 +133,49 @@ function AccountSettings({ onClose }: { onClose: () => void }) {
   return (
     <div className="popover" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', width: 'min(280px, calc(100vw - 16px))', padding: 12, zIndex: 600 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <Avatar src={profile?.iconUrl} name={profile?.name ?? ''} seed={profile?.id} size={52} square />
+        <button
+          type="button"
+          onClick={() => profile?.iconUrl && setZoom(true)}
+          aria-label="アイコンを大きく表示"
+          title={profile?.iconUrl ? '押すと大きく表示' : undefined}
+          style={{ padding: 0, border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', cursor: profile?.iconUrl ? 'zoom-in' : 'default' }}
+        >
+          <Avatar src={profile?.iconUrl} name={profile?.name ?? ''} seed={profile?.id} size={52} square />
+        </button>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 900 }}>{profile?.name}</div>
-          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={saveIcon.isPending} style={{ fontSize: 11, padding: '2px 8px' }}>
-              {saveIcon.isPending ? '保存中...' : '写真を変更'}
+          <div style={{ marginTop: 4 }}>
+            <button type="button" onClick={() => setMenuOpen((v) => !v)} disabled={saveIcon.isPending} aria-expanded={menuOpen} style={{ fontSize: 11, padding: '2px 8px' }}>
+              {saveIcon.isPending ? '保存中...' : '画像変更'}
             </button>
-            {profile?.iconUrl && (
-              <button type="button" onClick={() => saveIcon.mutate(null)} style={{ fontSize: 11, padding: '2px 8px' }}>
-                外す
-              </button>
-            )}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => void pick(e.target.files?.[0])} />
+          <input ref={cameraRef} type="file" accept="image/*" capture="user" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+          <input ref={libraryRef} type="file" accept="image/*" hidden onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
       </div>
+      {menuOpen && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 0 10px' }}>
+          <button type="button" onClick={() => { setMenuOpen(false); cameraRef.current?.click(); }} style={{ fontSize: 12, padding: '6px 10px', textAlign: 'left' }}>
+            写真を撮る
+          </button>
+          <button type="button" onClick={() => { setMenuOpen(false); libraryRef.current?.click(); }} style={{ fontSize: 12, padding: '6px 10px', textAlign: 'left' }}>
+            写真ライブラリから選択
+          </button>
+          {profile?.iconUrl && (
+            <button type="button" className="btn-danger" onClick={() => { setMenuOpen(false); saveIcon.mutate(null); }} style={{ fontSize: 12, padding: '6px 10px', textAlign: 'left' }}>
+              削除
+            </button>
+          )}
+        </div>
+      )}
+      {zoom && profile?.iconUrl && (
+        <div
+          onClick={() => setZoom(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 900, background: 'rgba(10, 14, 24, 0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <img src={profile.iconUrl} alt={`${profile.name ?? ''}のアイコン`} style={{ maxWidth: 'min(92vw, 420px)', maxHeight: '80vh', width: '100%', height: 'auto', borderRadius: 12, objectFit: 'contain', background: 'var(--color-surface)' }} />
+        </div>
+      )}
       {error && <p style={{ fontSize: 11, color: 'var(--color-danger)', margin: '0 0 8px' }}>{error}</p>}
 
       <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 10 }}>

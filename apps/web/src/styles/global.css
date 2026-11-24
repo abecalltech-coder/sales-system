@@ -349,13 +349,13 @@ table {
 /* ---- 携帯レイアウト(下メニュー・＋ボタン・コンパクト一覧) ---- */
 .phone-nav-scroll {
   scrollbar-width: none;
-  scroll-snap-type: x proximity;
+  /* 要望: 下のタブを横にスクロールできるように。スナップは使わず(中身がボタンだと端末によって止まる)、横の指の動きを必ずここで受ける */
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 .phone-nav-scroll::-webkit-scrollbar {
   display: none;
-}
-.phone-nav-scroll > a {
-  scroll-snap-align: start;
 }
 .app-tag {
   padding: 0 5px;
