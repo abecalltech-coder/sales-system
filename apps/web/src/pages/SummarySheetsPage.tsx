@@ -7,8 +7,9 @@ import { api, ApiError } from '../lib/api';
 import { logCopy } from '../lib/copyLog';
 
 /**
- * サマリー(要望: アプリで作るのではなくこちらで作成。旧「実績/フリーシート/カスタムレポート」は廃止)。
- * 1画面に上から 前確者サマリー → CLサマリー → 部署ごとのAPサマリー を並べる(前確者・CLは枠のみ)。集計の定義は API department-summary.module.ts を参照。
+ * 役割別数値(旧「サマリー」。要望: 名称変更)。
+ * 1画面に上から 前確数値関連 → クローザー数値関連 → 部署ごとのアポインター数値関連 を並べる。
+ * 算出方法が決まっていない列は空欄(指示があり次第埋める)。集計の定義は API department-summary.module.ts を参照。
  */
 
 interface Row {
@@ -31,7 +32,7 @@ interface Row {
 
 interface SummaryResponse {
   period: string;
-  preConfirmers: { id: string; name: string }[];
+  preConfirmers: { id: string; name: string; departmentName: string; tossCount: number; preOk: number; reschedule: number; zenrenLost: number }[];
   departments: { id: string; name: string; rows: Row[] }[];
 }
 
@@ -50,11 +51,11 @@ const roleLabel = (roles: string[]) => {
 };
 
 const BUDGETS: { key: string; label: string }[] = [
-  { key: 'tossUp', label: '予算のトスアップ' },
-  { key: 'preOk', label: '予算の前確OK' },
-  { key: 'meeting', label: '予算の商談実施' },
-  { key: 'contract', label: '予算の商談成約' },
-  { key: 'contractSites', label: '予算の成約拠点' },
+  { key: 'tossUp', label: 'トスアップ予算' },
+  { key: 'preOk', label: '前確OK予算' },
+  { key: 'meeting', label: '商談実施数予算' },
+  { key: 'contractSites', label: '成約拠点数予算' },
+  { key: 'et', label: 'ET数予算' },
 ];
 
 const fixed = (n: number, d: number) => (Number.isFinite(n) ? n.toFixed(d) : '');
@@ -71,18 +72,21 @@ function metricsFor(): Metric[] {
     { key: 'headcount', label: '稼働人数', value: (r) => fixed(r.workHours / 8, 2) },
     { key: 'seats', label: '席数', value: (r) => fixed(r.workHours / 176, 2) },
     ...BUDGETS.map((b) => ({ key: `budget.${b.key}`, label: b.label, value: (r: Row) => r.budget[b.key] ?? '', width: 74 })),
-    { key: 'calls', label: 'コール数', value: (r) => String(r.calls) },
-    { key: 'dph', label: 'DPH（1時間あたり）', value: (r) => fixed(div(r.calls, r.workHours), 1), width: 84 },
+    { key: 'callSf', label: 'SFコール数', value: () => '' },
+    { key: 'callBlank', label: '白地コール数', value: () => '' },
+    { key: 'calls', label: '合計コール数', value: (r) => String(r.calls) },
+    { key: 'dph', label: 'DPH※1時間あたり', value: (r) => fixed(div(r.calls, r.workHours), 1), width: 84 },
+    { key: 'tossUp', label: 'トスアップ', value: (r) => String(r.tossCount) },
     { key: 'preOk', label: '前確OK', value: (r) => String(r.preOk) },
     { key: 'preOkRate', label: '前確OK通過率', value: (r) => (r.tossCount ? `${fixed(div(r.preOk, r.tossCount) * 100, 1)}%` : ''), width: 78 },
-    { key: 'validPreOk', label: '有効前確OK', value: (r) => String(r.validPreOk) },
-    { key: 'meetingDone', label: '商談実施', value: (r) => String(r.meetingDone) },
-    { key: 'contractSites', label: '成約拠点', value: () => '' },
-    { key: 'et', label: 'ET', value: (r) => String(r.et) },
+    { key: 'appo', label: 'アポ', value: () => '' },
+    { key: 'meetingDone', label: '商談実施数', value: (r) => String(r.meetingDone) },
+    { key: 'contractSites', label: '成約拠点数', value: () => '' },
+    { key: 'et', label: 'ET数', value: (r) => String(r.et) },
     { key: 'reschedule', label: 'リスケ', value: (r) => String(r.reschedule) },
     { key: 'zenrenLost', label: '前連失注', value: (r) => String(r.zenrenLost) },
     { key: 'remainingVisit', label: '残訪問', value: (r) => String(r.remainingVisit) },
-    { key: 'points', label: 'Pt', value: (r) => String(r.points) },
+    { key: 'points', label: 'pt数', value: (r) => String(r.points) },
   ];
 }
 
@@ -142,7 +146,7 @@ export function SummarySheetsPage() {
     const text = [header.join('\t'), ...lines].join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      logCopy('サマリー(表のコピー)', text, { target: `${period} ${dept.name}`, cells: lines.length });
+      logCopy('役割別数値(表のコピー)', text, { target: `${period} ${dept.name}`, cells: lines.length });
       setToast('表をコピーしました(スプレッドシートに貼り付けできます)');
     } catch {
       setToast('コピーできませんでした');
@@ -155,7 +159,7 @@ export function SummarySheetsPage() {
       <div className="page" style={{ maxWidth: 'none' }}>
         <div className="page-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 className="page-title">サマリー</h1>
+            <h1 className="page-title">役割別数値</h1>
             <MonthSwitcher />
           </div>
         </div>
@@ -165,29 +169,24 @@ export function SummarySheetsPage() {
 
         {data && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            {/* 上から 前確者 → CL → 部署ごとのAP(要望)。前確者・CLは列が決まるまで枠のみ */}
-            <SummarySection title="前確者サマリー" note="列の内容は今後決めます(枠のみ)">
-              <NameOnlyTable names={preConfirmers.map((p) => ({ key: p.id, name: p.name }))} empty="マスタ管理の「前確担当者」が登録されていません" />
+            {/* 上から 前確 → CL → 部署ごとのAP(要望)。算出方法が未定の列は空欄 */}
+            <SummarySection title="■前確数値関連">
+              <PreConfirmTable rows={preConfirmers} />
             </SummarySection>
 
-            <SummarySection title="CLサマリー" note="列の内容は今後決めます(枠のみ)">
-              <NameOnlyTable
-                names={clRows.map((r) => ({ key: r.userId, name: r.name, sub: r.deptName }))}
-                subLabel="部署"
-                empty="役職がCLのアカウントがありません"
-              />
+            <SummarySection title="■クローザー数値関連">
+              <CloserTable rows={clRows} />
             </SummarySection>
-
 
             {apDepartments.length === 0 && (
-              <SummarySection title="APサマリー">
+              <SummarySection title="■アポインター数値関連">
                 <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>役職がAPのアカウントがありません</p>
               </SummarySection>
             )}
             {apDepartments.map((d) => (
               <SummarySection
                 key={d.id}
-                title={`${d.name} APサマリー`}
+                title={`■${d.name} アポインター数値関連`}
                 actions={
                   <button type="button" onClick={() => void copyDepartment(d)} style={{ fontSize: 11, padding: '2px 10px' }}>
                     表をコピー
@@ -225,38 +224,113 @@ function SummarySection({ title, note, actions, children }: { title: string; not
   );
 }
 
-/** 列が未定のサマリーの枠: 氏名(と部署)だけの表 */
-function NameOnlyTable({ names, subLabel, empty }: { names: { key: string; name: string; sub?: string }[]; subLabel?: string; empty: string }) {
-  const th: React.CSSProperties = { background: 'var(--color-subtle)', fontSize: 10.5, padding: '4px 8px', borderBottom: '1px solid var(--color-border-strong)', borderRight: '1px solid var(--color-border)', textAlign: 'left' };
-  const td: React.CSSProperties = { fontSize: 12, padding: '3px 8px', borderBottom: '1px solid var(--color-sunken)', borderRight: '1px solid var(--color-sunken)', whiteSpace: 'nowrap' };
-  if (names.length === 0) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>{empty}</p>;
+type Col<T> = { label: string; get: (r: T) => string; left?: boolean };
+
+/** 画像の表の形(濃紺の見出し・ALL行は黄色)で出す共通の表。値が決まっていない列は get が '' を返す */
+function FlatTable<T>({ cols, rows, total, totalLabel, empty }: { cols: Col<T>[]; rows: { key: string; row: T }[]; total: T; totalLabel: string; empty: string }) {
+  if (rows.length === 0) return <p style={{ fontSize: 12, color: 'var(--color-text-faint)', margin: 0 }}>{empty}</p>;
+  const th: React.CSSProperties = { background: '#1f3864', color: '#fff', fontSize: 10.5, padding: '5px 6px', borderRight: '1px solid #4a5f8c', lineHeight: 1.25, textAlign: 'center', whiteSpace: 'normal', minWidth: 54 };
+  const td: React.CSSProperties = { fontSize: 12, padding: '4px 6px', borderBottom: '1px solid var(--color-sunken)', borderRight: '1px solid var(--color-sunken)', whiteSpace: 'nowrap', textAlign: 'center' };
+  const yellow = '#fff94d';
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)' }}>
-      <table style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%' }}>
+      <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content', minWidth: '100%' }}>
         <thead>
           <tr>
-            <th style={{ ...th, width: 120 }}>氏名</th>
-            {subLabel && <th style={{ ...th, width: 80 }}>{subLabel}</th>}
-            <th style={{ ...th, color: 'var(--color-text-faint)', fontWeight: 500 }}>(列は未設定)</th>
+            {cols.map((c) => (
+              <th key={c.label} style={th}>
+                {c.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {names.map((n) => (
-            <tr key={n.key}>
-              <td style={td}>{n.name}</td>
-              {subLabel && <td style={td}>{n.sub ?? ''}</td>}
-              <td style={td} />
+          {rows.map((r) => (
+            <tr key={r.key}>
+              {cols.map((c) => (
+                <td key={c.label} style={td}>
+                  {c.get(r.row)}
+                </td>
+              ))}
             </tr>
           ))}
           <tr style={{ fontWeight: 900 }}>
-            <td style={{ ...td, background: 'var(--color-primary-soft)' }}>合計</td>
-            {subLabel && <td style={{ ...td, background: 'var(--color-primary-soft)' }} />}
-            <td style={{ ...td, background: 'var(--color-primary-soft)' }} />
+            {cols.map((c, i) => (
+              <td key={c.label} style={{ ...td, background: yellow }}>
+                {i === 1 ? totalLabel : i < 3 ? '' : c.get(total)}
+              </td>
+            ))}
           </tr>
         </tbody>
       </table>
     </div>
   );
+}
+
+const pct = (a: number, b: number) => (b ? `${fixed((a / b) * 100, 1)}%` : '');
+
+type PreRow = SummaryResponse['preConfirmers'][number];
+
+/** 前確数値関連。ランク・対象外数・OK後対応数・成約法人など算出方法が未定の列は空欄 */
+function PreConfirmTable({ rows }: { rows: PreRow[] }) {
+  const sum = (f: (r: PreRow) => number) => rows.reduce((a, r) => a + f(r), 0);
+  const total: PreRow = { id: 'all', name: 'ALL', departmentName: '', tossCount: sum((r) => r.tossCount), preOk: sum((r) => r.preOk), reschedule: sum((r) => r.reschedule), zenrenLost: sum((r) => r.zenrenLost) };
+  const blank = () => '';
+  const cols: Col<PreRow>[] = [
+    { label: 'ランク', get: blank },
+    { label: '前確担当', get: (r) => r.name },
+    { label: '部署', get: (r) => r.departmentName },
+    { label: '前確対応数', get: (r) => String(r.tossCount) },
+    { label: '前確OK', get: (r) => String(r.preOk) },
+    { label: '対象外数', get: blank },
+    { label: 'OK後対応数', get: blank },
+    { label: '前確通過率', get: (r) => pct(r.preOk, r.tossCount) },
+    { label: 'リスケ', get: (r) => String(r.reschedule) },
+    { label: '前連失注', get: (r) => String(r.zenrenLost) },
+    { label: 'リスケ・前失合計', get: (r) => String(r.reschedule + r.zenrenLost) },
+    { label: 'リスケ・前失率', get: blank },
+    { label: '成約法人数', get: blank },
+    { label: '前確OKに対しての法人成約率', get: blank },
+    { label: '成約拠点数', get: blank },
+    { label: '複数拠点比率', get: blank },
+    { label: '保留A法人数', get: blank },
+    { label: '保留B法人数', get: blank },
+    { label: '評価', get: blank },
+  ];
+  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.id, row: r }))} total={total} totalLabel="ALL" empty="マスタ管理の「前確担当者」が登録されていません" />;
+}
+
+type ClRow = Row & { deptName: string };
+
+/** クローザー数値関連(役職がCLのアカウント)。予算・成約・率などは算出方法が未定のため空欄 */
+function CloserTable({ rows }: { rows: ClRow[] }) {
+  const blank = () => '';
+  const total = totalRow(rows) as ClRow;
+  const cols: Col<ClRow>[] = [
+    { label: 'ランク', get: blank },
+    { label: 'CL担当', get: (r) => r.name },
+    { label: '部署', get: (r) => r.deptName },
+    { label: '法人成約数予算', get: blank },
+    { label: '成約拠点数予算', get: blank },
+    { label: '複数拠点比率予算', get: blank },
+    { label: '訪問数', get: (r) => String(r.meetingDone) },
+    { label: '成約法人数', get: blank },
+    { label: '成約拠点数', get: blank },
+    { label: '成約拠点数進捗', get: blank },
+    { label: '法人成約率', get: blank },
+    { label: '複数拠点比率', get: blank },
+    { label: '即決率', get: blank },
+    { label: '案件決着率', get: blank },
+    { label: 'pt数', get: (r) => String(r.points) },
+    { label: '保留A法人数', get: blank },
+    { label: '保留B法人数', get: blank },
+    { label: '失注・月内失注法人数', get: blank },
+    { label: '取次不可法人数', get: blank },
+    { label: '手書き明細使用数', get: blank },
+    { label: '手書き明細使用率', get: blank },
+    { label: 'CL評価', get: blank },
+  ];
+  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.userId, row: r }))} total={total} totalLabel="ALL" empty="役職がCLのアカウントがありません" />;
 }
 
 function DepartmentTable({ period, deptName, rows, metrics }: { period: string; deptName: string; rows: Row[]; metrics: Metric[] }) {
@@ -312,7 +386,7 @@ function DepartmentTable({ period, deptName, rows, metrics }: { period: string; 
             </tr>
           ))}
           <tr style={{ fontWeight: 900 }}>
-            <td style={{ ...td, ...sticky(0, 96, 'var(--color-primary-soft)'), fontWeight: 900 }}>合計</td>
+            <td style={{ ...td, ...sticky(0, 96, 'var(--color-primary-soft)'), fontWeight: 900 }}>ALL</td>
             <td style={{ ...td, background: 'var(--color-primary-soft)' }} />
             <td style={{ ...td, background: 'var(--color-primary-soft)' }}>{deptName}</td>
             {metrics.map((m) => (

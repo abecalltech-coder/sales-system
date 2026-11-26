@@ -22,7 +22,7 @@ import { AuthenticatedUser } from '../auth/types';
  */
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
-export const BUDGET_KEYS = ['tossUp', 'preOk', 'meeting', 'contract', 'contractSites'] as const;
+export const BUDGET_KEYS = ['tossUp', 'preOk', 'meeting', 'contract', 'contractSites', 'et'] as const;
 
 /** 名前の照合用: 全角/半角・空白の違いを吸収する */
 const norm = (s: string | null | undefined) => (s ?? '').normalize('NFKC').replace(/\s+/g, '').trim();
@@ -62,7 +62,7 @@ class DepartmentSummaryService {
       this.prisma.finalReportEntry.findMany({ where: { date: { startsWith: period } }, select: { userId: true, values: true } }),
       this.prisma.tossCase.findMany({
         where: { deletedAt: null, periodMonth: period },
-        select: { id: true, apStaffName: true, progressStatusId: true },
+        select: { id: true, apStaffName: true, progressStatusId: true, preConfirmStatusId: true },
       }),
       this.prisma.appointment.findMany({
         where: { deletedAt: null, periodMonth: period },
@@ -148,11 +148,26 @@ class DepartmentSummaryService {
     };
 
     const rows = users.map(rowFor);
-    // 前確者のサマリー(枠のみ)用: マスタ管理の「前確担当者」
+    // 前確数値関連(要望: 前確担当ごとの表): マスタ管理の「前確担当者」ごとに、そのトスの前確対応数・前確OK・リスケ・前連失注(アポ詳細の進捗)を数える。
+    // 部署は同じ名前のユーザーの所属。ほかの列(対象外・成約法人など)は算出方法が決まるまで空欄
+    const deptName = (id: string | null) => departments.find((d) => d.id === id)?.name ?? '';
     const preConfirmers = statuses
       .filter((x) => x.category === 'TOSS_PRE_CONFIRM' && x.active)
       .sort((a, b) => a.order - b.order)
-      .map((x) => ({ id: x.id, name: x.displayName }));
+      .map((x) => {
+        const mine = tosses.filter((t) => t.preConfirmStatusId === x.id);
+        const user = users.find((u) => norm(u.name) === norm(x.displayName));
+        const appos = mine.map((t) => appoByToss.get(t.id)).filter((a): a is NonNullable<typeof a> => !!a);
+        return {
+          id: x.id,
+          name: x.displayName,
+          departmentName: deptName(user?.departmentId ?? null),
+          tossCount: mine.length,
+          preOk: mine.filter((t) => isPreOk(t.progressStatusId)).length,
+          reschedule: appos.filter((a) => isResche(a.progressStatusId)).length,
+          zenrenLost: appos.filter((a) => isZenren(a.progressStatusId)).length,
+        };
+      });
     return {
       period,
       preConfirmers,

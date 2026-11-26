@@ -20,7 +20,7 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/application-sheets', label: '申込情報/明細', group: '営業' },
   { key: '/deals', label: '案件管理', group: '顧客管理' },
   { key: '/cb-cases', label: 'CB管理', group: '顧客管理' },
-  { key: '/summary', label: 'サマリー', group: '数値管理' },
+  { key: '/summary', label: '役割別数値', group: '数値管理' },
   { key: '/personal-stats', label: '個人別数値', group: '数値管理' },
   { key: '/story', label: 'ストーリー', group: '数値管理' },
   { key: '/admin/users', label: 'ユーザー管理', group: '管理' },
