@@ -2,6 +2,16 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../lib/api';
 import { todayKeyJst } from './personal-stats/apStats';
+import { fmtRate, rateColor, rateOf } from './personal-stats/parts';
+
+/** 部署ごとの色(要望: 直販・CH東・CH西・CT東で色を変える)。soft=稼働した日、mid=週が終わったときの塗りつぶし */
+export const STORY_COLORS: Record<string, { soft: string; mid: string }> = {
+  直販ALL: { soft: '#ece4f7', mid: '#c9b6e8' },
+  CH東: { soft: '#dbeafe', mid: '#9cc3f5' },
+  CH西: { soft: '#d9f2e1', mid: '#97d7ad' },
+  CT東: { soft: '#fde5cc', mid: '#f5bd85' },
+};
+const RED = '2px solid #d32f2f';
 
 /**
  * サマリーの「部署ストーリー」(要望: 部署ごとの週表。日曜始まり、日付の数字はすべて手打ち)。
@@ -49,7 +59,7 @@ const dow = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
 /**
  * departmentIds が1つなら入力できる表、複数なら各部署の数字を足した表示専用(直販ALL)。
  */
-export function StoryTable({ departmentIds, month }: { departmentIds: string[]; month: string }) {
+export function StoryTable({ departmentIds, month, color }: { departmentIds: string[]; month: string; color: { soft: string; mid: string } }) {
   const queryClient = useQueryClient();
   const editable = departmentIds.length === 1;
   const departmentId = departmentIds[0] ?? '';
@@ -209,10 +219,53 @@ export function StoryTable({ departmentIds, month }: { departmentIds: string[]; 
   const td: React.CSSProperties = { padding: 0, border: '1px solid var(--color-border)', textAlign: 'center', fontSize: 12, whiteSpace: 'nowrap', minWidth: 46 };
   const calc: React.CSSProperties = { ...td, padding: '4px 6px', fontWeight: 700 };
   const GRAY = 'var(--color-border-strong)';
-  const ACTUAL = 'var(--color-success-soft)';
+  const ACTUAL = color.soft;
+  const weekDone = (wi: number) => inMonth[wi].length > 0 && inMonth[wi][inMonth[wi].length - 1] < today;
+  const lastWi = weeks.length - 1;
+  /** 実績の欄を赤い線で囲う(要望): 実績の2列の外側だけ */
+  const redCell = (col: 0 | 1, edge: { top?: boolean; bottom?: boolean }): React.CSSProperties => ({
+    ...(col === 0 ? { borderLeft: RED } : { borderRight: RED }),
+    ...(edge.top ? { borderTop: RED } : {}),
+    ...(edge.bottom ? { borderBottom: RED } : {}),
+  });
+
+  const total = (m: RowKey) => (weeks.length ? actualCum(weeks.length - 1, m) : 0);
+  const goalOf = (m: RowKey) => (has(goalCell(m)) ? num(goalCell(m)) : null);
+  /** 月間ストーリー(要望: 部署ごとの月の合計だけの表。月目標は下の表の一番下の枠、実績は前日までの合計) */
+  const monthly = (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-surface)', marginBottom: 8, overflowX: 'auto', maxWidth: 420 }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            {['月間', '月目標', '実績', '達成率', '残り'].map((h) => (
+              <th key={h} style={{ ...th, background: h === '月間' ? color.mid : th.background }}>
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {ROWS.map((r) => {
+            const g = goalOf(r.key);
+            const t = total(r.key);
+            return (
+              <tr key={r.key}>
+                <td style={{ ...calc, textAlign: 'left', fontSize: 11, background: color.soft }}>{r.label}</td>
+                <td style={calc}>{g ?? '—'}</td>
+                <td style={calc}>{t}</td>
+                <td style={{ ...calc, color: rateColor(rateOf(t, g)) }}>{fmtRate(rateOf(t, g))}</td>
+                <td style={calc}>{g == null ? '—' : Math.max(0, g - t)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <div>
+      {monthly}
     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-surface)' }}>
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: 840 }}>
         {/* 要望: 実績とストーリーの5列は全部同じ幅、日付の7列も同じ幅 */}
@@ -233,7 +286,7 @@ export function StoryTable({ departmentIds, month }: { departmentIds: string[]; 
                 {w}
               </th>
             ))}
-            <th style={{ ...th, background: 'var(--color-primary-soft)' }} colSpan={2}>
+            <th style={{ ...th, background: 'var(--color-primary-soft)', borderTop: RED, borderLeft: RED, borderRight: RED }} colSpan={2}>
               実績
             </th>
             <th style={{ ...th, background: 'var(--color-warning-soft)' }} colSpan={3}>
@@ -248,10 +301,10 @@ export function StoryTable({ departmentIds, month }: { departmentIds: string[]; 
               <Fragment key={wi}>
                 {/* 週の見出し行: 第N週 / 日付(押すと灰色に切り替え) / 小計の見出し */}
                 <tr>
-                  <th style={{ ...th, background: 'var(--color-primary-soft)' }}>第{wi + 1}週</th>
+                  <th style={{ ...th, background: color.mid }}>第{wi + 1}週</th>
                   {w.map((d, i) =>
                     d ? (
-                      <th key={i} style={{ ...th, padding: 0, background: isGray(d) ? GRAY : 'var(--color-primary-soft)' }}>
+                      <th key={i} style={{ ...th, padding: 0, background: isGray(d) ? GRAY : color.soft }}>
                         <button
                           type="button"
                           disabled={!editable}
@@ -266,8 +319,8 @@ export function StoryTable({ departmentIds, month }: { departmentIds: string[]; 
                       <th key={i} style={{ ...th, background: GRAY }} />
                     ),
                   )}
-                  <th style={th}>週小計</th>
-                  <th style={th}>合計</th>
+                  <th style={{ ...th, ...redCell(0, {}) }}>週小計</th>
+                  <th style={{ ...th, ...redCell(1, {}) }}>合計</th>
                   <th style={th}>週小計</th>
                   <th style={th}>当初合計</th>
                   <th style={th}>あるべき姿</th>
@@ -288,16 +341,16 @@ export function StoryTable({ departmentIds, month }: { departmentIds: string[]; 
                         <td key={i} style={{ ...td, background: GRAY }} />
                       ),
                     )}
-                    <td style={calc}>{hasActualWeek(wi) ? actualWeek(wi, r.key) : ''}</td>
-                    <td style={calc}>{anyActual ? actualCum(wi, r.key) : ''}</td>
-                    <td style={calc}>{storyWeek(wi, r.key)}</td>
-                    <td style={calc}>{storyCum(wi, r.key)}</td>
+                    <td style={{ ...calc, ...(weekDone(wi) ? { background: color.mid } : {}), ...redCell(0, { bottom: wi === lastWi && r.key === ROWS[ROWS.length - 1].key }) }}>{hasActualWeek(wi) ? actualWeek(wi, r.key) : ''}</td>
+                    <td style={{ ...calc, ...(weekDone(wi) ? { background: color.mid } : {}), ...redCell(1, { bottom: wi === lastWi && r.key === ROWS[ROWS.length - 1].key }) }}>{anyActual ? actualCum(wi, r.key) : ''}</td>
+                    <td style={{ ...calc, ...(weekDone(wi) ? { background: color.mid } : {}) }}>{storyWeek(wi, r.key)}</td>
+                    <td style={{ ...calc, ...(weekDone(wi) ? { background: color.mid } : {}) }}>{storyCum(wi, r.key)}</td>
                     {isLast && editable ? (
                       <td style={{ ...td, background: 'var(--color-warning-soft)' }} title="月の目標(この数字から各週のあるべき姿を自動計算)">
                         {input(goalCell(r.key), 'transparent', true)}
                       </td>
                     ) : (
-                      <td style={calc}>{isLast ? (has(goalCell(r.key)) ? sumOf(goalCell(r.key)) : '') : (ideal(wi, r.key) ?? '')}</td>
+                      <td style={{ ...calc, ...(weekDone(wi) ? { background: color.mid } : {}) }}>{isLast ? (has(goalCell(r.key)) ? sumOf(goalCell(r.key)) : '') : (ideal(wi, r.key) ?? '')}</td>
                     )}
                   </tr>
                 ))}

@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '../../components/AppLayout';
 import { AppointerSheet } from './AppointerSheet';
 import { DepartmentSummary } from './DepartmentSummary';
-import { DepartmentStory } from './DepartmentStory';
 import { RoleBadge } from './parts';
 import { useIsPhone } from '../../lib/useIsPhone';
 import { MonthSwitcher } from '../../components/MonthSwitcher';
@@ -21,8 +20,6 @@ import { PersonalDailyKey, PersonalMetricKey, PersonalStatsSheet, useMe, usePers
 const SAVE_DELAY_MS = 500;
 /** 下のタブで部署サマリーを選んでいるときの値 */
 const SUMMARY_TAB = 'summary';
-/** 部署ストーリー(要望: 部署ごとに週・月で追うシート) */
-const STORY_TAB = 'story';
 
 export function PersonalStatsPage() {
   const isPhone = useIsPhone();
@@ -51,8 +48,7 @@ export function PersonalStatsPage() {
     departments[0]?.key;
   const deptUsers = users.filter((u) => deptKey(u) === selectedDept);
   const showSummary = requested === SUMMARY_TAB && deptUsers.length > 0;
-  const showStory = requested === STORY_TAB && deptUsers.length > 0;
-  const selectedId = showSummary || showStory
+  const selectedId = showSummary
     ? undefined
     : (requested && deptUsers.some((u) => u.id === requested) ? requested : undefined) ??
       (me && deptUsers.some((u) => u.id === me.id) ? me.id : deptUsers[0]?.id);
@@ -66,7 +62,7 @@ export function PersonalStatsPage() {
     const next = new URLSearchParams(params);
     next.set('dept', key);
     // 部署サマリー・部署ストーリーを見ているときは、部署を変えても同じシートのまま
-    if (next.get('user') !== SUMMARY_TAB && next.get('user') !== STORY_TAB) next.delete('user');
+    if (next.get('user') !== SUMMARY_TAB) next.delete('user');
     setParams(next, { replace: true });
   };
 
@@ -185,19 +181,16 @@ export function PersonalStatsPage() {
                 ))}
               </select>
             )}
-            {!showSummary && !showStory && sheet && (
+            {!showSummary && sheet && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>{sheet.user.name}</span>
                 {sheet.roleLabel && <RoleBadge label={sheet.roleLabel} />}
               </span>
             )}
           </div>
-          {/* 部署ストーリーはすべて手入力なので出さない */}
-          {!showStory && (
-            <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
-              実績はトス・アポから自動で出ます。入力すると上書きでき、消すと0、0も消すと自動の数字に戻ります
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>
+            実績はトス・アポから自動で出ます。入力すると上書きでき、消すと0、0も消すと自動の数字に戻ります
+          </span>
         </div>
 
         <div style={{ flex: 1 }}>
@@ -207,12 +200,6 @@ export function PersonalStatsPage() {
             <p style={{ fontSize: 13, color: 'var(--color-text-faint)' }}>表示できる人員がいません(AP・APリーダーの有効なユーザーが対象です)</p>
           ) : showSummary && selectedDept ? (
             <DepartmentSummary departmentId={selectedDept} month={month} onOpen={selectUser} />
-          ) : showStory && selectedDept ? (
-            <DepartmentStory
-              departmentId={selectedDept}
-              departmentName={departments.find((d) => d.key === selectedDept)?.name ?? ''}
-              month={month}
-            />
           ) : sheet ? (
             <AppointerSheet sheet={sheet} drafts={drafts} valueOf={valueOf} manualOf={manualOf} autoOf={autoOf} setDaily={setDaily} />
           ) : null}
@@ -238,9 +225,6 @@ export function PersonalStatsPage() {
           >
             <button onClick={() => selectUser(SUMMARY_TAB)} style={tabStyle(showSummary)}>
               部署サマリー
-            </button>
-            <button onClick={() => selectUser(STORY_TAB)} style={tabStyle(showStory)}>
-              部署ストーリー
             </button>
             {deptUsers.map((u) => (
               <button key={u.id} onClick={() => selectUser(u.id)} style={tabStyle(u.id === selectedId)}>
