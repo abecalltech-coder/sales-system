@@ -164,6 +164,16 @@ function StoryTable({ departmentId, month }: { departmentId: string; month: stri
     persist(`sg:${d}`, () => next);
   };
 
+  /** 曜日でまとめて切り替え(要望: 灰色は部署・月・日付ごとに決める。まとめて直したいときの近道。結果は日付ごとに保存され、あとから1日ずつ直せる) */
+  const weekdayAllGray = (w: number) => {
+    const ds = data.days.filter((d) => dow(d) === w);
+    return ds.length > 0 && ds.every((d) => isGray(d));
+  };
+  const toggleWeekday = (w: number) => {
+    const next = weekdayAllGray(w) ? 0 : 1;
+    for (const d of data.days.filter((x) => dow(x) === w)) persist(`sg:${d}`, () => next);
+  };
+
   const inMonth = weeks.map((w) => w.filter((d): d is string => !!d));
   const workdays = inMonth.map((w) => w.filter((d) => !isGray(d)).length);
   const monthWorkdays = workdays.reduce((a, b) => a + b, 0);
@@ -214,6 +224,29 @@ function StoryTable({ departmentId, month }: { departmentId: string; month: stri
   const ACTUAL = 'var(--color-success-soft)';
 
   return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginBottom: 6, fontSize: 11, color: 'var(--color-text-muted)' }}>
+        <span>この月の灰色(休み)を曜日でまとめて切り替え:</span>
+        {WEEKDAYS.map((label, w) => {
+          const on = weekdayAllGray(w);
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => toggleWeekday(w)}
+              title={on ? `${label}曜をすべて稼働日に戻す` : `${label}曜をすべて灰色(休み)にする`}
+              style={{
+                fontSize: 11,
+                padding: '1px 8px',
+                background: on ? 'var(--color-border-strong)' : 'var(--color-surface)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+        <span>(日付を押せば1日ずつも切り替え。部署・月ごとに保存)</span>
+      </div>
     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-surface)' }}>
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: 840 }}>
         {/* 要望: 実績とストーリーの5列は全部同じ幅、日付の7列も同じ幅 */}
@@ -302,6 +335,7 @@ function StoryTable({ departmentId, month }: { departmentId: string; month: stri
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 
