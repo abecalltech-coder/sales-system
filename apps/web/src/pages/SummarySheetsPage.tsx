@@ -5,7 +5,6 @@ import { MonthSwitcher } from '../components/MonthSwitcher';
 import { usePeriodMonth } from '../lib/usePeriodMonth';
 import { api, ApiError } from '../lib/api';
 import { logCopy } from '../lib/copyLog';
-import { SummaryStory } from './SummaryStory';
 
 /**
  * サマリー(要望: アプリで作るのではなくこちらで作成。旧「実績/フリーシート/カスタムレポート」は廃止)。
@@ -179,7 +178,6 @@ export function SummarySheetsPage() {
               />
             </SummarySection>
 
-            <SummaryStory departments={data.departments.filter((d) => d.id !== 'none').map((d) => ({ id: d.id, name: d.name }))} month={period} />
 
             {apDepartments.length === 0 && (
               <SummarySection title="APサマリー">

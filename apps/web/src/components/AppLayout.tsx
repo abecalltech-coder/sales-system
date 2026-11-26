@@ -57,6 +57,7 @@ const NAV_GENRES: NavGenre[] = [
     items: [
       { to: '/summary', label: 'サマリー', icon: 'chart' },
       { to: '/personal-stats', label: '個人別数値', icon: 'grid' },
+      { to: '/story', label: 'ストーリー', icon: 'chart' },
     ],
   },
 ];
