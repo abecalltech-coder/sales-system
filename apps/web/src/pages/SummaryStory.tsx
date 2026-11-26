@@ -215,7 +215,17 @@ function StoryTable({ departmentId, month }: { departmentId: string; month: stri
 
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10, background: 'var(--color-surface)' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 760 }}>
+      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: '100%', minWidth: 840 }}>
+        {/* 要望: 実績とストーリーの5列は全部同じ幅、日付の7列も同じ幅 */}
+        <colgroup>
+          <col style={{ width: 84 }} />
+          {WEEKDAYS.map((w) => (
+            <col key={w} style={{ width: 52 }} />
+          ))}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <col key={i} style={{ width: 68 }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th style={{ ...th, minWidth: 84 }}>曜日</th>
