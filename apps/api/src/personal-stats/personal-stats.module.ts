@@ -112,8 +112,11 @@ class SaveTargetDto {
 
 /** 部署ストーリーの行(要望: トスアップ・アポイント・商談実施・成約法人・重説OK・ET) */
 export const STORY_METRICS = ['TOSS_UP', 'APPOINTMENT', 'MEETING', 'CONTRACT_CORP', 'JUSETSU_OK', 'ET'];
+const STORY_DATE = '\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])';
 const STORY_CELL_RE = new RegExp(
-  `^(d:\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])|w:[0-5]|m):(${STORY_METRICS.join('|')})$`,
+  `^((d:${STORY_DATE}|w:[0-5]|m):(${STORY_METRICS.join('|')})` +
+    // サマリーの部署ストーリー(日曜始まりの表): sd=日別の数字(今日より先は予定)、sg=灰色の日(1=灰色/0=稼働日)、st=月のあるべき姿の目標
+    `|sd:${STORY_DATE}:(${STORY_METRICS.join('|')})|sg:${STORY_DATE}|st:(${STORY_METRICS.join('|')}))$`,
 );
 
 class GetStoryQuery {
@@ -350,6 +353,8 @@ export class PersonalStatsService {
   /** 部署ストーリーのセルの保存(日別と同じく version で重なりを検出) */
   async saveStory(viewer: AuthenticatedUser, dto: SaveStoryDto) {
     if (dto.cell.startsWith('d:') && !dto.cell.startsWith(`d:${dto.month}-`)) throw new BadRequestException('対象月の日付ではありません');
+    // サマリーの部署ストーリーは今日より先の日にも予定を入れられる(今日までの制限なし)
+    if ((dto.cell.startsWith('sd:') || dto.cell.startsWith('sg:')) && !dto.cell.startsWith(`${dto.cell.slice(0, 3)}${dto.month}-`)) throw new BadRequestException('対象月の日付ではありません');
     // 日別のセルは実績なので今日までだけ(要望)。消すのはいつでもできる
     if (dto.cell.startsWith('d:') && dto.value != null && !isActualEditable(dto.cell.slice(2, 12), todayJst())) {
       throw new BadRequestException('実績は今日までの日にだけ入力できます');
