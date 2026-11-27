@@ -5,6 +5,7 @@ import { MonthSwitcher } from '../components/MonthSwitcher';
 import { usePeriodMonth } from '../lib/usePeriodMonth';
 import { api, ApiError } from '../lib/api';
 import { logCopy } from '../lib/copyLog';
+import { useMe } from '../hooks/useApi';
 
 /**
  * 役割別数値(旧「サマリー」。要望: 名称変更)。
@@ -135,8 +136,24 @@ export function SummarySheetsPage() {
     .map((d) => ({ ...d, rows: d.rows.filter((r) => r.roles.some((c) => AP_ROLES.includes(c))) }))
     .filter((d) => d.id !== 'none' || d.rows.length > 0);
   // CLだけのサマリー(全部署)
-  const clRows = (data?.departments ?? []).flatMap((d) => d.rows.filter((r) => r.roles.includes('CL')).map((r) => ({ ...r, deptName: d.name })));
-  const preConfirmers = data?.preConfirmers ?? [];
+  const { data: me } = useMe();
+  // 登録しているアカウント全員(該当者の選択に出す)
+  const accounts = (data?.departments ?? []).flatMap((d) => d.rows.map((r) => ({ ...r, deptName: d.name })));
+  const normName = (s: string) => s.normalize('NFKC').replace(/\s+/g, '');
+  // 前確・クローザーに出すアカウントの選択(要望: 変更するまではその表示のまま。見る人ごとにこの端末へ保存)。未選択のうちは 前確=マスタの前確担当者と同名のアカウント / クローザー=役職CL
+  const preDefault = accounts.filter((a) => (data?.preConfirmers ?? []).some((p) => normName(p.name) === normName(a.name))).map((a) => a.userId);
+  const clDefault = accounts.filter((a) => a.roles.includes('CL')).map((a) => a.userId);
+  const [prePick, setPrePick] = useStoredPick(`roleStats.pick.pre:${me?.id ?? ''}`);
+  const [clPick, setClPick] = useStoredPick(`roleStats.pick.cl:${me?.id ?? ''}`);
+  const preIds = prePick ?? preDefault;
+  const clIds = clPick ?? clDefault;
+  const preRows: PreRow[] = accounts
+    .filter((a) => preIds.includes(a.userId))
+    .map((a) => {
+      const p = (data?.preConfirmers ?? []).find((x) => normName(x.name) === normName(a.name));
+      return { id: a.userId, name: a.name, departmentName: a.deptName === '所属なし' ? '' : a.deptName, tossCount: p?.tossCount ?? 0, preOk: p?.preOk ?? 0, reschedule: p?.reschedule ?? 0, zenrenLost: p?.zenrenLost ?? 0 };
+    });
+  const clRows: ClRow[] = accounts.filter((a) => clIds.includes(a.userId));
 
   const copyDepartment = async (dept: { name: string; rows: Row[] }) => {
     const header = ['氏名', '役職', '部署', ...metrics.map((m) => m.label)];
@@ -171,10 +188,12 @@ export function SummarySheetsPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {/* 上から 前確 → CL → 部署ごとのAP(要望)。算出方法が未定の列は空欄 */}
             <SummarySection title="■前確数値関連">
-              <PreConfirmTable rows={preConfirmers} />
+              <PickButton title="前確の該当者の選択" accounts={accounts} selected={preIds} onConfirm={setPrePick} />
+              <PreConfirmTable rows={preRows} />
             </SummarySection>
 
             <SummarySection title="■クローザー数値関連">
+              <PickButton title="クローザーの該当者の選択" accounts={accounts} selected={clIds} onConfirm={setClPick} />
               <CloserTable rows={clRows} />
             </SummarySection>
 
@@ -297,7 +316,7 @@ function PreConfirmTable({ rows }: { rows: PreRow[] }) {
     { label: '保留B法人数', get: blank },
     { label: '評価', get: blank },
   ];
-  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.id, row: r }))} total={total} totalLabel="ALL" empty="マスタ管理の「前確担当者」が登録されていません" />;
+  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.id, row: r }))} total={total} totalLabel="ALL" empty="該当者が選ばれていません(上の「該当者の選択」から選んでください)" />;
 }
 
 type ClRow = Row & { deptName: string };
@@ -330,7 +349,7 @@ function CloserTable({ rows }: { rows: ClRow[] }) {
     { label: '手書き明細使用率', get: blank },
     { label: 'CL評価', get: blank },
   ];
-  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.userId, row: r }))} total={total} totalLabel="ALL" empty="役職がCLのアカウントがありません" />;
+  return <FlatTable cols={cols} rows={rows.map((r) => ({ key: r.userId, row: r }))} total={total} totalLabel="ALL" empty="該当者が選ばれていません(上の「該当者の選択」から選んでください)" />;
 }
 
 function DepartmentTable({ period, deptName, rows, metrics }: { period: string; deptName: string; rows: Row[]; metrics: Metric[] }) {
@@ -425,5 +444,98 @@ function BudgetInput({ period, userId, budgetKey, value }: { period: string; use
       }}
       style={{ width: '100%', boxSizing: 'border-box', border: 'none', background: 'transparent', textAlign: 'right', fontSize: 12, padding: '3px 6px', boxShadow: 'none' }}
     />
+  );
+}
+
+
+/** 選んだアカウントの保存(この端末。null=未選択でそのまま既定の表示) */
+function useStoredPick(key: string): [string[] | null, (ids: string[]) => void] {
+  const read = () => {
+    try {
+      const v = localStorage.getItem(key);
+      return v ? (JSON.parse(v) as string[]) : null;
+    } catch {
+      return null;
+    }
+  };
+  const [ids, setIds] = useState<string[] | null>(read);
+  useEffect(() => setIds(read()), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [
+    ids,
+    (next) => {
+      setIds(next);
+      try {
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        /* 保存できなくても表示は切り替わる */
+      }
+    },
+  ];
+}
+
+/** 「該当者の選択」ボタン: 押すと登録しているアカウントをチェックボックスで出し、確定で表示を切り替える */
+function PickButton({ title, accounts, selected, onConfirm }: { title: string; accounts: { userId: string; name: string; deptName: string }[]; selected: string[]; onConfirm: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>(selected);
+  const [q, setQ] = useState('');
+  const shown = accounts.filter((a) => !q.trim() || a.name.includes(q.trim()) || a.deptName.includes(q.trim()));
+  const toggle = (id: string) => setDraft((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
+  return (
+    <>
+      <div style={{ marginBottom: 6 }}>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(selected);
+            setQ('');
+            setOpen(true);
+          }}
+          style={{ fontSize: 12, padding: '3px 12px' }}
+        >
+          該当者の選択({selected.length}人)
+        </button>
+      </div>
+      {open && (
+        <div className="modal-backdrop" onClick={() => setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, width: '92vw', maxHeight: '86vh', display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>{title}</h3>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="名前・部署で絞り込み" style={{ flex: 1, fontSize: 12 }} />
+              <button type="button" style={{ fontSize: 11 }} onClick={() => setDraft((d) => [...new Set([...d, ...shown.map((a) => a.userId)])])}>
+                全て選ぶ
+              </button>
+              <button type="button" style={{ fontSize: 11 }} onClick={() => setDraft((d) => d.filter((id) => !shown.some((a) => a.userId === id)))}>
+                全て外す
+              </button>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1, border: '1px solid var(--color-border)', borderRadius: 8 }}>
+              {shown.map((a) => (
+                <label key={a.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 13, borderBottom: '1px solid var(--color-sunken)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={draft.includes(a.userId)} onChange={() => toggle(a.userId)} />
+                  <span style={{ flex: 1 }}>{a.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{a.deptName}</span>
+                </label>
+              ))}
+              {shown.length === 0 && <p style={{ fontSize: 12, color: 'var(--color-text-faint)', padding: 10, margin: 0 }}>該当するアカウントがありません</p>}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+              <button type="button" onClick={() => setOpen(false)}>
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  onConfirm(accounts.filter((a) => draft.includes(a.userId)).map((a) => a.userId));
+                  setOpen(false);
+                }}
+              >
+                確定({draft.length}人)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
