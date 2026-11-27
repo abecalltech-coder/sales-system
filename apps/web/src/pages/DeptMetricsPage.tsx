@@ -9,7 +9,7 @@ import { STORY_COLORS } from './SummaryStory';
 /**
  * 部署数値(数値管理): 直販ALL・CH東・CH西・CT東ごとに、項目×指標×実績の表。
  * - 指標は手打ち、または「=」で始まる関数(R3=3行目の指標、A3=3行目の実績。+ - * / ( ) と %)。割合の行は 95 と打つと 95%。
- * - 実績は取れるものだけ自動(コール数・有効数はアポインターの個人別数値の「流れ」、トスアップ・前確通過・商談は トス/アポ実績)。取れないものは空欄。
+ * - 法人成約率=ET法人数÷商談数(ET法人数の実績が決まれば自動で出る)。実績は取れるものだけ自動(コール数・有効数はアポインターの個人別数値の「流れ」、トスアップ・前確通過・商談は トス/アポ実績)。取れないものは空欄。
  * - 直販ALLの実績は3部署の合計から計算。見出しの色はストーリーの部署色。
  */
 
@@ -45,8 +45,10 @@ const RED = '2px solid #d32f2f';
 /** 実績(自動で取れるものだけ。ほかは null=空欄)。割合は 分子÷分母、分母が0なら0% */
 function actualOf(a: Actuals): Record<string, number | null> {
   const r = (x: number, y: number) => (y ? x / y : 0);
+  const etCorps: number | null = null; // ET法人数の数え方が決まったらここへ(法人成約率=ET法人数÷商談数 は下で対応済み)
   return {
-    etSites: null, multiRate: null, afterPassRate: null, etCorps: null, corpRate: null, validMeetings: null, validMeetingRate: null,
+    etSites: null, multiRate: null, afterPassRate: null, etCorps,
+    corpRate: etCorps === null ? null : r(etCorps, a.meetings), validMeetings: null, validMeetingRate: null,
     meetings: a.meetings,
     meetingRate: r(a.meetings, a.preOk),
     preOkCount: a.preOk,
