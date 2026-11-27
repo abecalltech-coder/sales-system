@@ -31,6 +31,21 @@ const norm = (s: string | null | undefined) => (s ?? '').normalize('NFKC').repla
 const matches = (opt: { internalCode: string; displayName: string } | undefined, codes: string[], names: string[]) =>
   !!opt && (codes.includes(opt.internalCode) || names.includes(opt.displayName.trim()));
 
+/** 部署数値の指標(手打ち・関数)。部署ごとに SummaryBudget へ userId='dept:<部署ID>'(直販ALLは 'dept:ALL')で持つ */
+export const METRIC_KEYS = [
+  'etSites', 'multiRate', 'afterPassRate', 'etCorps', 'corpRate', 'validMeetings', 'validMeetingRate', 'meetings',
+  'meetingRate', 'preOkCount', 'preOkRate', 'tossUp', 'tossUpRate', 'valid', 'validRate', 'calls',
+] as const;
+
+class MetricTargetDto {
+  @Matches(PERIOD_RE) period!: string;
+  /** 部署ID または ALL(直販ALL) */
+  @IsString() @MaxLength(60) departmentId!: string;
+  @IsIn(METRIC_KEYS as unknown as string[]) key!: string;
+  /** 数字または =関数。空文字で未入力に戻す */
+  @IsOptional() @IsString() @MaxLength(120) value?: string;
+}
+
 class BudgetDto {
   @Matches(PERIOD_RE) period!: string;
   @IsString() userId!: string;
@@ -179,6 +194,53 @@ class DepartmentSummaryService {
     };
   }
 
+  /** 部署数値(要望): 部署ごとの実績(取れるものだけ)と、手打ち・関数の指標 */
+  async metrics(period: string) {
+    const base = await this.build(period);
+    const stats = await this.prisma.personalDailyStat.findMany({
+      where: { date: { startsWith: period }, metricKey: { in: ['CALLS', 'VALID'] } },
+      select: { userId: true, metricKey: true, value: true },
+    });
+    const targetRows = await this.prisma.summaryBudget.findMany({ where: { periodMonth: period, userId: { startsWith: 'dept:' } } });
+    const targetOf = new Map(targetRows.map((t) => [t.userId, (t.values ?? {}) as Record<string, string>]));
+    const departments = base.departments
+      .filter((d) => d.id !== 'none')
+      .map((d) => {
+        const ids = new Set(d.rows.map((r) => r.userId));
+        const ap = d.rows.filter((r) => r.roles.some((c) => c === 'AP' || c === 'AP_LEADER'));
+        const stat = (key: string) => stats.filter((x) => ids.has(x.userId) && x.metricKey === key).reduce((a, x) => a + x.value, 0);
+        return {
+          id: d.id,
+          name: d.name,
+          actuals: {
+            calls: stat('CALLS'),
+            valid: stat('VALID'),
+            tossUp: ap.reduce((a, r) => a + r.tossCount, 0),
+            preOk: ap.reduce((a, r) => a + r.preOk, 0),
+            meetings: ap.reduce((a, r) => a + r.meetingDone, 0),
+          },
+          targets: targetOf.get(`dept:${d.id}`) ?? {},
+        };
+      });
+    return { period, departments, allTargets: targetOf.get('dept:ALL') ?? {} };
+  }
+
+  async setMetricTarget(dto: MetricTargetDto, userId: string) {
+    const v = (dto.value ?? '').trim();
+    const rowKey = `dept:${dto.departmentId}`;
+    const existing = await this.prisma.summaryBudget.findUnique({ where: { periodMonth_userId: { periodMonth: dto.period, userId: rowKey } } });
+    const values = { ...((existing?.values ?? {}) as Record<string, string>) };
+    if (v) values[dto.key] = v;
+    else delete values[dto.key];
+    await this.prisma.summaryBudget.upsert({
+      where: { periodMonth_userId: { periodMonth: dto.period, userId: rowKey } },
+      update: { values: values as Prisma.InputJsonValue, updatedBy: userId },
+      create: { periodMonth: dto.period, userId: rowKey, values: values as Prisma.InputJsonValue, updatedBy: userId },
+    });
+    this.realtime.emitToAll('department-summary.updated', { period: dto.period });
+    return { ok: true };
+  }
+
   async setBudget(dto: BudgetDto, userId: string) {
     const v = (dto.value ?? '').trim();
     if (v && !/^-?\d+(\.\d+)?$/.test(v.replace(/,/g, ''))) throw new BadRequestException('予算は数値で入力してください');
@@ -203,6 +265,17 @@ class DepartmentSummaryController {
   @Get()
   get(@Query('period') period: string) {
     return this.service.build(period);
+  }
+
+  @Get('metrics')
+  metrics(@Query('period') period: string) {
+    if (!PERIOD_RE.test(period)) throw new BadRequestException('対象月の形式が正しくありません');
+    return this.service.metrics(period);
+  }
+
+  @Put('metric-target')
+  metricTarget(@Body() dto: MetricTargetDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.setMetricTarget(dto, user.id);
   }
 
   @Put('budget')

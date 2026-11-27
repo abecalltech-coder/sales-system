@@ -23,6 +23,7 @@ export const ALL_NAV_TABS: NavTabDef[] = [
   { key: '/summary', label: '役割別数値', group: '数値管理' },
   { key: '/personal-stats', label: '個人別数値', group: '数値管理' },
   { key: '/story', label: 'ストーリー', group: '数値管理' },
+  { key: '/dept-metrics', label: '部署数値', group: '数値管理' },
   { key: '/admin/users', label: 'ユーザー管理', group: '管理' },
   { key: '/admin/organizations', label: '組織管理', group: '管理' },
   { key: '/admin/masters', label: 'マスタ管理', group: '管理' },

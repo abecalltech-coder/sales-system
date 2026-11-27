@@ -12,6 +12,7 @@ import { OrganizationsAdminPage } from './pages/admin/OrganizationsAdminPage';
 import { MastersAdminPage } from './pages/admin/MastersAdminPage';
 import { SummarySheetsPage } from './pages/SummarySheetsPage';
 import { StoryPage } from './pages/StoryPage';
+import { DeptMetricsPage } from './pages/DeptMetricsPage';
 import { PersonalStatsPage } from './pages/personal-stats/PersonalStatsPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { IntegrationsPage } from './pages/admin/IntegrationsPage';
@@ -51,6 +52,7 @@ export function App() {
         <Route path="/cl-calendar" element={protect(<CLCalendarPage />)} />
         <Route path="/contracts" element={protect(<ContractsListPage />)} />
         <Route path="/deals" element={protect(<DealsListPage />)} />
+        <Route path="/dept-metrics" element={protect(<DeptMetricsPage />)} />
         <Route path="/story" element={protect(<StoryPage />)} />
         <Route path="/summary" element={protect(<SummarySheetsPage />)} />
         <Route path="/personal-stats" element={protect(<PersonalStatsPage />)} />
