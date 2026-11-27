@@ -7,7 +7,7 @@ import { api, ApiError } from '../lib/api';
 import { STORY_COLORS } from './SummaryStory';
 
 /**
- * 部署数値(数値管理): 直販ALL・CH東・CH西・CT東ごとに、項目×指標×実績の表。
+ * 部署別数値(数値管理): 直販ALL・CH東・CH西・CT東ごとに、項目×指標×実績の表。
  * - 指標は手打ち、または「=」で始まる関数(R3=3行目の指標、A3=3行目の実績。+ - * / ( ) と %)。割合の行は 95 と打つと 95%。
  * - 法人成約率=ET法人数÷商談数(ET法人数の実績が決まれば自動で出る)。実績は取れるものだけ自動(コール数・有効数はアポインターの個人別数値の「流れ」、トスアップ・前確通過・商談は トス/アポ実績)。取れないものは空欄。
  * - 直販ALLの実績は3部署の合計から計算。見出しの色はストーリーの部署色。
@@ -133,7 +133,7 @@ export function DeptMetricsPage() {
       <div className="page" style={{ maxWidth: 'none' }}>
         <div className="page-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 className="page-title">部署数値</h1>
+            <h1 className="page-title">部署別数値</h1>
             <MonthSwitcher />
           </div>
         </div>

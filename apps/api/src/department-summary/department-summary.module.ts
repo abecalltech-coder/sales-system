@@ -31,7 +31,7 @@ const norm = (s: string | null | undefined) => (s ?? '').normalize('NFKC').repla
 const matches = (opt: { internalCode: string; displayName: string } | undefined, codes: string[], names: string[]) =>
   !!opt && (codes.includes(opt.internalCode) || names.includes(opt.displayName.trim()));
 
-/** 部署数値の指標(手打ち・関数)。部署ごとに SummaryBudget へ userId='dept:<部署ID>'(直販ALLは 'dept:ALL')で持つ */
+/** 部署別数値の指標(手打ち・関数)。部署ごとに SummaryBudget へ userId='dept:<部署ID>'(直販ALLは 'dept:ALL')で持つ */
 export const METRIC_KEYS = [
   'etSites', 'multiRate', 'afterPassRate', 'etCorps', 'corpRate', 'validMeetings', 'validMeetingRate', 'meetings',
   'meetingRate', 'preOkCount', 'preOkRate', 'tossUp', 'tossUpRate', 'valid', 'validRate', 'calls',
@@ -194,7 +194,7 @@ class DepartmentSummaryService {
     };
   }
 
-  /** 部署数値(要望): 部署ごとの実績(取れるものだけ)と、手打ち・関数の指標 */
+  /** 部署別数値(要望): 部署ごとの実績(取れるものだけ)と、手打ち・関数の指標 */
   async metrics(period: string) {
     const base = await this.build(period);
     const stats = await this.prisma.personalDailyStat.findMany({
